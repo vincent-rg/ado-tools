@@ -1,0 +1,517 @@
+/**
+ * Azure DevOps Tools - Common Styles
+ * Shared styles across all ADO tools pages
+ */
+
+/* Reset & Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f3f2f1;
+    padding: 20px;
+    line-height: 1.6;
+    font-size: 13px;
+}
+
+/* Container */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 30px;
+}
+
+.container.narrow {
+    max-width: 800px;
+}
+
+/* Typography */
+h1 {
+    color: #0078d4;
+    margin-bottom: 10px;
+    font-size: 24px;
+}
+
+h2 {
+    color: #323130;
+    margin-bottom: 15px;
+    font-size: 18px;
+}
+
+h3 {
+    color: #323130;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.subtitle {
+    color: #605e5c;
+    margin-bottom: 30px;
+}
+
+/* Form Elements */
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #323130;
+    font-size: 13px;
+}
+
+.field-description {
+    font-size: 13px;
+    color: #605e5c;
+    margin-bottom: 5px;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d1d1;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+}
+
+/* Buttons */
+button {
+    background: #0078d4;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #106ebe;
+}
+
+button:disabled {
+    background: #d1d1d1;
+    cursor: not-allowed;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-primary {
+    background: #0078d4;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #106ebe;
+}
+
+.btn-secondary {
+    background: #f3f2f1;
+    color: #323130;
+    border: 1px solid #d1d1d1;
+}
+
+.btn-secondary:hover {
+    background: #e1dfdd;
+}
+
+.btn-danger {
+    background: #a4262c;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #8b0000;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+/* Message Boxes */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #605e5c;
+}
+
+.error {
+    background: #fde7e9;
+    color: #a4262c;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+    border-left: 4px solid #a4262c;
+}
+
+.info {
+    background: #e1f3ff;
+    color: #004578;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+    border-left: 4px solid #0078d4;
+}
+
+.success {
+    background: #dff6dd;
+    color: #107c10;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+    border-left: 4px solid #107c10;
+}
+
+.warning {
+    background: #fff4ce;
+    color: #8a6d3b;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+    border-left: 4px solid #ffb900;
+}
+
+/* Config Section */
+.config-section {
+    background: #f8f8f8;
+    padding: 20px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+}
+
+/* Stats */
+.stats {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #0078d4;
+}
+
+.stat-label {
+    color: #605e5c;
+    font-size: 12px;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-active {
+    background: #fff4ce;
+    color: #8a6d3b;
+}
+
+.badge-fixed {
+    background: #dff6dd;
+    color: #107c10;
+}
+
+.badge-closed {
+    background: #edebe9;
+    color: #605e5c;
+}
+
+.badge-deleted {
+    background: #fde7e9;
+    color: #a4262c;
+}
+
+.badge-completed {
+    background: #dff6dd;
+    color: #107c10;
+}
+
+.badge-abandoned {
+    background: #edebe9;
+    color: #605e5c;
+}
+
+/* Links */
+a {
+    color: #0078d4;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.link-button {
+    color: #0078d4;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 600;
+}
+
+/* Code */
+code {
+    background: #f3f2f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    color: #c7254e;
+}
+
+pre {
+    background: #f8f8f8;
+    border: 1px solid #d1d1d1;
+    border-radius: 4px;
+    padding: 12px;
+    overflow-x: auto;
+    margin: 10px 0;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+    color: #323130;
+    font-size: 12px;
+}
+
+/* Details/Summary */
+details {
+    margin: 10px 0;
+}
+
+summary {
+    cursor: pointer;
+    color: #0078d4;
+    font-weight: 600;
+    padding: 5px 0;
+}
+
+summary:hover {
+    text-decoration: underline;
+}
+
+/* Utility Classes */
+.text-muted {
+    color: #605e5c;
+}
+
+.text-small {
+    font-size: 12px;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.mt-20 {
+    margin-top: 20px;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+.mb-20 {
+    margin-bottom: 20px;
+}
+
+.flex {
+    display: flex;
+}
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.flex-gap-10 {
+    gap: 10px;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+/* Mention */
+.mention {
+    font-weight: 700;
+    color: #0078d4;
+    background: #e1f3ff;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Raw JSON */
+.raw-json-toggle {
+    background: #f3f2f1;
+    border: 1px solid #d1d1d1;
+    color: #323130;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.raw-json-toggle:hover {
+    background: #e1dfdd;
+}
+
+.raw-json-container {
+    display: none;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.raw-json-container.show {
+    display: block;
+}
+
+.raw-json-container pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* Filters Section */
+.filters-section {
+    background: #f8f8f8;
+    padding: 20px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-group label {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.show {
+    display: flex;
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-close {
+    font-size: 24px;
+    cursor: pointer;
+    color: #605e5c;
+    background: none;
+    border: none;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+}
+
+.modal-close:hover {
+    color: #323130;
+}

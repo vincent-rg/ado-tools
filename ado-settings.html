@@ -4,151 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Azure DevOps - Settings</title>
+    <link rel="stylesheet" href="common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f3f2f1;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            padding: 30px;
-        }
-        
-        h1 {
-            color: #0078d4;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            color: #605e5c;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #323130;
-        }
-        
-        .field-description {
-            font-size: 13px;
-            color: #605e5c;
-            margin-bottom: 5px;
-        }
-        
-        input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #d1d1d1;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #0078d4;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 30px;
-        }
-        
-        button {
-            padding: 12px 24px;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            border: none;
-        }
-        
-        .btn-primary {
-            background: #0078d4;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #106ebe;
-        }
-        
-        .btn-secondary {
-            background: #f3f2f1;
-            color: #323130;
-            border: 1px solid #d1d1d1;
-        }
-        
-        .btn-secondary:hover {
-            background: #e1dfdd;
-        }
-        
-        .btn-danger {
-            background: #a4262c;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #8b0000;
-        }
-        
-        .success {
-            background: #dff6dd;
-            color: #107c10;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 20px;
-            border-left: 4px solid #107c10;
-        }
-        
-        .info {
-            background: #e1f3ff;
-            color: #004578;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 20px;
-            border-left: 4px solid #0078d4;
-        }
-        
-        .warning {
-            background: #fff4ce;
-            color: #8a6d3b;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 20px;
-            border-left: 4px solid #ffb900;
-        }
-        
         .tools-section {
             margin-top: 40px;
             padding-top: 30px;
             border-top: 1px solid #edebe9;
         }
-        
-        .tools-section h2 {
-            color: #323130;
-            margin-bottom: 15px;
-        }
-        
+
         .tool-link {
             display: block;
             padding: 12px 15px;
@@ -159,78 +22,80 @@
             color: #0078d4;
             transition: background 0.2s;
         }
-        
+
         .tool-link:hover {
             background: #e1f3ff;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container narrow">
         <h1>⚙️ Azure DevOps Settings</h1>
         <p class="subtitle">Configure your Azure DevOps Server connection. Settings are shared across all tools.</p>
-        
+
         <div id="currentStatus"></div>
-        
+
         <form id="settingsForm">
             <div class="form-group">
                 <label for="serverUrl">Azure DevOps Server URL</label>
                 <div class="field-description">The base URL of your Azure DevOps Server (e.g., https://your-server.com)</div>
                 <input type="text" id="serverUrl" placeholder="https://your-ado-server.com" required />
             </div>
-            
+
             <div class="form-group">
                 <label for="organization">Organization/Collection</label>
                 <div class="field-description">Usually "DefaultCollection" for on-premise servers</div>
                 <input type="text" id="organization" placeholder="DefaultCollection" required />
             </div>
-            
+
             <div class="form-group">
                 <label for="project">Default Project Name</label>
                 <div class="field-description">Your default project (can be overridden in individual tools)</div>
                 <input type="text" id="project" placeholder="MyProject" required />
             </div>
-            
+
             <div class="form-group">
                 <label for="repository">Default Repository Name</label>
                 <div class="field-description">Your default repository (can be overridden in individual tools)</div>
                 <input type="text" id="repository" placeholder="MyRepo" required />
             </div>
-            
+
             <div class="form-group">
                 <label for="pat">Personal Access Token (PAT)</label>
                 <div class="field-description">
-                    Token with "Code (Read)" permissions. 
+                    Token with "Code (Read)" permissions.
                     <a href="#" id="patHelpLink" style="color: #0078d4;">How to create a PAT?</a>
                 </div>
                 <input type="password" id="pat" placeholder="Your Personal Access Token" required />
             </div>
-            
+
             <div class="button-group">
                 <button type="submit" class="btn-primary">💾 Save Settings</button>
                 <button type="button" class="btn-secondary" onclick="testConnection()">🔌 Test Connection</button>
                 <button type="button" class="btn-danger" onclick="clearSettings()">🗑️ Clear All</button>
             </div>
         </form>
-        
+
         <div id="message"></div>
-        
+
         <div class="warning" style="margin-top: 30px;">
-            <strong>⚠️ Security Note:</strong> Your PAT is stored in browser localStorage. 
+            <strong>⚠️ Security Note:</strong> Your PAT is stored in browser localStorage.
             This is secure for localhost usage, but never use this on a public/shared computer.
         </div>
-        
+
         <div class="tools-section">
             <h2>🛠️ Available Tools</h2>
             <a href="ado-pr-threads.html" class="tool-link">
                 <strong>PR Threads Viewer</strong> - View and analyze all discussion threads in a Pull Request
             </a>
-            <!-- Add more tools here as you create them -->
         </div>
-        
-        <div id="patHelpModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%;">
-                <h2 style="margin-bottom: 20px; color: #323130;">Creating a Personal Access Token</h2>
+
+        <div id="patHelpModal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Creating a Personal Access Token</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
                 <ol style="line-height: 1.8; color: #323130; padding-left: 20px;">
                     <li>Log in to your Azure DevOps Server</li>
                     <li>Click on your profile icon (top right)</li>
@@ -242,28 +107,32 @@
                     <li>Click <strong>Create</strong></li>
                     <li>Copy the token immediately (you won't see it again!)</li>
                 </ol>
-                <button onclick="document.getElementById('patHelpModal').style.display='none'" class="btn-primary" style="margin-top: 20px;">Close</button>
+                <button onclick="closeModal()" class="btn-primary" style="margin-top: 20px;">Close</button>
             </div>
         </div>
     </div>
 
+    <script src="common.js"></script>
     <script>
         // Load current settings on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadSettings();
             checkCurrentStatus();
-            
+
             // PAT help link
             document.getElementById('patHelpLink').addEventListener('click', (e) => {
                 e.preventDefault();
-                document.getElementById('patHelpModal').style.display = 'block';
+                document.getElementById('patHelpModal').classList.add('show');
             });
         });
-        
+
+        function closeModal() {
+            document.getElementById('patHelpModal').classList.remove('show');
+        }
+
         function loadSettings() {
-            const savedConfig = localStorage.getItem('adoConfig');
-            if (savedConfig) {
-                const config = JSON.parse(savedConfig);
+            const config = ADOConfig.get();
+            if (config) {
                 document.getElementById('serverUrl').value = config.serverUrl || '';
                 document.getElementById('organization').value = config.organization || '';
                 document.getElementById('project').value = config.project || '';
@@ -271,20 +140,19 @@
                 document.getElementById('pat').value = config.pat || '';
             }
         }
-        
+
         function checkCurrentStatus() {
-            const savedConfig = localStorage.getItem('adoConfig');
+            const config = ADOConfig.get();
             const statusDiv = document.getElementById('currentStatus');
-            
-            if (savedConfig) {
-                const config = JSON.parse(savedConfig);
+
+            if (config && ADOConfig.isValid(config)) {
                 statusDiv.innerHTML = `
                     <div class="info">
                         <strong>✓ Settings configured</strong><br>
-                        Server: ${config.serverUrl || 'Not set'}<br>
-                        Organization: ${config.organization || 'Not set'}<br>
-                        Project: ${config.project || 'Not set'}<br>
-                        PAT: ${config.pat ? 'â—â—â—â—â—â—â—â— (hidden)' : 'Not set'}
+                        Server: ${ADOContent.escapeHtml(config.serverUrl)}<br>
+                        Organization: ${ADOContent.escapeHtml(config.organization)}<br>
+                        Project: ${ADOContent.escapeHtml(config.project)}<br>
+                        PAT: ${config.pat ? '●●●●●●●● (hidden)' : 'Not set'}
                     </div>
                 `;
             } else {
@@ -296,82 +164,55 @@
                 `;
             }
         }
-        
+
         document.getElementById('settingsForm').addEventListener('submit', (e) => {
             e.preventDefault();
             saveSettings();
         });
-        
+
         function saveSettings() {
-            const config = {
-                serverUrl: document.getElementById('serverUrl').value.trim(),
-                organization: document.getElementById('organization').value.trim(),
-                project: document.getElementById('project').value.trim(),
-                repository: document.getElementById('repository').value.trim(),
-                pat: document.getElementById('pat').value.trim()
-            };
-            
-            localStorage.setItem('adoConfig', JSON.stringify(config));
-            
-            showMessage('success', '✓ Settings saved successfully! You can now use any ADO tool.');
+            const config = ADOConfig.getFromForm({});
+            ADOConfig.save(config);
+
+            ADOUI.showMessage('message', 'success', '✓ Settings saved successfully! You can now use any ADO tool.');
             checkCurrentStatus();
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => ADOUI.clear('message'), 5000);
         }
-        
+
         async function testConnection() {
-            const config = {
-                serverUrl: document.getElementById('serverUrl').value.trim(),
-                organization: document.getElementById('organization').value.trim(),
-                project: document.getElementById('project').value.trim(),
-                pat: document.getElementById('pat').value.trim()
-            };
-            
-            if (!config.serverUrl || !config.organization || !config.project || !config.pat) {
-                showMessage('warning', '⚠️ Please fill in all required fields before testing.');
+            const config = ADOConfig.getFromForm({});
+
+            if (!ADOConfig.isValid(config)) {
+                ADOUI.showMessage('message', 'warning', '⚠️ Please fill in all required fields before testing.');
                 return;
             }
-            
-            showMessage('info', '🔄 Testing connection...');
-            
+
+            ADOUI.showMessage('message', 'info', '🔄 Testing connection...');
+
             try {
-                const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories?api-version=6.0`;
-                const authHeader = 'Basic ' + btoa(':' + config.pat);
-                
-                const response = await fetch(url, {
-                    headers: {
-                        'Authorization': authHeader,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    showMessage('success', `✓ Connection successful! Found ${data.count || 0} repositories in project "${config.project}".`);
-                } else {
-                    showMessage('warning', `⚠️ Connection failed: ${response.status} ${response.statusText}. Check your settings.`);
-                }
+                const data = await ADOAPI.getRepositories(config);
+                ADOUI.showMessage('message', 'success',
+                    `✓ Connection successful! Found ${data.count || 0} repositories in project "${ADOContent.escapeHtml(config.project)}".`);
+
+                // Auto-hide after 5 seconds
+                setTimeout(() => ADOUI.clear('message'), 5000);
             } catch (error) {
-                showMessage('warning', `⚠️ Connection error: ${error.message}. Check your server URL.`);
+                ADOUI.showMessage('message', 'error', `⚠️ ${error.message}`);
             }
         }
-        
+
         function clearSettings() {
             if (confirm('Are you sure you want to clear all settings? This cannot be undone.')) {
-                localStorage.removeItem('adoConfig');
+                ADOConfig.clear();
                 document.getElementById('settingsForm').reset();
-                showMessage('info', 'ℹ️ Settings cleared.');
+                ADOUI.showMessage('message', 'info', 'ℹ️ Settings cleared.');
                 checkCurrentStatus();
+
+                // Auto-hide after 5 seconds
+                setTimeout(() => ADOUI.clear('message'), 5000);
             }
-        }
-        
-        function showMessage(type, text) {
-            const messageDiv = document.getElementById('message');
-            const className = type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
-            messageDiv.innerHTML = `<div class="${className}">${text}</div>`;
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                messageDiv.innerHTML = '';
-            }, 5000);
         }
     </script>
 </body>
