@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure DevOps PR Threads Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f3f2f1;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #0078d4;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .config-section {
+            background: #f8f8f8;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #323130;
+            font-size: 13px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+        
+        button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #106ebe;
+        }
+        
+        button:disabled {
+            background: #d1d1d1;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #605e5c;
+        }
+        
+        .error {
+            background: #fde7e9;
+            color: #a4262c;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #a4262c;
+        }
+        
+        .info {
+            background: #e1f3ff;
+            color: #004578;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #0078d4;
+        }
+        
+        .pr-info {
+            background: #f3f2f1;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+        }
+        
+        .pr-info h2 {
+            color: #323130;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .thread-container {
+            margin-bottom: 30px;
+        }
+        
+        .thread {
+            border: 1px solid #edebe9;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .thread-header {
+            background: #f3f2f1;
+            padding: 15px;
+            font-weight: 600;
+            color: #323130;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .thread-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-active {
+            background: #fff4ce;
+            color: #8a6d3b;
+        }
+        
+        .status-fixed {
+            background: #dff6dd;
+            color: #107c10;
+        }
+        
+        .status-closed {
+            background: #edebe9;
+            color: #605e5c;
+        }
+        
+        .status-deleted {
+            background: #fde7e9;
+            color: #a4262c;
+        }
+        
+        .comment {
+            padding: 15px;
+            border-bottom: 1px solid #edebe9;
+        }
+        
+        .comment:last-child {
+            border-bottom: none;
+        }
+        
+        .comment.system-comment {
+            background: #f8f8f8;
+            border-left: 3px solid #a19f9d;
+        }
+        
+        .comment.code-change-comment {
+            background: #fff9e6;
+            border-left: 3px solid #ffb900;
+        }
+        
+        .comment-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+        
+        .comment-type-system {
+            background: #e1dfdd;
+            color: #605e5c;
+        }
+        
+        .comment-type-code-change {
+            background: #fff4ce;
+            color: #8a6d3b;
+        }
+        
+        .comment-type-text {
+            background: #e1f3ff;
+            color: #004578;
+        }
+        
+        .comment-type-deleted {
+            background: #fde7e9;
+            color: #a4262c;
+        }
+        
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .comment-author {
+            font-weight: 600;
+            color: #0078d4;
+        }
+        
+        .comment-date {
+            color: #605e5c;
+            font-size: 13px;
+        }
+        
+        .comment-link {
+            color: #0078d4;
+            text-decoration: none;
+            font-size: 13px;
+            margin-left: 10px;
+        }
+        
+        .comment-link:hover {
+            text-decoration: underline;
+        }
+        
+        .comment-content {
+            color: #323130;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .comment-content code {
+            background: #f3f2f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            color: #c7254e;
+        }
+        
+        .comment-content pre {
+            background: #f8f8f8;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            padding: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .comment-content pre code {
+            background: none;
+            padding: 0;
+            color: #323130;
+            font-size: 12px;
+        }
+        
+        .comment-content strong {
+            font-weight: 700;
+            color: #323130;
+        }
+        
+        .comment-content em {
+            font-style: italic;
+            color: #323130;
+        }
+        
+        .comment-content a {
+            color: #0078d4;
+            text-decoration: none;
+        }
+        
+        .comment-content a:hover {
+            text-decoration: underline;
+        }
+        
+        .comment-content img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            margin: 5px 5px 5px 0;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        .mention {
+            font-weight: 700;
+            color: #0078d4;
+            background: #e1f3ff;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .thread-context {
+            background: #fff4ce;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid #ffb900;
+            font-size: 13px;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #0078d4;
+        }
+        
+        .stat-label {
+            color: #605e5c;
+            font-size: 12px;
+        }
+        
+        .raw-json-toggle {
+            background: #f3f2f1;
+            border: 1px solid #d1d1d1;
+            color: #323130;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .raw-json-toggle:hover {
+            background: #e1dfdd;
+        }
+        
+        .raw-json-container {
+            display: none;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .raw-json-container.show {
+            display: block;
+        }
+        
+        .raw-json-container pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .api-link {
+            color: #0078d4;
+            text-decoration: none;
+            font-size: 12px;
+            font-family: monospace;
+            background: #f3f2f1;
+            padding: 4px 8px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
+        .api-link:hover {
+            background: #e1dfdd;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Azure DevOps PR Threads Viewer</h1>
+        <p style="color: #605e5c; margin-bottom: 30px;">View all discussion threads from a Pull Request</p>
+        
+        <div class="config-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Pull Request</h3>
+                <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 13px;">⚙️ Settings</a>
+            </div>
+            
+            <div class="form-group">
+                <label for="prId">Pull Request ID</label>
+                <input type="number" id="prId" placeholder="123" />
+            </div>
+            
+            <details id="advancedConfig" style="margin-top: 20px;">
+                <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">🔧 Advanced Configuration</summary>
+                <div style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label for="serverUrl">Azure DevOps Server URL</label>
+                        <input type="text" id="serverUrl" placeholder="https://your-ado-server.com" />
+                    </div>
+                    <div class="form-group">
+                        <label for="organization">Organization/Collection</label>
+                        <input type="text" id="organization" placeholder="DefaultCollection" />
+                    </div>
+                    <div class="form-group">
+                        <label for="project">Project Name</label>
+                        <input type="text" id="project" placeholder="MyProject" />
+                    </div>
+                    <div class="form-group">
+                        <label for="repository">Repository Name</label>
+                        <input type="text" id="repository" placeholder="MyRepo" />
+                    </div>
+                    <div class="form-group">
+                        <label for="pat">Personal Access Token (PAT)</label>
+                        <input type="password" id="pat" placeholder="Your PAT with Code (Read) permission" />
+                    </div>
+                </div>
+            </details>
+            
+            <button id="loadButton" onclick="loadPRThreads()">Load PR Threads</button>
+            <div id="configStatus" style="margin-top: 10px; font-size: 12px; color: #605e5c;"></div>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Parse URL parameters on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const prId = urlParams.get('prId') || urlParams.get('id');
+            
+            if (prId) {
+                document.getElementById('prId').value = prId;
+            }
+            
+            // Load saved configuration from localStorage
+            const savedConfig = localStorage.getItem('adoConfig');
+            if (savedConfig) {
+                const config = JSON.parse(savedConfig);
+                document.getElementById('serverUrl').value = config.serverUrl || '';
+                document.getElementById('organization').value = config.organization || '';
+                document.getElementById('project').value = config.project || '';
+                document.getElementById('repository').value = config.repository || '';
+                document.getElementById('pat').value = config.pat || '';
+                
+                // Show status
+                const hasAllSettings = config.serverUrl && config.organization && config.project && config.repository && config.pat;
+                const statusDiv = document.getElementById('configStatus');
+                if (hasAllSettings) {
+                    statusDiv.innerHTML = '✓ Using saved settings from <a href="ado-settings.html" style="color: #0078d4;">Settings page</a>';
+                    statusDiv.style.color = '#107c10';
+                    
+                    // Auto-load if PR ID is provided
+                    if (prId) {
+                        setTimeout(() => loadPRThreads(), 100);
+                    }
+                } else {
+                    statusDiv.innerHTML = '⚠️ Some settings are missing. <a href="ado-settings.html" style="color: #0078d4;">Configure in Settings</a> or use Advanced Configuration below.';
+                    statusDiv.style.color = '#8a6d3b';
+                }
+            } else {
+                const statusDiv = document.getElementById('configStatus');
+                statusDiv.innerHTML = '⚠️ No settings found. <a href="ado-settings.html" style="color: #0078d4;">Configure in Settings</a> or use Advanced Configuration below.';
+                statusDiv.style.color = '#8a6d3b';
+            }
+        });
+
+        // Cache for resolved identities
+        const identityCache = {};
+        
+        async function loadPRThreads() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            const organization = document.getElementById('organization').value.trim();
+            const project = document.getElementById('project').value.trim();
+            const repository = document.getElementById('repository').value.trim();
+            const prId = document.getElementById('prId').value.trim();
+            const pat = document.getElementById('pat').value.trim();
+            
+            // Validation
+            if (!serverUrl || !organization || !project || !repository || !prId || !pat) {
+                showErrorHTML('Please fill in all fields. Missing fields can be configured in <a href="ado-settings.html" style="color: #fff; text-decoration: underline;">Settings</a> or in Advanced Configuration below.');
+                return;
+            }
+            
+            // Save configuration (including PAT for HTTP server setup)
+            const config = { serverUrl, organization, project, repository, pat };
+            localStorage.setItem('adoConfig', JSON.stringify(config));
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">Loading PR threads...</div>';
+            
+            try {
+                // First, get PR details
+                const prUrl = `${serverUrl}/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}?api-version=6.0`;
+                const prResponse = await fetchWithAuth(prUrl, pat);
+                const prData = await prResponse.json();
+                
+                if (!prResponse.ok) {
+                    throw new Error(prData.message || 'Failed to fetch PR details');
+                }
+                
+                // Then, get PR threads
+                const threadsUrl = `${serverUrl}/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/threads?api-version=6.0`;
+                const threadsResponse = await fetchWithAuth(threadsUrl, pat);
+                const threadsData = await threadsResponse.json();
+                
+                if (!threadsResponse.ok) {
+                    throw new Error(threadsData.message || 'Failed to fetch PR threads');
+                }
+                
+                // Get PR iterations/updates
+                const iterationsUrl = `${serverUrl}/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/iterations?api-version=6.0`;
+                const iterationsResponse = await fetchWithAuth(iterationsUrl, pat);
+                const iterationsData = await iterationsResponse.json();
+                
+                if (!iterationsResponse.ok) {
+                    throw new Error(iterationsData.message || 'Failed to fetch PR iterations');
+                }
+                
+                // Collect all unique identities from threads to resolve
+                const threads = threadsData.value || [];
+                const iterations = iterationsData.value || [];
+                await collectAndResolveIdentities(threads, serverUrl, organization, pat);
+                
+                displayResults(prData, threads, iterations, { serverUrl, organization, project, repository });
+                
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            }
+        }
+        
+        async function collectAndResolveIdentities(threads, serverUrl, organization, pat) {
+            const identityIds = new Set();
+            
+            // Collect all identity references from comments
+            threads.forEach(thread => {
+                if (thread.comments) {
+                    thread.comments.forEach(comment => {
+                        if (comment.content) {
+                            // Match patterns like @<guid> or @<email>
+                            const mentionPattern = /@<([^>]+)>/g;
+                            let match;
+                            while ((match = mentionPattern.exec(comment.content)) !== null) {
+                                identityIds.add(match[1]);
+                            }
+                        }
+                    });
+                }
+            });
+            
+            // Resolve all unique identities
+            const resolvePromises = Array.from(identityIds).map(id => 
+                resolveIdentity(id, serverUrl, organization, pat)
+            );
+            
+            await Promise.all(resolvePromises);
+        }
+        
+        async function resolveIdentity(id, serverUrl, organization, pat) {
+            if (identityCache[id]) {
+                return identityCache[id];
+            }
+            
+            try {
+                // Try identity API first
+                const identityUrl = `${serverUrl}/${organization}/_apis/identities/${encodeURIComponent(id)}?api-version=6.0`;
+                const response = await fetchWithAuth(identityUrl, pat);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    identityCache[id] = data.displayName || data.providerDisplayName || id;
+                } else {
+                    // If it fails, try to use it as email/username directly
+                    identityCache[id] = id;
+                }
+            } catch (error) {
+                // If resolution fails, just use the original ID
+                identityCache[id] = id;
+            }
+            
+            return identityCache[id];
+        }
+        
+        function resolveMentions(text) {
+            if (!text) return text;
+            
+            // Replace @<...> with resolved names wrapped in styled span
+            return text.replace(/@<([^>]+)>/g, (match, id) => {
+                const displayName = identityCache[id] || id;
+                return `<span class="mention">@${escapeHtml(displayName)}</span>`;
+            });
+        }
+        
+        function resolveMentionsInEscaped(escapedHtml) {
+            if (!escapedHtml) return escapedHtml;
+            
+            // In escaped HTML, @<...> becomes @&lt;...&gt;
+            // Replace these with styled spans
+            return escapedHtml.replace(/@&lt;([^&]+)&gt;/g, (match, id) => {
+                const displayName = identityCache[id] || id;
+                return `<span class="mention">@${escapeHtml(displayName)}</span>`;
+            });
+        }
+        
+        function parseMarkdownLinks(escapedHtml) {
+            if (!escapedHtml) return escapedHtml;
+            
+            let result = escapedHtml;
+            const placeholders = [];
+            let placeholderIndex = 0;
+            
+            // Helper function to create a placeholder
+            // Use Unicode brackets that won't be matched by markdown patterns
+            function createPlaceholder(content) {
+                const placeholder = `〔PLH${placeholderIndex}〕`;
+                placeholders.push({ placeholder, content });
+                placeholderIndex++;
+                return placeholder;
+            }
+            
+            // Helper function to restore all placeholders
+            function restorePlaceholders(text) {
+                let restored = text;
+                // Restore in reverse order to handle nested cases
+                for (let i = placeholders.length - 1; i >= 0; i--) {
+                    const { placeholder, content } = placeholders[i];
+                    // Use split/join to replace all occurrences
+                    restored = restored.split(placeholder).join(content);
+                }
+                return restored;
+            }
+            
+            // 1. Parse code blocks first - with optional language identifier
+            // Pattern: triple-backtick + language + newline + code + triple-backtick
+            result = result.replace(/```(\w+)?\n?([^`]+)```/g, (match, language, code) => {
+                const html = `<pre><code>${code.trim()}</code></pre>`;
+                return createPlaceholder(html);
+            });
+            
+            // 2. Parse inline code (single backticks)
+            result = result.replace(/`([^`]+)`/g, (match, code) => {
+                const html = `<code>${code}</code>`;
+                return createPlaceholder(html);
+            });
+            
+            // 3. Parse images (must be before regular links since images start with !)
+            // Pattern: ![alt](url) or ![alt](url "title") or ![alt](url 'title')
+            result = result.replace(/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+['"]([^'"]+)['"])?\)/g, (match, alt, url, title) => {
+                const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+                const html = `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}"${titleAttr} />`;
+                return createPlaceholder(html);
+            });
+            
+            // 4. Parse bold (**text** or __text__) - must be before italic
+            result = result.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
+            result = result.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+            
+            // 5. Parse italic (*text* or _text_) - but not if part of __ or **
+            // Use negative lookbehind/lookahead to avoid matching ** or __
+            result = result.replace(/(?<!\*)\*(?!\*)([^\*]+)\*(?!\*)/g, '<em>$1</em>');
+            result = result.replace(/(?<!_)_(?!_)([^_]+)_(?!_)/g, '<em>$1</em>');
+            
+            // 6. Parse regular links: [text](url) - protect URLs with placeholders
+            result = result.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, text, url) => {
+                const html = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+                return createPlaceholder(html);
+            });
+            
+            // 7. Restore all placeholders
+            result = restorePlaceholders(result);
+            
+            return result;
+        }
+        
+        function getIterationLinksForComment(comment, thread, iterations, config, prData, filePath) {
+            const commentId = comment.id;
+            const discussionId = thread.id;
+            
+            if (!iterations || iterations.length === 0) {
+                return { beforeLink: null, afterLink: null, completeLink: null };
+            }
+            
+            // Sort iterations by creation date
+            const sortedIterations = [...iterations].sort((a, b) => 
+                new Date(a.createdDate) - new Date(b.createdDate)
+            );
+            
+            const commentTime = new Date(comment.publishedDate);
+            
+            // Find last iteration before comment
+            let lastBeforeIndex = -1;
+            for (let i = sortedIterations.length - 1; i >= 0; i--) {
+                if (new Date(sortedIterations[i].createdDate) < commentTime) {
+                    lastBeforeIndex = i;
+                    break;
+                }
+            }
+            
+            // Find first iteration after comment
+            let firstAfterIndex = -1;
+            for (let i = 0; i < sortedIterations.length; i++) {
+                if (new Date(sortedIterations[i].createdDate) > commentTime) {
+                    firstAfterIndex = i;
+                    break;
+                }
+            }
+            
+            const latestIteration = sortedIterations[sortedIterations.length - 1];
+            
+            let beforeLink = null;
+            let afterLink = null;
+            let completeLink = null;
+            
+            // Base URL parts
+            const baseUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}`;
+            const pathParam = filePath ? `&path=${encodeURIComponent(filePath)}` : '';
+            const commentParams = `&discussionId=${discussionId}&commentId=${commentId}`;
+            
+            // Create "before" link: iteration 1 to last before comment
+            // To show iterations 1 to N, use base=0 (N-1 would be 0 for first iteration)
+            if (lastBeforeIndex >= 0) {
+                const baseIteration = 0; // base is always one less than the starting iteration
+                const targetIteration = sortedIterations[lastBeforeIndex].id;
+                beforeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
+            }
+            
+            // Create "after" link: first after comment to latest
+            if (firstAfterIndex >= 0) {
+                const baseIteration = sortedIterations[firstAfterIndex].id - 1; // one less than the starting iteration
+                const targetIteration = latestIteration.id;
+                afterLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
+            }
+            
+            // Create "complete" link: iteration 1 to latest (always available if we have iterations)
+            const baseIteration = 0; // base=0 to start from iteration 1
+            const targetIteration = latestIteration.id;
+            completeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
+            
+            return { beforeLink, afterLink, completeLink };
+        }
+        
+        function fetchWithAuth(url, pat) {
+            const authHeader = 'Basic ' + btoa(':' + pat);
+            return fetch(url, {
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
+                }
+            });
+        }
+        
+        function displayResults(prData, threads, iterations, config) {
+            const resultsDiv = document.getElementById('results');
+            
+            // Count threads by status
+            const statusCounts = threads.reduce((acc, thread) => {
+                if (thread.isDeleted === true) {
+                    acc.deleted = (acc.deleted || 0) + 1;
+                } else {
+                    const status = thread.status || 'unknown';
+                    acc[status] = (acc[status] || 0) + 1;
+                }
+                return acc;
+            }, {});
+            
+            let html = `
+                <div class="pr-info">
+                    <h2>PR #${prData.pullRequestId}: ${escapeHtml(prData.title)}</h2>
+                    <p><strong>Author:</strong> ${escapeHtml(prData.createdBy.displayName)}</p>
+                    <p><strong>Status:</strong> ${prData.status}</p>
+                    <p><strong>Created:</strong> ${new Date(prData.creationDate).toLocaleString()}</p>
+                    <details style="margin-top: 15px;">
+                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📡 API Endpoints Used</summary>
+                        <div style="margin-top: 10px; font-size: 13px; font-family: monospace; background: #f8f8f8; padding: 10px; border-radius: 4px;">
+                            <div style="margin-bottom: 8px;">
+                                <strong>PR Details:</strong><br>
+                                <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}?api-version=6.0</code>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <strong>PR Threads:</strong><br>
+                                <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads?api-version=6.0</code>
+                            </div>
+                            <div>
+                                <strong>PR Iterations:</strong><br>
+                                <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/iterations?api-version=6.0</code>
+                            </div>
+                        </div>
+                    </details>
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">ℹ️ Comment Types & Formatting</summary>
+                        <div style="margin-top: 10px; font-size: 13px; background: #f8f8f8; padding: 10px; border-radius: 4px;">
+                            <div style="margin-bottom: 8px;"><strong>Comment Types:</strong></div>
+                            <div style="margin-bottom: 6px;"><span class="comment-type-badge comment-type-text">Text</span> Regular user comment (default)</div>
+                            <div style="margin-bottom: 6px;"><span class="comment-type-badge comment-type-system">System</span> Automated system message (e.g., "marked as resolved", "reopened")</div>
+                            <div style="margin-bottom: 6px;"><span class="comment-type-badge comment-type-code-change">Code Change</span> Comment generated from code changes</div>
+                            <div style="margin-bottom: 12px;"><span class="comment-type-badge comment-type-deleted">Deleted</span> Comment has been deleted</div>
+                            <div style="margin-bottom: 8px;"><strong>Supported Markdown Formatting:</strong></div>
+                            <div style="margin-bottom: 6px;">• <span class="mention">@User</span> Resolved mentions from Azure DevOps</div>
+                            <div style="margin-bottom: 6px;">• <strong>Bold</strong>: <code>**text**</code> or <code>__text__</code></div>
+                            <div style="margin-bottom: 6px;">• <em>Italic</em>: <code>*text*</code> or <code>_text_</code></div>
+                            <div style="margin-bottom: 6px;">• <code>Inline code</code>: <code>&#96;code&#96;</code></div>
+                            <div style="margin-bottom: 6px;">• Code blocks: <code>&#96;&#96;&#96;code&#96;&#96;&#96;</code></div>
+                            <div style="margin-bottom: 6px;">• <a href="#" onclick="return false;" style="color: #0078d4;">Links</a>: <code>[text](url)</code></div>
+                            <div style="margin-bottom: 12px;">• 🖼️ Images: <code>![alt](url)</code> or <code>![alt](url 'title')</code></div>
+                            <div style="margin-bottom: 8px;"><strong>View in Code Links:</strong></div>
+                            <div style="margin-bottom: 6px;">• 📋 <strong>Before</strong> - View comment in diff from update 1 to last update before comment</div>
+                            <div style="margin-bottom: 6px;">• 📝 <strong>After</strong> - View comment in diff from first update after comment to latest</div>
+                            <div>• 📄 <strong>Complete</strong> - View comment in complete diff from update 1 to latest</div>
+                        </div>
+                    </details>
+                </div>
+                
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value">${threads.length}</div>
+                        <div class="stat-label">Total Threads</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${statusCounts.active || 0}</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${statusCounts.fixed || 0}</div>
+                        <div class="stat-label">Fixed</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${statusCounts.closed || 0}</div>
+                        <div class="stat-label">Closed</div>
+                    </div>
+                    ${statusCounts.deleted ? `
+                    <div class="stat">
+                        <div class="stat-value" style="color: #a4262c;">${statusCounts.deleted}</div>
+                        <div class="stat-label">Deleted</div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            if (threads.length === 0) {
+                html += '<div class="info">No threads found for this Pull Request.</div>';
+            } else {
+                html += '<div class="thread-container">';
+                
+                threads.forEach((thread, index) => {
+                    const status = thread.status || 'unknown';
+                    const isThreadDeleted = thread.isDeleted === true;
+                    
+                    const statusClass = isThreadDeleted ? 'status-deleted' :
+                                      status === 'active' ? 'status-active' : 
+                                      status === 'fixed' ? 'status-fixed' : 'status-closed';
+                    
+                    const statusText = isThreadDeleted ? 'DELETED' : status.toUpperCase();
+                    
+                    // Build link to thread in Azure DevOps
+                    const threadId = thread.id;
+                    let threadUrl;
+                    
+                    // Check if thread is related to a file
+                    if (thread.threadContext && thread.threadContext.filePath) {
+                        // File-related thread - open in files tab with specific file
+                        const filePath = encodeURIComponent(thread.threadContext.filePath);
+                        threadUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}?_a=files&path=${filePath}&discussionId=${threadId}`;
+                    } else {
+                        // General thread - open in overview tab
+                        threadUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}?_a=overview&discussionId=${threadId}`;
+                    }
+                    
+                    // API endpoint for this thread
+                    const apiEndpoint = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads/${threadId}?api-version=6.0`;
+                    
+                    html += `
+                        <div class="thread">
+                            <div class="thread-header">
+                                <span>Thread #${index + 1}</span>
+                                <span>
+                                    <button class="raw-json-toggle" onclick="toggleRawJson('thread-${index}')">View Raw JSON</button>
+                                    <span class="thread-status ${statusClass}">${statusText}</span>
+                                </span>
+                            </div>
+                    `;
+                    
+                    // Add raw JSON container
+                    const jsonString = JSON.stringify(thread, null, 2);
+                    html += `
+                        <div id="thread-${index}" class="raw-json-container">
+                            <div style="margin-bottom: 10px; color: #9cdcfe;">
+                                <strong>API Endpoint:</strong><br>
+                                <a href="${apiEndpoint}" target="_blank" class="api-link" title="Open in new tab (requires authentication)">${apiEndpoint}</a>
+                            </div>
+                            <pre>${escapeHtml(jsonString)}</pre>
+                        </div>
+                    `;
+                    
+                    // Show thread context if it's a code comment
+                    if (thread.threadContext) {
+                        const ctx = thread.threadContext;
+                        html += `
+                            <div class="thread-context">
+                                <strong>File:</strong> ${escapeHtml(ctx.filePath || 'N/A')}<br>
+                                ${ctx.rightFileStart ? `<strong>Line:</strong> ${ctx.rightFileStart.line}` : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    // Show all comments in the thread
+                    if (thread.comments && thread.comments.length > 0) {
+                        thread.comments.forEach(comment => {
+                            // First escape HTML, then resolve mentions, then parse markdown links
+                            const escapedContent = escapeHtml(comment.content || '');
+                            const withMentions = resolveMentionsInEscaped(escapedContent);
+                            const resolvedContent = parseMarkdownLinks(withMentions);
+                            
+                            // Get iteration links for this comment
+                            const filePath = thread.threadContext?.filePath || null;
+                            const iterationLinks = getIterationLinksForComment(
+                                comment,
+                                thread,
+                                iterations, 
+                                config, 
+                                prData,
+                                filePath
+                            );
+                            
+                            // Check if comment is deleted
+                            const isDeleted = comment.isDeleted === true;
+                            
+                            // Determine comment type
+                            const commentType = comment.commentType || 'unknown';
+                            let commentTypeLabel = '';
+                            let commentClass = '';
+                            let commentTypeBadgeClass = '';
+                            
+                            if (isDeleted) {
+                                commentTypeLabel = 'Deleted';
+                                commentTypeBadgeClass = 'comment-type-deleted';
+                            } else {
+                                switch(commentType) {
+                                    case 'system':
+                                    case 3:
+                                        commentTypeLabel = 'System';
+                                        commentClass = 'system-comment';
+                                        commentTypeBadgeClass = 'comment-type-system';
+                                        break;
+                                    case 'codeChange':
+                                    case 2:
+                                        commentTypeLabel = 'Code Change';
+                                        commentClass = 'code-change-comment';
+                                        commentTypeBadgeClass = 'comment-type-code-change';
+                                        break;
+                                    case 'text':
+                                    case 1:
+                                        commentTypeLabel = 'Text';
+                                        commentTypeBadgeClass = 'comment-type-text';
+                                        break;
+                                    default:
+                                        commentTypeLabel = 'Unknown';
+                                        break;
+                                }
+                            }
+                            
+                            html += `
+                                <div class="comment ${commentClass}">
+                                    <div class="comment-header">
+                                        <span>
+                                            <span class="comment-author">${escapeHtml(comment.author?.displayName || 'Unknown')}</span>
+                                            ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
+                                        </span>
+                                        <span class="comment-date">${new Date(comment.publishedDate).toLocaleString()}</span>
+                                    </div>
+                                    ${iterationLinks.completeLink ? `
+                                    <div style="padding: 8px 0; font-size: 12px; border-bottom: 1px solid #edebe9;">
+                                        <strong style="color: #605e5c;">View in Code:</strong>
+                                        ${iterationLinks.beforeLink ? `<a href="${iterationLinks.beforeLink}" target="_blank" class="comment-link" title="Diff from first update to last update before this comment">📋 Before</a>` : ''}
+                                        ${iterationLinks.afterLink ? `<a href="${iterationLinks.afterLink}" target="_blank" class="comment-link" title="Diff from first update after this comment to latest">📝 After</a>` : ''}
+                                        <a href="${iterationLinks.completeLink}" target="_blank" class="comment-link" title="Complete diff from first to latest update">📄 Complete</a>
+                                    </div>
+                                    ` : ''}
+                                    ${resolvedContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    html += '</div>';
+                });
+                
+                html += '</div>';
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
+        }
+        
+        function showErrorHTML(htmlMessage) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `<div class="error">${htmlMessage}</div>`;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function toggleRawJson(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.classList.toggle('show');
+            }
+        }
+    </script>
+</body>
+</html>
