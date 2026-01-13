@@ -332,7 +332,6 @@
                         <option value="active">Active</option>
                         <option value="closed">Resolved</option>
                         <option value="wontFix">Won't Fix</option>
-                        <option value="byDesign">By Design</option>
                         <option value="pending">Pending</option>
                     </select>
                     <button onclick="applyBulkStatusChange()" class="btn-primary">Apply Changes</button>
@@ -378,10 +377,6 @@
                         <label>
                             <input type="checkbox" value="wontFix" checked onchange="applyThreadFilters()">
                             Won't Fix
-                        </label>
-                        <label>
-                            <input type="checkbox" value="byDesign" checked onchange="applyThreadFilters()">
-                            By Design
                         </label>
                         <label>
                             <input type="checkbox" value="pending" checked onchange="applyThreadFilters()">
@@ -756,7 +751,6 @@
                 'active': 'Active',
                 'closed': 'Resolved',
                 'wontFix': "Won't Fix",
-                'byDesign': 'By Design',
                 'pending': 'Pending'
             };
             const statusLabel = statusLabels[newStatus] || newStatus;
@@ -947,7 +941,6 @@
                                     <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
                                     <option value="closed" ${status === 'closed' ? 'selected' : ''}>Resolved</option>
                                     <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
-                                    <option value="byDesign" ${status === 'byDesign' ? 'selected' : ''}>By Design</option>
                                     <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
                                 </select>
                             </span>

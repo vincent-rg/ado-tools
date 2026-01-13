@@ -484,7 +484,6 @@ const ADOUI = {
             'active': 'ACTIVE',
             'closed': 'RESOLVED',
             'wontFix': "WON'T FIX",
-            'byDesign': 'BY DESIGN',
             'pending': 'PENDING',
             'unknown': 'UNKNOWN'
         };
