@@ -245,6 +245,8 @@ const ADOIdentity = {
                 identityCache[id] = id;
             }
         } catch (error) {
+            // CORS errors are expected when ADO Server doesn't allow cross-origin requests
+            // This is not critical - we'll just use the raw ID instead of display name
             identityCache[id] = id;
         }
 
@@ -270,6 +272,10 @@ const ADOIdentity = {
                 });
             }
         });
+
+        if (identityIds.size > 0) {
+            console.log(`Attempting to resolve ${identityIds.size} @mention identities. CORS errors may appear but are harmless.`);
+        }
 
         const resolvePromises = Array.from(identityIds).map(id =>
             this.resolve(id, serverUrl, organization, pat)
