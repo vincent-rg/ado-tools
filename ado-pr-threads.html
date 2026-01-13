@@ -13,6 +13,58 @@
             margin-bottom: 30px;
         }
 
+        .thread-filters {
+            background: #f3f2f1;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #323130;
+        }
+
+        .filter-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .checkbox-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .checkbox-filters label {
+            display: flex;
+            align-items: center;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .checkbox-filters input[type="checkbox"] {
+            margin-right: 8px;
+            width: auto;
+        }
+
         .thread-container {
             margin-bottom: 30px;
         }
@@ -22,6 +74,32 @@
             border-radius: 6px;
             margin-bottom: 20px;
             overflow: hidden;
+        }
+
+        .thread.compact-view .comment {
+            padding: 8px 15px;
+        }
+
+        .thread.compact-view .comment-content {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .thread.compact-view .comment-header {
+            margin-bottom: 4px;
+        }
+
+        .thread.compact-view .thread-context,
+        .thread.compact-view .raw-json-container {
+            display: none;
+        }
+
+        .thread.compact-view .comment-content pre,
+        .thread.compact-view .comment-content code,
+        .thread.compact-view .comment-content img {
+            display: none;
         }
 
         .thread-header {
@@ -188,6 +266,65 @@
 
         <div id="prInfo" style="margin-bottom: 20px;"></div>
 
+        <div id="threadFilters" class="thread-filters" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Thread Filters</h3>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span style="font-size: 14px; color: #605e5c;">View:</span>
+                    <button id="viewToggle" onclick="toggleView()" class="btn-secondary" style="padding: 8px 16px;">
+                        Switch to Compact
+                    </button>
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>Show Deleted Threads</label>
+                    <div class="checkbox-filters">
+                        <label>
+                            <input type="checkbox" id="showDeleted" checked onchange="applyThreadFilters()">
+                            Show deleted threads
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label>Thread Status</label>
+                    <div class="checkbox-filters">
+                        <label>
+                            <input type="checkbox" value="active" checked onchange="applyThreadFilters()">
+                            Active
+                        </label>
+                        <label>
+                            <input type="checkbox" value="fixed" checked onchange="applyThreadFilters()">
+                            Fixed
+                        </label>
+                        <label>
+                            <input type="checkbox" value="closed" checked onchange="applyThreadFilters()">
+                            Closed
+                        </label>
+                        <label>
+                            <input type="checkbox" value="completed" checked onchange="applyThreadFilters()">
+                            Completed
+                        </label>
+                        <label>
+                            <input type="checkbox" value="unknown" onchange="applyThreadFilters()">
+                            Unknown
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label for="threadAuthorFilter">Thread Author (First Comment)</label>
+                    <select id="threadAuthorFilter" onchange="applyThreadFilters()">
+                        <option value="">All authors</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 15px; color: #605e5c; font-size: 13px;">
+                Showing <span id="filteredCount">0</span> of <span id="totalCount">0</span> threads
+            </div>
+        </div>
+
         <div class="config-section" id="configSection" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">Configuration</h3>
@@ -229,6 +366,11 @@
     <script src="common.js"></script>
     <script>
         let currentPRId = null;
+        let allThreads = [];
+        let allIterations = [];
+        let currentPRData = null;
+        let currentConfig = null;
+        let isCompactView = false;
 
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
@@ -317,17 +459,100 @@
                     ADOAPI.getPRIterations(config, currentPRId)
                 ]);
 
-                const threads = threadsData.value || [];
-                const iterations = iterationsData.value || [];
+                allThreads = threadsData.value || [];
+                allIterations = iterationsData.value || [];
+                currentPRData = prData;
+                currentConfig = config;
 
                 // Collect and resolve identities
-                await ADOIdentity.collectAndResolveFromThreads(threads, config.serverUrl, config.organization, config.pat);
+                await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
 
-                displayResults(prData, threads, iterations, config);
+                // Show filters
+                document.getElementById('threadFilters').style.display = 'block';
+
+                // Populate author filter
+                populateAuthorFilter();
+
+                // Apply filters and display results
+                applyThreadFilters();
 
             } catch (error) {
                 ADOUI.showError('results', error.message);
             }
+        }
+
+        function populateAuthorFilter() {
+            const authorFilter = document.getElementById('threadAuthorFilter');
+            const authors = new Set();
+
+            allThreads.forEach(thread => {
+                if (thread.comments && thread.comments.length > 0) {
+                    const firstComment = thread.comments[0];
+                    if (firstComment.author && firstComment.author.displayName) {
+                        authors.add(firstComment.author.displayName);
+                    }
+                }
+            });
+
+            let html = '<option value="">All authors</option>';
+            Array.from(authors).sort().forEach(author => {
+                html += `<option value="${ADOContent.escapeHtml(author)}">${ADOContent.escapeHtml(author)}</option>`;
+            });
+
+            authorFilter.innerHTML = html;
+        }
+
+        function applyThreadFilters() {
+            const showDeleted = document.getElementById('showDeleted').checked;
+            const selectedStatuses = getSelectedThreadStatuses();
+            const selectedAuthor = document.getElementById('threadAuthorFilter').value;
+
+            const filtered = allThreads.filter(thread => {
+                // Deleted filter
+                if (!showDeleted && thread.isDeleted === true) {
+                    return false;
+                }
+
+                // Status filter
+                const status = (thread.status || 'unknown').toLowerCase();
+                if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) {
+                    return false;
+                }
+
+                // Author filter (first comment author)
+                if (selectedAuthor) {
+                    if (!thread.comments || thread.comments.length === 0) {
+                        return false;
+                    }
+                    const firstComment = thread.comments[0];
+                    if (!firstComment.author || firstComment.author.displayName !== selectedAuthor) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            // Update counts
+            document.getElementById('totalCount').textContent = allThreads.length;
+            document.getElementById('filteredCount').textContent = filtered.length;
+
+            // Display filtered threads
+            displayResults(currentPRData, filtered, allIterations, currentConfig);
+        }
+
+        function getSelectedThreadStatuses() {
+            const checkboxes = document.querySelectorAll('.thread-filters .checkbox-filters input[type="checkbox"][value]:checked');
+            return Array.from(checkboxes).map(cb => cb.value.toLowerCase());
+        }
+
+        function toggleView() {
+            isCompactView = !isCompactView;
+            const button = document.getElementById('viewToggle');
+            button.textContent = isCompactView ? 'Switch to Detailed' : 'Switch to Compact';
+
+            // Re-apply filters to refresh display
+            applyThreadFilters();
         }
 
         function getIterationLinksForComment(comment, thread, iterations, config, prData, filePath) {
@@ -472,8 +697,10 @@
                     const threadUrl = ADOURL.buildThreadUrl(config, prData.pullRequestId, threadId, thread.threadContext?.filePath);
                     const apiEndpoint = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads/${threadId}?api-version=6.0`;
 
+                    const compactClass = isCompactView ? 'compact-view' : '';
+
                     html += `
-                        <div class="thread">
+                        <div class="thread ${compactClass}">
                             <div class="thread-header">
                                 <span>Thread #${index + 1}</span>
                                 <span>
