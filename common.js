@@ -139,8 +139,19 @@ const ADOAPI = {
     async updateThreadStatus(config, prId, threadId, status) {
         const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}?api-version=6.0`;
 
-        // "active" means no status field, so send null to clear it
-        const payload = { status: status === 'active' ? null : status };
+        // Map string status to CommentThreadStatus enum integers
+        // https://learn.microsoft.com/en-us/javascript/api/azure-devops-extension-api/commentthreadstatus
+        const statusMap = {
+            'active': 1,
+            'fixed': 2,
+            'wontFix': 3,
+            'closed': 4,
+            'byDesign': 5,
+            'pending': 6
+        };
+
+        const statusValue = statusMap[status] !== undefined ? statusMap[status] : status;
+        const payload = { status: statusValue };
 
         const response = await this.fetchWithAuth(url, config.pat, {
             method: 'PATCH',
