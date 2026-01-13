@@ -294,6 +294,7 @@
         let filteredPRs = [];
         let allAuthors = new Set();
         let allReviewers = new Set();
+        let isRestoringFromURL = false;
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -305,7 +306,126 @@
             }
 
             await loadProjects();
+            await restoreFiltersFromURL();
         });
+
+        // URL parameter helpers
+        function getURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                projects: params.get('projects') ? params.get('projects').split(',') : null,
+                repos: params.get('repos') ? params.get('repos').split(',') : null,
+                status: params.get('status') ? params.get('status').split(',') : null,
+                prId: params.get('prId') || null,
+                createdBy: params.get('createdBy') || null,
+                assignedTo: params.get('assignedTo') || null
+            };
+        }
+
+        function updateURL() {
+            if (isRestoringFromURL) return;
+
+            const params = new URLSearchParams();
+
+            // Projects
+            const selectedProjects = getSelectedProjects();
+            if (selectedProjects.length > 0) {
+                params.set('projects', selectedProjects.join(','));
+            }
+
+            // Repos (store repo IDs)
+            const selectedRepos = getSelectedRepos();
+            if (selectedRepos.length > 0) {
+                params.set('repos', selectedRepos.map(r => r.id).join(','));
+            }
+
+            // Status
+            const selectedStatuses = getSelectedStatuses();
+            if (selectedStatuses.length > 0) {
+                params.set('status', selectedStatuses.join(','));
+            }
+
+            // PR ID
+            const prId = document.getElementById('prIdFilter').value.trim();
+            if (prId) {
+                params.set('prId', prId);
+            }
+
+            // Created By
+            const createdBy = document.getElementById('createdByFilter').value.trim();
+            if (createdBy) {
+                params.set('createdBy', createdBy);
+            }
+
+            // Assigned To
+            const assignedTo = document.getElementById('assignedToFilter').value.trim();
+            if (assignedTo) {
+                params.set('assignedTo', assignedTo);
+            }
+
+            const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+            history.replaceState(null, '', newURL);
+        }
+
+        async function restoreFiltersFromURL() {
+            const urlParams = getURLParams();
+            isRestoringFromURL = true;
+
+            try {
+                // Restore project selections
+                if (urlParams.projects) {
+                    urlParams.projects.forEach(projectName => {
+                        const checkbox = document.querySelector(`#projectFilters input[type="checkbox"][value="${projectName}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                        }
+                    });
+                    await loadRepos();
+                }
+
+                // Restore repo selections
+                if (urlParams.repos) {
+                    urlParams.repos.forEach(repoId => {
+                        const checkbox = document.querySelector(`#repoFilters input[type="checkbox"][value="${repoId}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                        }
+                    });
+                }
+
+                // Restore status selections (if provided in URL, override defaults)
+                if (urlParams.status) {
+                    // First uncheck all
+                    ['active', 'completed', 'abandoned'].forEach(status => {
+                        const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
+                        if (checkbox) {
+                            checkbox.checked = false;
+                        }
+                    });
+                    // Then check only URL-specified statuses
+                    urlParams.status.forEach(status => {
+                        const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                        }
+                    });
+                }
+
+                // Restore text filters
+                if (urlParams.prId) {
+                    document.getElementById('prIdFilter').value = urlParams.prId;
+                }
+                if (urlParams.createdBy) {
+                    document.getElementById('createdByFilter').value = urlParams.createdBy;
+                }
+                if (urlParams.assignedTo) {
+                    document.getElementById('assignedToFilter').value = urlParams.assignedTo;
+                }
+
+            } finally {
+                isRestoringFromURL = false;
+            }
+        }
 
         async function loadProjects() {
             const config = ADOConfig.get();
@@ -345,6 +465,7 @@
 
         async function onProjectChange() {
             await loadRepos();
+            updateURL();
             applyFilters();
         }
 
@@ -533,6 +654,7 @@
 
             displayPRs();
             updateSelectedFilters();
+            updateURL();
         }
 
         function updateSelectedFilters() {
@@ -720,7 +842,7 @@
                 }
             });
 
-            applyFilters();
+            applyFilters(); // This will call updateURL()
         }
     </script>
 </body>
