@@ -227,12 +227,18 @@
         .comment-link {
             color: #0078d4;
             text-decoration: none;
-            font-size: 13px;
-            margin-left: 10px;
+            font-size: 20px;
+            margin-left: 12px;
+            line-height: 1;
         }
 
         .comment-link:hover {
-            text-decoration: underline;
+            opacity: 0.7;
+        }
+
+        .code-links {
+            display: flex;
+            align-items: center;
         }
 
         .comment-content {
@@ -1028,16 +1034,17 @@
                                             <span class="comment-author">${ADOContent.escapeHtml(comment.author?.displayName || 'Unknown')}</span>
                                             ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
                                         </span>
-                                        <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
+                                            ${iterationLinks.completeLink ? `
+                                            <div class="code-links">
+                                                ${iterationLinks.beforeLink ? `<a href="${iterationLinks.beforeLink}" target="_blank" class="comment-link" title="Diff from first update to last update before this comment">←</a>` : ''}
+                                                ${iterationLinks.afterLink ? `<a href="${iterationLinks.afterLink}" target="_blank" class="comment-link" title="Diff from first update after this comment to latest">→</a>` : ''}
+                                                <a href="${iterationLinks.completeLink}" target="_blank" class="comment-link" title="Complete diff from first to latest update">↔</a>
+                                            </div>
+                                            ` : ''}
+                                        </div>
                                     </div>
-                                    ${iterationLinks.completeLink ? `
-                                    <div style="padding: 8px 0; font-size: 12px; border-bottom: 1px solid #edebe9;">
-                                        <strong style="color: #605e5c;">View in Code:</strong>
-                                        ${iterationLinks.beforeLink ? `<a href="${iterationLinks.beforeLink}" target="_blank" class="comment-link" title="Diff from first update to last update before this comment">📋 Before</a>` : ''}
-                                        ${iterationLinks.afterLink ? `<a href="${iterationLinks.afterLink}" target="_blank" class="comment-link" title="Diff from first update after this comment to latest">📝 After</a>` : ''}
-                                        <a href="${iterationLinks.completeLink}" target="_blank" class="comment-link" title="Complete diff from first to latest update">📄 Complete</a>
-                                    </div>
-                                    ` : ''}
                                     ${resolvedContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
                                 </div>
                             `;
