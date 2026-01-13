@@ -710,8 +710,11 @@
             document.getElementById('assignedToFilter').value = '';
 
             // Reset status checkboxes to default (only active)
-            document.querySelectorAll('.filter-section:nth-child(4) input[type="checkbox"]').forEach(cb => {
-                cb.checked = cb.value === 'active';
+            ['active', 'completed', 'abandoned', 'all'].forEach(status => {
+                const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
+                if (checkbox) {
+                    checkbox.checked = status === 'active';
+                }
             });
 
             applyFilters();
