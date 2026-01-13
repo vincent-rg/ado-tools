@@ -330,8 +330,10 @@
                     <select id="bulkStatusSelect">
                         <option value="">Select status...</option>
                         <option value="active">Active</option>
-                        <option value="fixed">Fixed</option>
-                        <option value="closed">Closed</option>
+                        <option value="closed">Resolved</option>
+                        <option value="wontFix">Won't Fix</option>
+                        <option value="byDesign">By Design</option>
+                        <option value="pending">Pending</option>
                     </select>
                     <button onclick="applyBulkStatusChange()" class="btn-primary">Apply Changes</button>
                 </div>
@@ -370,16 +372,20 @@
                             Active
                         </label>
                         <label>
-                            <input type="checkbox" value="fixed" checked onchange="applyThreadFilters()">
-                            Fixed
-                        </label>
-                        <label>
                             <input type="checkbox" value="closed" checked onchange="applyThreadFilters()">
-                            Closed
+                            Resolved
                         </label>
                         <label>
-                            <input type="checkbox" value="completed" checked onchange="applyThreadFilters()">
-                            Completed
+                            <input type="checkbox" value="wontFix" checked onchange="applyThreadFilters()">
+                            Won't Fix
+                        </label>
+                        <label>
+                            <input type="checkbox" value="byDesign" checked onchange="applyThreadFilters()">
+                            By Design
+                        </label>
+                        <label>
+                            <input type="checkbox" value="pending" checked onchange="applyThreadFilters()">
+                            Pending
                         </label>
                         <label>
                             <input type="checkbox" value="unknown" onchange="applyThreadFilters()">
@@ -714,15 +720,16 @@
             if (!currentConfig || !currentPRId) return;
 
             try {
-                await ADOAPI.updateThreadStatus(currentConfig, currentPRId, threadId, newStatus);
+                const updatedThread = await ADOAPI.updateThreadStatus(currentConfig, currentPRId, threadId, newStatus);
 
-                // Update local thread data
+                // Update local thread data with response from API
                 const thread = allThreads.find(t => t.id === threadId);
-                if (thread) {
-                    thread.status = newStatus;
+                if (thread && updatedThread) {
+                    thread.status = updatedThread.status;
+                    thread.properties = updatedThread.properties;
                 }
 
-                // Refresh display
+                // Refresh display to show updated badge
                 applyThreadFilters();
 
                 return true;
@@ -745,7 +752,16 @@
                 return;
             }
 
-            const confirmed = confirm(`Are you sure you want to change ${selectedThreadIds.size} thread(s) to "${newStatus.toUpperCase()}"?`);
+            const statusLabels = {
+                'active': 'Active',
+                'closed': 'Resolved',
+                'wontFix': "Won't Fix",
+                'byDesign': 'By Design',
+                'pending': 'Pending'
+            };
+            const statusLabel = statusLabels[newStatus] || newStatus;
+
+            const confirmed = confirm(`Are you sure you want to change ${selectedThreadIds.size} thread(s) to "${statusLabel}"?`);
             if (!confirmed) return;
 
             ADOUI.showLoading('results', `Updating ${selectedThreadIds.size} thread(s)...`);
@@ -929,8 +945,10 @@
                                 <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
                                     <option value="">Change status...</option>
                                     <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
-                                    <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Fixed</option>
-                                    <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
+                                    <option value="closed" ${status === 'closed' ? 'selected' : ''}>Resolved</option>
+                                    <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
+                                    <option value="byDesign" ${status === 'byDesign' ? 'selected' : ''}>By Design</option>
+                                    <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
                                 </select>
                             </span>
                         `;

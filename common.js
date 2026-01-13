@@ -479,7 +479,17 @@ const ADOUI = {
      */
     getStatusText(status, isDeleted = false) {
         if (isDeleted) return 'DELETED';
-        return (status || 'unknown').toUpperCase();
+
+        const statusLabels = {
+            'active': 'ACTIVE',
+            'closed': 'RESOLVED',
+            'wontFix': "WON'T FIX",
+            'byDesign': 'BY DESIGN',
+            'pending': 'PENDING',
+            'unknown': 'UNKNOWN'
+        };
+
+        return statusLabels[status] || (status || 'UNKNOWN').toUpperCase();
     }
 };
 
