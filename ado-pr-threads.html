@@ -330,8 +330,8 @@
                     <select id="bulkStatusSelect">
                         <option value="">Select status...</option>
                         <option value="active">Active</option>
-                        <option value="fixed">Fixed</option>
-                        <option value="closed">Resolved</option>
+                        <option value="fixed">Resolved</option>
+                        <option value="closed">Closed</option>
                         <option value="wontFix">Won't Fix</option>
                         <option value="pending">Pending</option>
                     </select>
@@ -373,11 +373,11 @@
                         </label>
                         <label>
                             <input type="checkbox" value="fixed" checked onchange="applyThreadFilters()">
-                            Fixed
+                            Resolved
                         </label>
                         <label>
                             <input type="checkbox" value="closed" checked onchange="applyThreadFilters()">
-                            Resolved
+                            Closed
                         </label>
                         <label>
                             <input type="checkbox" value="wontFix" checked onchange="applyThreadFilters()">
@@ -766,8 +766,8 @@
 
             const statusLabels = {
                 'active': 'Active',
-                'fixed': 'Fixed',
-                'closed': 'Resolved',
+                'fixed': 'Resolved',
+                'closed': 'Closed',
                 'wontFix': "Won't Fix",
                 'pending': 'Pending'
             };
@@ -959,8 +959,8 @@
                                 <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
                                     <option value="">Change status...</option>
                                     <option value="active" ${(!status || status === 'active') ? 'selected' : ''}>Active</option>
-                                    <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Fixed</option>
-                                    <option value="closed" ${status === 'closed' ? 'selected' : ''}>Resolved</option>
+                                    <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Resolved</option>
+                                    <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
                                     <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
                                     <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
                                 </select>

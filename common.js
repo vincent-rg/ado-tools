@@ -490,8 +490,8 @@ const ADOUI = {
         if (!status || status === 'active') return 'ACTIVE';
 
         const statusLabels = {
-            'fixed': 'FIXED',
-            'closed': 'RESOLVED',
+            'fixed': 'RESOLVED',
+            'closed': 'CLOSED',
             'wontFix': "WON'T FIX",
             'pending': 'PENDING',
             'unknown': 'UNKNOWN'
