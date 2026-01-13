@@ -102,6 +102,52 @@
             display: none;
         }
 
+        .thread-status-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .thread-status-change select {
+            padding: 4px 8px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            font-size: 12px;
+            background: white;
+        }
+
+        .thread-checkbox {
+            margin-right: 10px;
+        }
+
+        .bulk-actions {
+            background: #fff4ce;
+            border-left: 4px solid #ffb900;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .bulk-actions.show {
+            display: block;
+        }
+
+        .bulk-actions-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .bulk-actions-buttons select {
+            padding: 8px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+        }
+
         .thread-header {
             background: #f3f2f1;
             padding: 15px;
@@ -266,10 +312,33 @@
 
         <div id="prInfo" style="margin-bottom: 20px;"></div>
 
+        <div id="bulkActions" class="bulk-actions">
+            <strong>Bulk Thread Selection Mode Active</strong>
+            <p style="margin: 10px 0 0 0; font-size: 14px; color: #605e5c;">Select threads using checkboxes, then change their status below. Filters are disabled in bulk mode.</p>
+            <div class="bulk-actions-buttons">
+                <button onclick="selectAllThreads()" class="btn-secondary">Select All</button>
+                <button onclick="deselectAllThreads()" class="btn-secondary">Deselect All</button>
+                <span style="margin-left: 10px; color: #323130;">Selected: <strong id="selectedCount">0</strong> threads</span>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                    <label for="bulkStatusSelect" style="margin: 0;">Change selected to:</label>
+                    <select id="bulkStatusSelect">
+                        <option value="">Select status...</option>
+                        <option value="active">Active</option>
+                        <option value="fixed">Fixed</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                    <button onclick="applyBulkStatusChange()" class="btn-primary">Apply Changes</button>
+                </div>
+            </div>
+        </div>
+
         <div id="threadFilters" class="thread-filters" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">Thread Filters</h3>
                 <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary" style="padding: 8px 16px;">
+                        Enable Bulk Selection
+                    </button>
                     <span style="font-size: 14px; color: #605e5c;">View:</span>
                     <button id="viewToggle" onclick="toggleView()" class="btn-secondary" style="padding: 8px 16px;">
                         Switch to Compact
@@ -371,6 +440,8 @@
         let currentPRData = null;
         let currentConfig = null;
         let isCompactView = false;
+        let isBulkMode = false;
+        let selectedThreadIds = new Set();
 
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
@@ -555,6 +626,150 @@
             applyThreadFilters();
         }
 
+        function toggleBulkMode() {
+            isBulkMode = !isBulkMode;
+            selectedThreadIds.clear();
+
+            const button = document.getElementById('bulkModeToggle');
+            const bulkActions = document.getElementById('bulkActions');
+            const filters = document.querySelectorAll('.thread-filters .filter-row');
+
+            if (isBulkMode) {
+                button.textContent = 'Disable Bulk Selection';
+                button.classList.remove('btn-secondary');
+                button.classList.add('btn-primary');
+                bulkActions.classList.add('show');
+
+                // Disable filters in bulk mode
+                filters.forEach(row => {
+                    const inputs = row.querySelectorAll('input, select');
+                    inputs.forEach(input => input.disabled = true);
+                });
+            } else {
+                button.textContent = 'Enable Bulk Selection';
+                button.classList.remove('btn-primary');
+                button.classList.add('btn-secondary');
+                bulkActions.classList.remove('show');
+
+                // Enable filters
+                filters.forEach(row => {
+                    const inputs = row.querySelectorAll('input, select');
+                    inputs.forEach(input => input.disabled = false);
+                });
+            }
+
+            // Refresh display to show/hide checkboxes
+            applyThreadFilters();
+        }
+
+        function toggleThreadSelection(threadId) {
+            if (selectedThreadIds.has(threadId)) {
+                selectedThreadIds.delete(threadId);
+            } else {
+                selectedThreadIds.add(threadId);
+            }
+
+            // Update selected count
+            document.getElementById('selectedCount').textContent = selectedThreadIds.size;
+
+            // Update checkbox state
+            const checkbox = document.getElementById(`thread-checkbox-${threadId}`);
+            if (checkbox) {
+                checkbox.checked = selectedThreadIds.has(threadId);
+            }
+        }
+
+        function selectAllThreads() {
+            selectedThreadIds.clear();
+
+            // Get all visible thread IDs
+            const checkboxes = document.querySelectorAll('.thread-checkbox');
+            checkboxes.forEach(checkbox => {
+                const threadId = checkbox.dataset.threadId;
+                selectedThreadIds.add(threadId);
+                checkbox.checked = true;
+            });
+
+            document.getElementById('selectedCount').textContent = selectedThreadIds.size;
+        }
+
+        function deselectAllThreads() {
+            selectedThreadIds.clear();
+
+            const checkboxes = document.querySelectorAll('.thread-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+
+            document.getElementById('selectedCount').textContent = 0;
+        }
+
+        async function changeThreadStatus(threadId, newStatus) {
+            if (!currentConfig || !currentPRId) return;
+
+            try {
+                await ADOAPI.updateThreadStatus(currentConfig, currentPRId, threadId, newStatus);
+
+                // Update local thread data
+                const thread = allThreads.find(t => t.id === threadId);
+                if (thread) {
+                    thread.status = newStatus;
+                }
+
+                // Refresh display
+                applyThreadFilters();
+
+                return true;
+            } catch (error) {
+                alert(`Failed to update thread status: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+                return false;
+            }
+        }
+
+        async function applyBulkStatusChange() {
+            const newStatus = document.getElementById('bulkStatusSelect').value;
+
+            if (!newStatus) {
+                alert('Please select a status to apply.');
+                return;
+            }
+
+            if (selectedThreadIds.size === 0) {
+                alert('Please select at least one thread.');
+                return;
+            }
+
+            const confirmed = confirm(`Are you sure you want to change ${selectedThreadIds.size} thread(s) to "${newStatus.toUpperCase()}"?`);
+            if (!confirmed) return;
+
+            ADOUI.showLoading('results', `Updating ${selectedThreadIds.size} thread(s)...`);
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const threadId of selectedThreadIds) {
+                const success = await changeThreadStatus(threadId, newStatus);
+                if (success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            }
+
+            // Clear selection and refresh
+            selectedThreadIds.clear();
+            document.getElementById('selectedCount').textContent = 0;
+            document.getElementById('bulkStatusSelect').value = '';
+
+            applyThreadFilters();
+
+            if (failCount === 0) {
+                alert(`Successfully updated ${successCount} thread(s).`);
+            } else {
+                alert(`Updated ${successCount} thread(s) successfully.\n${failCount} thread(s) failed to update.`);
+            }
+        }
+
         function getIterationLinksForComment(comment, thread, iterations, config, prData, filePath) {
             const commentId = comment.id;
             const discussionId = thread.id;
@@ -698,14 +913,34 @@
                     const apiEndpoint = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads/${threadId}?api-version=6.0`;
 
                     const compactClass = isCompactView ? 'compact-view' : '';
+                    const isChecked = selectedThreadIds.has(threadId) ? 'checked' : '';
+
+                    // Build status dropdown for non-unknown threads (only when not in bulk mode)
+                    let statusControl = '';
+                    if (!isBulkMode && status !== 'unknown' && !isThreadDeleted) {
+                        statusControl = `
+                            <span class="thread-status-change">
+                                <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
+                                    <option value="">Change status...</option>
+                                    <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Fixed</option>
+                                    <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
+                                </select>
+                            </span>
+                        `;
+                    }
 
                     html += `
                         <div class="thread ${compactClass}">
                             <div class="thread-header">
-                                <span>Thread #${index + 1}</span>
+                                <span>
+                                    ${isBulkMode ? `<input type="checkbox" class="thread-checkbox" id="thread-checkbox-${threadId}" data-thread-id="${threadId}" ${isChecked} onchange="toggleThreadSelection('${threadId}')">` : ''}
+                                    Thread #${index + 1}
+                                </span>
                                 <span>
                                     <button class="raw-json-toggle" onclick="ADOUI.toggleRawJson('thread-${index}')">View Raw JSON</button>
                                     <span class="badge ${statusClass}">${statusText}</span>
+                                    ${statusControl}
                                 </span>
                             </div>
                     `;
