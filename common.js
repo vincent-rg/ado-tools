@@ -138,9 +138,13 @@ const ADOAPI = {
      */
     async updateThreadStatus(config, prId, threadId, status) {
         const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}?api-version=6.0`;
+
+        // "active" means no status field, so send null to clear it
+        const payload = { status: status === 'active' ? null : status };
+
         const response = await this.fetchWithAuth(url, config.pat, {
             method: 'PATCH',
-            body: JSON.stringify({ status })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
