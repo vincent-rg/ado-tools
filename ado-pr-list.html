@@ -487,8 +487,15 @@
         }
 
         function getSelectedStatuses() {
-            const checkboxes = document.querySelectorAll('.filter-section:nth-child(4) input[type="checkbox"]:checked');
-            return Array.from(checkboxes).map(cb => cb.value);
+            const statuses = ['active', 'completed', 'abandoned', 'all'];
+            const selected = [];
+            statuses.forEach(status => {
+                const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
+                if (checkbox && checkbox.checked) {
+                    selected.push(status);
+                }
+            });
+            return selected;
         }
 
         function applyFilters() {
