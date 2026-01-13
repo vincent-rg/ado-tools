@@ -188,9 +188,8 @@ const ADOAPI = {
     async getPRs(config, project, repository, status = 'all') {
         let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests?api-version=6.0`;
 
-        if (status !== 'all') {
-            url += `&searchCriteria.status=${status}`;
-        }
+        // Always add status parameter (Azure DevOps defaults to 'active' if omitted)
+        url += `&searchCriteria.status=${status}`;
 
         const response = await this.fetchWithAuth(url, config.pat);
 
