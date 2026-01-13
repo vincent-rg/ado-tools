@@ -486,15 +486,18 @@ const ADOUI = {
     getStatusText(status, isDeleted = false) {
         if (isDeleted) return 'DELETED';
 
+        // Treat undefined/null/empty as active
+        if (!status || status === 'active') return 'ACTIVE';
+
         const statusLabels = {
-            'active': 'ACTIVE',
+            'fixed': 'FIXED',
             'closed': 'RESOLVED',
             'wontFix': "WON'T FIX",
             'pending': 'PENDING',
             'unknown': 'UNKNOWN'
         };
 
-        return statusLabels[status] || (status || 'UNKNOWN').toUpperCase();
+        return statusLabels[status] || status.toUpperCase();
     }
 };
 

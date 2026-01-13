@@ -330,6 +330,7 @@
                     <select id="bulkStatusSelect">
                         <option value="">Select status...</option>
                         <option value="active">Active</option>
+                        <option value="fixed">Fixed</option>
                         <option value="closed">Resolved</option>
                         <option value="wontFix">Won't Fix</option>
                         <option value="pending">Pending</option>
@@ -369,6 +370,10 @@
                         <label>
                             <input type="checkbox" value="active" checked onchange="applyThreadFilters()">
                             Active
+                        </label>
+                        <label>
+                            <input type="checkbox" value="fixed" checked onchange="applyThreadFilters()">
+                            Fixed
                         </label>
                         <label>
                             <input type="checkbox" value="closed" checked onchange="applyThreadFilters()">
@@ -597,7 +602,8 @@
                 }
 
                 // Status filter
-                const status = (thread.status || 'unknown').toLowerCase();
+                // Treat undefined/null/empty status as "active", otherwise use actual status
+                const status = thread.status ? thread.status.toLowerCase() : 'active';
                 if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) {
                     return false;
                 }
@@ -760,6 +766,7 @@
 
             const statusLabels = {
                 'active': 'Active',
+                'fixed': 'Fixed',
                 'closed': 'Resolved',
                 'wontFix': "Won't Fix",
                 'pending': 'Pending'
@@ -866,7 +873,8 @@
                 if (thread.isDeleted === true) {
                     acc.deleted = (acc.deleted || 0) + 1;
                 } else {
-                    const status = thread.status || 'unknown';
+                    // Treat undefined/empty status as "active"
+                    const status = thread.status || 'active';
                     acc[status] = (acc[status] || 0) + 1;
                 }
                 return acc;
@@ -929,7 +937,8 @@
                 html += '<div class="thread-container">';
 
                 threads.forEach((thread, index) => {
-                    const status = thread.status || 'unknown';
+                    // Treat undefined/empty status as "active"
+                    const status = thread.status || 'active';
                     const isThreadDeleted = thread.isDeleted === true;
 
                     const statusClass = ADOUI.getStatusBadgeClass(status, isThreadDeleted);
@@ -949,7 +958,8 @@
                             <span class="thread-status-change">
                                 <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
                                     <option value="">Change status...</option>
-                                    <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="active" ${(!status || status === 'active') ? 'selected' : ''}>Active</option>
+                                    <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Fixed</option>
                                     <option value="closed" ${status === 'closed' ? 'selected' : ''}>Resolved</option>
                                     <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
                                     <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
