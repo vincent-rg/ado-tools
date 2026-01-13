@@ -542,6 +542,11 @@
                 currentPRData = prData;
                 currentConfig = config;
 
+                // Debug: Log unique status values found in threads
+                const uniqueStatuses = new Set(allThreads.map(t => t.status));
+                console.log('Loaded threads. Unique status values found:', Array.from(uniqueStatuses));
+                console.log('Sample threads with their statuses:', allThreads.slice(0, 5).map(t => ({ id: t.id, status: t.status })));
+
                 // Collect and resolve identities
                 await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
 
@@ -715,13 +720,18 @@
             if (!currentConfig || !currentPRId) return;
 
             try {
+                console.log(`Attempting to change thread ${threadId} status to: ${newStatus}`);
                 const updatedThread = await ADOAPI.updateThreadStatus(currentConfig, currentPRId, threadId, newStatus);
+                console.log(`API returned status:`, updatedThread.status);
+                console.log(`Full updated thread:`, updatedThread);
 
                 // Update local thread data with response from API
                 const thread = allThreads.find(t => t.id === threadId);
                 if (thread && updatedThread) {
+                    const oldStatus = thread.status;
                     thread.status = updatedThread.status;
                     thread.properties = updatedThread.properties;
+                    console.log(`Updated local thread from ${oldStatus} to ${thread.status}`);
                 }
 
                 // Refresh display to show updated badge
@@ -729,6 +739,7 @@
 
                 return true;
             } catch (error) {
+                console.error(`Failed to update thread status:`, error);
                 alert(`Failed to update thread status: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
                 return false;
             }
