@@ -186,19 +186,39 @@ const ADOAPI = {
      * Get PRs from a repository
      */
     async getPRs(config, project, repository, status = 'all') {
-        let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests?api-version=6.0`;
+        let allPRs = [];
+        let skip = 0;
+        const top = 100; // Max items per request
+        let hasMore = true;
 
-        // Always add status parameter (Azure DevOps defaults to 'active' if omitted)
-        url += `&searchCriteria.status=${status}`;
+        while (hasMore) {
+            let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests?api-version=6.0`;
 
-        const response = await this.fetchWithAuth(url, config.pat);
+            // Always add status parameter (Azure DevOps defaults to 'active' if omitted)
+            url += `&searchCriteria.status=${status}`;
+            url += `&$top=${top}&$skip=${skip}`;
 
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data.message || `Failed to fetch PRs: ${response.status} ${response.statusText}`);
+            const response = await this.fetchWithAuth(url, config.pat);
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || `Failed to fetch PRs: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const prs = data.value || [];
+
+            allPRs = allPRs.concat(prs);
+
+            // Check if there are more results
+            if (prs.length < top) {
+                hasMore = false;
+            } else {
+                skip += top;
+            }
         }
 
-        return response.json();
+        return { value: allPRs };
     }
 };
 
