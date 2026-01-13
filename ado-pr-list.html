@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure DevOps - PR List</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        .filters {
+            background: #f3f2f1;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+        }
+
+        .filter-section {
+            margin-bottom: 20px;
+        }
+
+        .filter-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .filter-section h4 {
+            margin-bottom: 10px;
+            color: #323130;
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .checkbox-label:hover {
+            background: #e1f3ff;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 8px;
+            width: auto;
+        }
+
+        .filter-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-input input {
+            flex: 1;
+        }
+
+        .autocomplete-container {
+            position: relative;
+        }
+
+        .autocomplete-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #d1d1d1;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .autocomplete-results.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f2f1;
+        }
+
+        .autocomplete-item:hover {
+            background: #e1f3ff;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .pr-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pr-table thead {
+            background: #f3f2f1;
+        }
+
+        .pr-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #323130;
+            border-bottom: 2px solid #edebe9;
+        }
+
+        .pr-table td {
+            padding: 12px;
+            border-bottom: 1px solid #edebe9;
+        }
+
+        .pr-table tbody tr {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .pr-table tbody tr:hover {
+            background: #f8f8f8;
+        }
+
+        .pr-title {
+            font-weight: 600;
+            color: #0078d4;
+            margin-bottom: 4px;
+        }
+
+        .pr-description {
+            font-size: 13px;
+            color: #605e5c;
+            max-width: 500px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pr-meta {
+            font-size: 13px;
+            color: #605e5c;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .clear-filters {
+            background: #f3f2f1;
+            color: #323130;
+            border: 1px solid #d1d1d1;
+        }
+
+        .clear-filters:hover {
+            background: #e1dfdd;
+        }
+
+        .selected-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .filter-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e1f3ff;
+            color: #004578;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+
+        .filter-tag button {
+            background: none;
+            border: none;
+            color: #004578;
+            margin-left: 6px;
+            cursor: pointer;
+            padding: 0;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .filter-tag button:hover {
+            color: #0078d4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container wide">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+                <h1>📋 Pull Request List</h1>
+                <p style="color: #605e5c;">Browse and filter Pull Requests across all projects and repositories</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="index.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">🏠 Home</a>
+                <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">⚙️ Settings</a>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Filters</h3>
+                <button onclick="loadData()" class="btn-primary" id="loadButton">Load Pull Requests</button>
+            </div>
+
+            <div id="selectedFilters" class="selected-filters"></div>
+
+            <div class="filter-section">
+                <h4>Projects</h4>
+                <div id="projectFilters" class="checkbox-group">
+                    <div class="loading">Loading projects...</div>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h4>Repositories</h4>
+                <div id="repoFilters" class="checkbox-group">
+                    <div style="color: #605e5c; font-size: 13px;">Select projects first</div>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h4>PR Status</h4>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" value="active" checked onchange="applyFilters()">
+                        Active
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" value="completed" onchange="applyFilters()">
+                        Completed
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" value="abandoned" onchange="applyFilters()">
+                        Abandoned
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" value="all" onchange="applyFilters()">
+                        All
+                    </label>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h4>PR ID</h4>
+                <div class="filter-input">
+                    <input type="number" id="prIdFilter" placeholder="Filter by PR ID" oninput="applyFilters()">
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h4>Created By</h4>
+                <div class="autocomplete-container">
+                    <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
+                    <div id="createdByAutocomplete" class="autocomplete-results"></div>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h4>Assigned To</h4>
+                <div class="autocomplete-container">
+                    <input type="text" id="assignedToFilter" placeholder="Start typing to filter by reviewer" oninput="showAutocomplete('assignedTo')">
+                    <div id="assignedToAutocomplete" class="autocomplete-results"></div>
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button onclick="clearFilters()" class="clear-filters">Clear All Filters</button>
+            </div>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script src="common.js"></script>
+    <script>
+        let allProjects = [];
+        let allRepos = [];
+        let allPRs = [];
+        let filteredPRs = [];
+        let allAuthors = new Set();
+        let allReviewers = new Set();
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const config = ADOConfig.get();
+
+            if (!config || !ADOConfig.isValid(config)) {
+                ADOUI.showError('results', 'Please configure your Azure DevOps connection in the Settings page.');
+                document.getElementById('loadButton').disabled = true;
+                return;
+            }
+
+            await loadProjects();
+        });
+
+        async function loadProjects() {
+            const config = ADOConfig.get();
+            const projectFiltersDiv = document.getElementById('projectFilters');
+
+            try {
+                ADOUI.showLoading('projectFilters', 'Loading projects...');
+
+                const projectsData = await ADOAPI.getProjects(config);
+                allProjects = projectsData.value || [];
+
+                if (allProjects.length === 0) {
+                    projectFiltersDiv.innerHTML = '<div style="color: #605e5c;">No projects found</div>';
+                    return;
+                }
+
+                let html = '';
+                allProjects.forEach(project => {
+                    const isDefault = project.name === config.project;
+                    html += `
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="${ADOContent.escapeHtml(project.name)}" ${isDefault ? 'checked' : ''} onchange="onProjectChange()">
+                            ${ADOContent.escapeHtml(project.name)}
+                        </label>
+                    `;
+                });
+
+                projectFiltersDiv.innerHTML = html;
+
+                // Load repos for selected projects
+                await loadRepos();
+
+            } catch (error) {
+                projectFiltersDiv.innerHTML = `<div class="error">Error: ${ADOContent.escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function onProjectChange() {
+            await loadRepos();
+            applyFilters();
+        }
+
+        async function loadRepos() {
+            const config = ADOConfig.get();
+            const repoFiltersDiv = document.getElementById('repoFilters');
+            const selectedProjects = getSelectedProjects();
+
+            if (selectedProjects.length === 0) {
+                repoFiltersDiv.innerHTML = '<div style="color: #605e5c; font-size: 13px;">Select projects first</div>';
+                allRepos = [];
+                return;
+            }
+
+            try {
+                ADOUI.showLoading('repoFilters', 'Loading repositories...');
+
+                // Load repos for all selected projects in parallel
+                const repoPromises = selectedProjects.map(project =>
+                    ADOAPI.getRepositories(config, project)
+                );
+
+                const reposResults = await Promise.all(repoPromises);
+
+                allRepos = [];
+                reposResults.forEach((reposData, index) => {
+                    const repos = reposData.value || [];
+                    repos.forEach(repo => {
+                        allRepos.push({
+                            ...repo,
+                            projectName: selectedProjects[index]
+                        });
+                    });
+                });
+
+                if (allRepos.length === 0) {
+                    repoFiltersDiv.innerHTML = '<div style="color: #605e5c;">No repositories found</div>';
+                    return;
+                }
+
+                let html = '';
+                allRepos.forEach(repo => {
+                    const isDefault = repo.name === config.repository && repo.projectName === config.project;
+                    html += `
+                        <label class="checkbox-label" title="${ADOContent.escapeHtml(repo.projectName)} / ${ADOContent.escapeHtml(repo.name)}">
+                            <input type="checkbox" value="${ADOContent.escapeHtml(repo.id)}" ${isDefault ? 'checked' : ''} onchange="applyFilters()">
+                            ${ADOContent.escapeHtml(repo.projectName)} / ${ADOContent.escapeHtml(repo.name)}
+                        </label>
+                    `;
+                });
+
+                repoFiltersDiv.innerHTML = html;
+
+            } catch (error) {
+                repoFiltersDiv.innerHTML = `<div class="error">Error: ${ADOContent.escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function loadData() {
+            const config = ADOConfig.get();
+            const selectedProjects = getSelectedProjects();
+            const selectedRepos = getSelectedRepos();
+
+            if (selectedProjects.length === 0) {
+                ADOUI.showError('results', 'Please select at least one project.');
+                return;
+            }
+
+            if (selectedRepos.length === 0) {
+                ADOUI.showError('results', 'Please select at least one repository.');
+                return;
+            }
+
+            ADOUI.showLoading('results', `Loading Pull Requests from ${selectedRepos.length} repositories...`);
+
+            try {
+                allPRs = [];
+                allAuthors = new Set();
+                allReviewers = new Set();
+
+                // Load PRs from all selected repos in parallel
+                const prPromises = selectedRepos.map(repo =>
+                    ADOAPI.getPRs(config, repo.projectName, repo.name, 'all')
+                        .then(data => ({
+                            repo: repo,
+                            prs: data.value || []
+                        }))
+                        .catch(error => ({
+                            repo: repo,
+                            prs: [],
+                            error: error.message
+                        }))
+                );
+
+                const prResults = await Promise.all(prPromises);
+
+                // Collect all PRs and build author/reviewer lists
+                prResults.forEach(result => {
+                    if (result.prs.length > 0) {
+                        result.prs.forEach(pr => {
+                            pr._repo = result.repo;
+                            pr._project = result.repo.projectName;
+                            allPRs.push(pr);
+
+                            // Collect authors
+                            if (pr.createdBy) {
+                                allAuthors.add(pr.createdBy.displayName);
+                            }
+
+                            // Collect reviewers
+                            if (pr.reviewers) {
+                                pr.reviewers.forEach(reviewer => {
+                                    allReviewers.add(reviewer.displayName);
+                                });
+                            }
+                        });
+                    }
+                });
+
+                applyFilters();
+
+            } catch (error) {
+                ADOUI.showError('results', error.message);
+            }
+        }
+
+        function getSelectedProjects() {
+            const checkboxes = document.querySelectorAll('#projectFilters input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function getSelectedRepos() {
+            const checkboxes = document.querySelectorAll('#repoFilters input[type="checkbox"]:checked');
+            const selectedRepoIds = Array.from(checkboxes).map(cb => cb.value);
+            return allRepos.filter(repo => selectedRepoIds.includes(repo.id));
+        }
+
+        function getSelectedStatuses() {
+            const checkboxes = document.querySelectorAll('.filter-section:nth-child(4) input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function applyFilters() {
+            const prIdFilter = document.getElementById('prIdFilter').value.trim();
+            const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
+            const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
+            const selectedStatuses = getSelectedStatuses();
+
+            filteredPRs = allPRs.filter(pr => {
+                // PR ID filter
+                if (prIdFilter && pr.pullRequestId.toString() !== prIdFilter) {
+                    return false;
+                }
+
+                // Status filter
+                if (selectedStatuses.length > 0 && !selectedStatuses.includes('all')) {
+                    if (!selectedStatuses.includes(pr.status.toLowerCase())) {
+                        return false;
+                    }
+                }
+
+                // Created by filter
+                if (createdByFilter && !pr.createdBy.displayName.toLowerCase().includes(createdByFilter)) {
+                    return false;
+                }
+
+                // Assigned to filter
+                if (assignedToFilter) {
+                    const hasReviewer = pr.reviewers.some(reviewer =>
+                        reviewer.displayName.toLowerCase().includes(assignedToFilter)
+                    );
+                    if (!hasReviewer) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            displayPRs();
+            updateSelectedFilters();
+        }
+
+        function updateSelectedFilters() {
+            const selectedFiltersDiv = document.getElementById('selectedFilters');
+            const filters = [];
+
+            const prIdFilter = document.getElementById('prIdFilter').value.trim();
+            if (prIdFilter) {
+                filters.push({ label: `PR ID: ${prIdFilter}`, clear: () => {
+                    document.getElementById('prIdFilter').value = '';
+                    applyFilters();
+                }});
+            }
+
+            const createdByFilter = document.getElementById('createdByFilter').value.trim();
+            if (createdByFilter) {
+                filters.push({ label: `Created by: ${createdByFilter}`, clear: () => {
+                    document.getElementById('createdByFilter').value = '';
+                    applyFilters();
+                }});
+            }
+
+            const assignedToFilter = document.getElementById('assignedToFilter').value.trim();
+            if (assignedToFilter) {
+                filters.push({ label: `Assigned to: ${assignedToFilter}`, clear: () => {
+                    document.getElementById('assignedToFilter').value = '';
+                    applyFilters();
+                }});
+            }
+
+            if (filters.length === 0) {
+                selectedFiltersDiv.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            filters.forEach((filter, index) => {
+                html += `
+                    <span class="filter-tag">
+                        ${ADOContent.escapeHtml(filter.label)}
+                        <button onclick="clearFilter(${index})" title="Remove filter">×</button>
+                    </span>
+                `;
+            });
+
+            selectedFiltersDiv.innerHTML = html;
+
+            // Store filters for clearing
+            window._activeFilters = filters;
+        }
+
+        function clearFilter(index) {
+            if (window._activeFilters && window._activeFilters[index]) {
+                window._activeFilters[index].clear();
+            }
+        }
+
+        function displayPRs() {
+            const resultsDiv = document.getElementById('results');
+
+            if (allPRs.length === 0) {
+                resultsDiv.innerHTML = '<div class="info">No Pull Requests loaded yet. Click "Load Pull Requests" to fetch data.</div>';
+                return;
+            }
+
+            if (filteredPRs.length === 0) {
+                resultsDiv.innerHTML = '<div class="warning">No Pull Requests match the current filters.</div>';
+                return;
+            }
+
+            let html = `
+                <div style="margin-bottom: 15px; color: #605e5c;">
+                    Showing ${filteredPRs.length} of ${allPRs.length} Pull Requests
+                </div>
+                <table class="pr-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">ID</th>
+                            <th>Title</th>
+                            <th style="width: 150px;">Author</th>
+                            <th style="width: 200px;">Repository</th>
+                            <th style="width: 100px;">Status</th>
+                            <th style="width: 150px;">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            filteredPRs.forEach(pr => {
+                const statusClass = ADOUI.getStatusBadgeClass(pr.status);
+
+                html += `
+                    <tr onclick="openPR('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})">
+                        <td><strong>#${pr.pullRequestId}</strong></td>
+                        <td>
+                            <div class="pr-title">${ADOContent.escapeHtml(pr.title)}</div>
+                            ${pr.description ? `<div class="pr-description">${ADOContent.escapeHtml(pr.description)}</div>` : ''}
+                        </td>
+                        <td class="pr-meta">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
+                        <td class="pr-meta">
+                            ${ADOContent.escapeHtml(pr._project)}<br>
+                            <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
+                        </td>
+                        <td><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span></td>
+                        <td class="pr-meta">${ADOUI.formatDate(pr.creationDate)}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function openPR(project, repository, prId) {
+            // Update config with selected project/repo
+            const config = ADOConfig.get();
+            config.project = project;
+            config.repository = repository;
+            ADOConfig.save(config);
+
+            // Navigate to PR threads page
+            window.location.href = `ado-pr-threads.html?prId=${prId}`;
+        }
+
+        function showAutocomplete(type) {
+            const input = document.getElementById(`${type}Filter`);
+            const autocompleteDiv = document.getElementById(`${type}Autocomplete`);
+            const query = input.value.trim().toLowerCase();
+
+            if (query.length === 0) {
+                autocompleteDiv.classList.remove('show');
+                return;
+            }
+
+            const items = type === 'createdBy' ? Array.from(allAuthors) : Array.from(allReviewers);
+            const filtered = items.filter(item => item.toLowerCase().includes(query));
+
+            if (filtered.length === 0) {
+                autocompleteDiv.classList.remove('show');
+                return;
+            }
+
+            let html = '';
+            filtered.slice(0, 10).forEach(item => {
+                html += `
+                    <div class="autocomplete-item" onclick="selectAutocomplete('${type}', '${ADOContent.escapeHtml(item)}')">
+                        ${ADOContent.escapeHtml(item)}
+                    </div>
+                `;
+            });
+
+            autocompleteDiv.innerHTML = html;
+            autocompleteDiv.classList.add('show');
+        }
+
+        function selectAutocomplete(type, value) {
+            document.getElementById(`${type}Filter`).value = value;
+            document.getElementById(`${type}Autocomplete`).classList.remove('show');
+            applyFilters();
+        }
+
+        // Close autocomplete when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-container')) {
+                document.querySelectorAll('.autocomplete-results').forEach(div => {
+                    div.classList.remove('show');
+                });
+            }
+        });
+
+        function clearFilters() {
+            document.getElementById('prIdFilter').value = '';
+            document.getElementById('createdByFilter').value = '';
+            document.getElementById('assignedToFilter').value = '';
+
+            // Reset status checkboxes to default (only active)
+            document.querySelectorAll('.filter-section:nth-child(4) input[type="checkbox"]').forEach(cb => {
+                cb.checked = cb.value === 'active';
+            });
+
+            applyFilters();
+        }
+    </script>
+</body>
+</html>

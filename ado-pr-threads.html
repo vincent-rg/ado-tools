@@ -35,7 +35,7 @@
         }
 
         .comment {
-            padding: 15px;
+            padding: 12px 15px;
             border-bottom: 1px solid #edebe9;
         }
 
@@ -87,7 +87,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .comment-author {
@@ -174,21 +174,26 @@
 </head>
 <body>
     <div class="container">
-        <h1>Azure DevOps PR Threads Viewer</h1>
-        <p style="color: #605e5c; margin-bottom: 30px;">View all discussion threads from a Pull Request</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+                <h1>💬 PR Threads Viewer</h1>
+                <p style="color: #605e5c; margin: 0;">View all discussion threads from a Pull Request</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="ado-pr-list.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">📋 PR List</a>
+                <a href="index.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">🏠 Home</a>
+                <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">⚙️ Settings</a>
+            </div>
+        </div>
 
-        <div class="config-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Pull Request</h3>
-                <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 13px;">⚙️ Settings</a>
+        <div id="prInfo" style="margin-bottom: 20px;"></div>
+
+        <div class="config-section" id="configSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Configuration</h3>
             </div>
 
-            <div class="form-group">
-                <label for="prId">Pull Request ID</label>
-                <input type="number" id="prId" placeholder="123" />
-            </div>
-
-            <details id="advancedConfig" style="margin-top: 20px;">
+            <details id="advancedConfig">
                 <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">🔧 Advanced Configuration</summary>
                 <div style="margin-top: 15px;">
                     <div class="form-group">
@@ -223,14 +228,12 @@
 
     <script src="common.js"></script>
     <script>
+        let currentPRId = null;
+
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = ADOURL.getParams();
-            const prId = urlParams.get('prId') || urlParams.get('id');
-
-            if (prId) {
-                document.getElementById('prId').value = prId;
-            }
+            currentPRId = urlParams.get('prId') || urlParams.get('id');
 
             // Load saved configuration from localStorage
             const savedConfig = ADOConfig.get();
@@ -240,35 +243,64 @@
                 document.getElementById('project').value = savedConfig.project || '';
                 document.getElementById('repository').value = savedConfig.repository || '';
                 document.getElementById('pat').value = savedConfig.pat || '';
+            }
 
-                // Show status
-                const statusDiv = document.getElementById('configStatus');
-                if (ADOConfig.isValid(savedConfig) && savedConfig.repository) {
-                    statusDiv.innerHTML = '✓ Using saved settings from <a href="ado-settings.html" style="color: #0078d4;">Settings page</a>';
-                    statusDiv.style.color = '#107c10';
+            // Show PR info or error
+            if (currentPRId) {
+                showPRInfo();
 
-                    // Auto-load if PR ID is provided
-                    if (prId) {
-                        setTimeout(() => loadPRThreads(), 100);
-                    }
+                // Auto-load if config is valid
+                if (savedConfig && ADOConfig.isValid(savedConfig) && savedConfig.repository) {
+                    setTimeout(() => loadPRThreads(), 100);
                 } else {
+                    // Show config section if settings are missing
+                    document.getElementById('configSection').style.display = 'block';
+                    const statusDiv = document.getElementById('configStatus');
                     statusDiv.innerHTML = '⚠️ Some settings are missing. <a href="ado-settings.html" style="color: #0078d4;">Configure in Settings</a> or use Advanced Configuration below.';
                     statusDiv.style.color = '#8a6d3b';
                 }
             } else {
-                const statusDiv = document.getElementById('configStatus');
-                statusDiv.innerHTML = '⚠️ No settings found. <a href="ado-settings.html" style="color: #0078d4;">Configure in Settings</a> or use Advanced Configuration below.';
-                statusDiv.style.color = '#8a6d3b';
+                showNoPRError();
             }
         });
 
+        function showPRInfo() {
+            const prInfoDiv = document.getElementById('prInfo');
+            const config = ADOConfig.get();
+
+            prInfoDiv.innerHTML = `
+                <div class="info">
+                    <strong>Loading Pull Request #${currentPRId}</strong><br>
+                    ${config && config.project && config.repository ?
+                        `Project: ${ADOContent.escapeHtml(config.project)} / Repository: ${ADOContent.escapeHtml(config.repository)}` :
+                        'Using saved configuration'}
+                </div>
+            `;
+        }
+
+        function showNoPRError() {
+            const prInfoDiv = document.getElementById('prInfo');
+            prInfoDiv.innerHTML = `
+                <div class="warning">
+                    <strong>⚠️ No Pull Request specified</strong><br>
+                    Please navigate from the <a href="ado-pr-list.html" style="color: #0078d4; font-weight: 600;">PR List page</a>
+                    or provide a PR ID in the URL (e.g., ?prId=123).
+                </div>
+            `;
+        }
+
         async function loadPRThreads() {
             const config = ADOConfig.getFromForm({});
-            const prId = document.getElementById('prId').value.trim();
 
             // Validation
-            if (!ADOConfig.isValid(config) || !config.repository || !prId) {
+            if (!currentPRId) {
+                showNoPRError();
+                return;
+            }
+
+            if (!ADOConfig.isValid(config) || !config.repository) {
                 ADOUI.showError('results', 'Please fill in all fields. Missing fields can be configured in Settings or in Advanced Configuration below.');
+                document.getElementById('configSection').style.display = 'block';
                 return;
             }
 
@@ -280,9 +312,9 @@
             try {
                 // Fetch PR details, threads, and iterations in parallel
                 const [prData, threadsData, iterationsData] = await Promise.all([
-                    ADOAPI.getPR(config, prId),
-                    ADOAPI.getPRThreads(config, prId),
-                    ADOAPI.getPRIterations(config, prId)
+                    ADOAPI.getPR(config, currentPRId),
+                    ADOAPI.getPRThreads(config, currentPRId),
+                    ADOAPI.getPRIterations(config, currentPRId)
                 ]);
 
                 const threads = threadsData.value || [];

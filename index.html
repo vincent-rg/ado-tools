@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure DevOps Tools</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        .hero {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 40px;
+        }
+
+        .hero h1 {
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .hero p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .tool-card {
+            background: white;
+            border: 1px solid #edebe9;
+            border-radius: 8px;
+            padding: 20px;
+            text-decoration: none;
+            color: #323130;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tool-card:hover {
+            border-color: #0078d4;
+            box-shadow: 0 4px 12px rgba(0,120,212,0.1);
+            transform: translateY(-2px);
+        }
+
+        .tool-card h3 {
+            color: #0078d4;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        .tool-card p {
+            color: #605e5c;
+            line-height: 1.6;
+            flex-grow: 1;
+        }
+
+        .tool-card .tool-status {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #edebe9;
+            font-size: 13px;
+            color: #107c10;
+            font-weight: 600;
+        }
+
+        .tool-card .tool-status.coming-soon {
+            color: #ffb900;
+        }
+
+        .setup-section {
+            background: #fff4ce;
+            border-left: 4px solid #ffb900;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 40px;
+        }
+
+        .setup-section h2 {
+            color: #8a6d3b;
+            margin-bottom: 10px;
+        }
+
+        .setup-section p {
+            color: #323130;
+            line-height: 1.6;
+        }
+
+        .quick-links {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px 0;
+            color: #605e5c;
+            border-top: 1px solid #edebe9;
+        }
+
+        .footer a {
+            color: #0078d4;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>🔧 Azure DevOps Tools</h1>
+            <p>Powerful browser-based tools for Azure DevOps Server</p>
+        </div>
+
+        <div id="setupWarning"></div>
+
+        <div class="tools-grid">
+            <a href="ado-settings.html" class="tool-card">
+                <h3>⚙️ Settings</h3>
+                <p>Configure your Azure DevOps Server connection, Personal Access Token, and default project settings. All settings are shared across tools.</p>
+                <div class="tool-status">Ready to use</div>
+            </a>
+
+            <a href="ado-pr-list.html" class="tool-card">
+                <h3>📋 PR List</h3>
+                <p>Browse and filter Pull Requests across all projects and repositories. Filter by status, author, assignee, and more.</p>
+                <div class="tool-status">Ready to use</div>
+            </a>
+
+            <a href="ado-pr-threads.html" class="tool-card">
+                <h3>💬 PR Threads Viewer</h3>
+                <p>View all discussion threads in a Pull Request with advanced filtering, compact/detailed views, and bulk status changes.</p>
+                <div class="tool-status">Ready to use</div>
+            </a>
+        </div>
+
+        <div class="setup-section">
+            <h2>🚀 Getting Started</h2>
+            <p>
+                <strong>First time here?</strong> Start by configuring your Azure DevOps connection in the Settings page.
+                You'll need your server URL, organization/collection name, and a Personal Access Token (PAT) with appropriate permissions.
+            </p>
+            <div class="quick-links">
+                <a href="ado-settings.html" class="btn-primary">Configure Settings</a>
+                <a href="https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+                   target="_blank"
+                   class="btn-secondary"
+                   rel="noopener noreferrer">Learn about PATs</a>
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>💡 About these tools</strong><br>
+            These are client-side web tools that run entirely in your browser. They connect directly to your Azure DevOps Server using the REST API.
+            No data is sent to external servers - everything stays between your browser and your ADO server.
+        </div>
+
+        <div class="footer">
+            <p>Azure DevOps Tools | <a href="https://github.com/vincent-rg/ado-tools" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            checkSetup();
+        });
+
+        function checkSetup() {
+            const config = ADOConfig.get();
+            const warningDiv = document.getElementById('setupWarning');
+
+            if (!config || !ADOConfig.isValid(config)) {
+                warningDiv.innerHTML = `
+                    <div class="warning">
+                        <strong>⚠️ Configuration Required</strong><br>
+                        You haven't configured your Azure DevOps connection yet. Please visit the
+                        <a href="ado-settings.html" style="color: #0078d4; font-weight: 600;">Settings page</a>
+                        to get started.
+                    </div>
+                `;
+            } else {
+                warningDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✓ Ready to go!</strong><br>
+                        Your Azure DevOps connection is configured for <strong>${ADOContent.escapeHtml(config.organization)}</strong> / <strong>${ADOContent.escapeHtml(config.project)}</strong>.
+                        You can change settings anytime from the Settings page.
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

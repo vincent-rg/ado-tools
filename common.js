@@ -180,6 +180,26 @@ const ADOAPI = {
         }
 
         return response.json();
+    },
+
+    /**
+     * Get PRs from a repository
+     */
+    async getPRs(config, project, repository, status = 'all') {
+        let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests?api-version=6.0`;
+
+        if (status !== 'all') {
+            url += `&searchCriteria.status=${status}`;
+        }
+
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch PRs: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
     }
 };
 
