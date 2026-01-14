@@ -142,6 +142,7 @@ const ADOAPI = {
         // Map string status to CommentThreadStatus enum integers
         // https://learn.microsoft.com/en-us/javascript/api/azure-devops-extension-api/commentthreadstatus
         const statusMap = {
+            'unknown': 0,
             'active': 1,
             'fixed': 2,
             'wontFix': 3,

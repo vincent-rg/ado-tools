@@ -391,6 +391,10 @@
                             <input type="checkbox" value="unknown" onchange="applyThreadFilters()">
                             Unknown
                         </label>
+                        <label>
+                            <input type="checkbox" value="noStatus" onchange="applyThreadFilters()">
+                            No status
+                        </label>
                     </div>
                 </div>
 
@@ -602,10 +606,20 @@
                 }
 
                 // Status filter
-                // Treat undefined/null status as "unknown"
-                const status = thread.status ? thread.status.toLowerCase() : 'unknown';
-                if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) {
-                    return false;
+                // Distinguish between undefined (no status) and "unknown" (actual status value)
+                if (selectedStatuses.length > 0) {
+                    if (thread.status === undefined) {
+                        // Thread has no status field
+                        if (!selectedStatuses.includes('noStatus')) {
+                            return false;
+                        }
+                    } else {
+                        // Thread has a status field
+                        const status = thread.status.toLowerCase();
+                        if (!selectedStatuses.includes(status)) {
+                            return false;
+                        }
+                    }
                 }
 
                 // Author filter (first comment author)
@@ -908,9 +922,12 @@
             const statusCounts = threads.reduce((acc, thread) => {
                 if (thread.isDeleted === true) {
                     acc.deleted = (acc.deleted || 0) + 1;
+                } else if (thread.status === undefined) {
+                    // Thread has no status field
+                    acc.noStatus = (acc.noStatus || 0) + 1;
                 } else {
-                    // Treat undefined status as "unknown"
-                    const status = thread.status || 'unknown';
+                    // Thread has a status field (including "unknown" as a valid value)
+                    const status = thread.status;
                     acc[status] = (acc[status] || 0) + 1;
                 }
                 return acc;
@@ -974,7 +991,7 @@
 
                 threads.forEach((thread, index) => {
                     const hasStatus = thread.status !== undefined;
-                    const status = thread.status || 'unknown';
+                    const status = thread.status; // Keep actual status value (could be undefined, 'unknown', 'active', etc.)
                     const isThreadDeleted = thread.isDeleted === true;
 
                     const statusClass = ADOUI.getStatusBadgeClass(status, isThreadDeleted);
@@ -1001,6 +1018,7 @@
                                         <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
                                         <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
                                         <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
+                                        <option value="unknown" ${status === 'unknown' ? 'selected' : ''}>Unknown</option>
                                     </select>
                                     <button onclick="removeThreadStatus('${threadId}')" class="btn-secondary" style="margin-left: 5px; padding: 2px 8px; font-size: 12px;" title="Remove status from this thread">✕</button>
                                 </span>
@@ -1016,6 +1034,7 @@
                                         <option value="closed">Closed</option>
                                         <option value="wontFix">Won't Fix</option>
                                         <option value="pending">Pending</option>
+                                        <option value="unknown">Unknown</option>
                                     </select>
                                 </span>
                             `;
