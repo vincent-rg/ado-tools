@@ -602,8 +602,8 @@
                 }
 
                 // Status filter
-                // Treat undefined/null/empty status as "active", otherwise use actual status
-                const status = thread.status ? thread.status.toLowerCase() : 'active';
+                // Treat undefined/null status as "unknown"
+                const status = thread.status ? thread.status.toLowerCase() : 'unknown';
                 if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) {
                     return false;
                 }
@@ -873,8 +873,8 @@
                 if (thread.isDeleted === true) {
                     acc.deleted = (acc.deleted || 0) + 1;
                 } else {
-                    // Treat undefined/empty status as "active"
-                    const status = thread.status || 'active';
+                    // Treat undefined status as "unknown"
+                    const status = thread.status || 'unknown';
                     acc[status] = (acc[status] || 0) + 1;
                 }
                 return acc;
@@ -937,8 +937,8 @@
                 html += '<div class="thread-container">';
 
                 threads.forEach((thread, index) => {
-                    // Treat undefined/empty status as "active"
-                    const status = thread.status || 'active';
+                    const hasStatus = thread.status !== undefined;
+                    const status = thread.status || 'unknown';
                     const isThreadDeleted = thread.isDeleted === true;
 
                     const statusClass = ADOUI.getStatusBadgeClass(status, isThreadDeleted);
@@ -951,21 +951,38 @@
                     const compactClass = isCompactView ? 'compact-view' : '';
                     const isChecked = selectedThreadIds.has(threadId) ? 'checked' : '';
 
-                    // Build status dropdown for non-unknown threads (only when not in bulk mode)
+                    // Build status dropdown (only when not in bulk mode and not deleted)
                     let statusControl = '';
-                    if (!isBulkMode && status !== 'unknown' && !isThreadDeleted) {
-                        statusControl = `
-                            <span class="thread-status-change">
-                                <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
-                                    <option value="">Change status...</option>
-                                    <option value="active" ${(!status || status === 'active') ? 'selected' : ''}>Active</option>
-                                    <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Resolved</option>
-                                    <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
-                                    <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
-                                    <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
-                                </select>
-                            </span>
-                        `;
+                    if (!isBulkMode && !isThreadDeleted) {
+                        if (hasStatus) {
+                            // Thread has status: show "Change status:" with current selection
+                            statusControl = `
+                                <span class="thread-status-change">
+                                    <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
+                                        <option value="">Change status...</option>
+                                        <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
+                                        <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Resolved</option>
+                                        <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
+                                        <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
+                                        <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
+                                    </select>
+                                </span>
+                            `;
+                        } else {
+                            // Thread has no status: show "Try force status:" with no selection
+                            statusControl = `
+                                <span class="thread-status-change">
+                                    <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
+                                        <option value="" selected>Try force status...</option>
+                                        <option value="active">Active</option>
+                                        <option value="fixed">Resolved</option>
+                                        <option value="closed">Closed</option>
+                                        <option value="wontFix">Won't Fix</option>
+                                        <option value="pending">Pending</option>
+                                    </select>
+                                </span>
+                            `;
+                        }
                     }
 
                     html += `
@@ -977,7 +994,7 @@
                                 </span>
                                 <span>
                                     <button class="raw-json-toggle" onclick="ADOUI.toggleRawJson('thread-${index}')">View Raw JSON</button>
-                                    <span class="badge ${statusClass}">${statusText}</span>
+                                    ${hasStatus ? `<span class="badge ${statusClass}">${statusText}</span>` : ''}
                                     ${statusControl}
                                 </span>
                             </div>
