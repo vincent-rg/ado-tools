@@ -167,6 +167,27 @@ const ADOAPI = {
     },
 
     /**
+     * Remove thread status (set to null)
+     */
+    async removeThreadStatus(config, prId, threadId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}?api-version=6.0`;
+
+        const payload = { status: null };
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to remove thread status: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
      * Get repositories in project
      */
     async getRepositories(config, project = null) {

@@ -723,7 +723,7 @@
         }
 
         async function changeThreadStatus(threadId, newStatus) {
-            if (!currentConfig || !currentPRId) return;
+            if (!currentConfig || !currentPRId || !newStatus) return;
 
             try {
                 console.log(`Attempting to change thread ${threadId} status to: ${newStatus}`);
@@ -747,6 +747,36 @@
             } catch (error) {
                 console.error(`Failed to update thread status:`, error);
                 alert(`Failed to update thread status: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+                return false;
+            }
+        }
+
+        async function removeThreadStatus(threadId) {
+            if (!currentConfig || !currentPRId) return;
+
+            const confirmed = confirm('Are you sure you want to remove the status from this thread?');
+            if (!confirmed) return;
+
+            try {
+                console.log(`Attempting to remove status from thread ${threadId}`);
+                const updatedThread = await ADOAPI.removeThreadStatus(currentConfig, currentPRId, threadId);
+                console.log(`API returned after removing status:`, updatedThread);
+
+                // Update local thread data with response from API
+                const thread = allThreads.find(t => t.id === threadId);
+                if (thread && updatedThread) {
+                    thread.status = updatedThread.status;
+                    thread.properties = updatedThread.properties;
+                    console.log(`Removed status from thread, new status:`, thread.status);
+                }
+
+                // Refresh display
+                applyThreadFilters();
+
+                return true;
+            } catch (error) {
+                console.error(`Failed to remove thread status:`, error);
+                alert(`Failed to remove thread status: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
                 return false;
             }
         }
@@ -955,7 +985,7 @@
                     let statusControl = '';
                     if (!isBulkMode && !isThreadDeleted) {
                         if (hasStatus) {
-                            // Thread has status: show "Change status:" with current selection
+                            // Thread has status: show "Change status:" with current selection and remove button
                             statusControl = `
                                 <span class="thread-status-change">
                                     <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
@@ -966,6 +996,7 @@
                                         <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
                                         <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
                                     </select>
+                                    <button onclick="removeThreadStatus('${threadId}')" class="btn-secondary" style="margin-left: 5px; padding: 2px 8px; font-size: 12px;" title="Remove status from this thread">✕</button>
                                 </span>
                             `;
                         } else {
