@@ -646,7 +646,10 @@
 
         function getSelectedThreadStatuses() {
             const checkboxes = document.querySelectorAll('.thread-filters .checkbox-filters input[type="checkbox"][value]:checked');
-            return Array.from(checkboxes).map(cb => cb.value.toLowerCase());
+            return Array.from(checkboxes).map(cb => {
+                // Keep 'noStatus' in camelCase, lowercase everything else
+                return cb.value === 'noStatus' ? cb.value : cb.value.toLowerCase();
+            });
         }
 
         function toggleView() {
