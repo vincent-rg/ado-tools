@@ -732,12 +732,15 @@
                 console.log(`Full updated thread:`, updatedThread);
 
                 // Update local thread data with response from API
-                const thread = allThreads.find(t => t.id === threadId);
+                // Note: threadId from onclick is a string, but thread.id is a number
+                const thread = allThreads.find(t => t.id == threadId);
                 if (thread && updatedThread) {
                     const oldStatus = thread.status;
                     thread.status = updatedThread.status;
                     thread.properties = updatedThread.properties;
                     console.log(`Updated local thread from ${oldStatus} to ${thread.status}`);
+                } else {
+                    console.warn(`Could not find thread ${threadId} in allThreads to update locally`);
                 }
 
                 // Refresh display to show updated badge
@@ -763,11 +766,14 @@
                 console.log(`API returned after removing status:`, updatedThread);
 
                 // Update local thread data with response from API
-                const thread = allThreads.find(t => t.id === threadId);
+                // Note: threadId from onclick is a string, but thread.id is a number
+                const thread = allThreads.find(t => t.id == threadId);
                 if (thread && updatedThread) {
                     thread.status = updatedThread.status;
                     thread.properties = updatedThread.properties;
                     console.log(`Removed status from thread, new status:`, thread.status);
+                } else {
+                    console.warn(`Could not find thread ${threadId} in allThreads to update locally`);
                 }
 
                 // Refresh display
