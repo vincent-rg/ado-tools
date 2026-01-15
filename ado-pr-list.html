@@ -745,13 +745,24 @@
 
             filteredPRs.forEach(pr => {
                 const statusClass = ADOUI.getStatusBadgeClass(pr.status);
+                const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}`;
 
                 html += `
-                    <tr onclick="openPR('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})">
-                        <td><strong>#${pr.pullRequestId}</strong></td>
+                    <tr>
                         <td>
-                            <div class="pr-title">${ADOContent.escapeHtml(pr.title)}</div>
-                            ${pr.description ? `<div class="pr-description">${ADOContent.escapeHtml(pr.description)}</div>` : ''}
+                            <a href="${prThreadsUrl}"
+                               onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
+                               style="color: inherit; text-decoration: none; display: block;">
+                                <strong>#${pr.pullRequestId}</strong>
+                            </a>
+                        </td>
+                        <td>
+                            <a href="${prThreadsUrl}"
+                               onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
+                               style="color: inherit; text-decoration: none; display: block;">
+                                <div class="pr-title">${ADOContent.escapeHtml(pr.title)}</div>
+                                ${pr.description ? `<div class="pr-description">${ADOContent.escapeHtml(pr.description)}</div>` : ''}
+                            </a>
                         </td>
                         <td class="pr-meta">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
                         <td class="pr-meta">
@@ -772,15 +783,16 @@
             resultsDiv.innerHTML = html;
         }
 
-        function openPR(project, repository, prId) {
+        function openPRLink(project, repository, prId) {
             // Update config with selected project/repo
             const config = ADOConfig.get();
             config.project = project;
             config.repository = repository;
             ADOConfig.save(config);
 
-            // Navigate to PR threads page
-            window.location.href = `ado-pr-threads.html?prId=${prId}`;
+            // Return true to allow the link to work normally
+            // This way left-click, right-click, and middle-click all work
+            return true;
         }
 
         function showAutocomplete(type) {
