@@ -49,20 +49,31 @@
 
         .checkbox-filters {
             display: flex;
-            flex-direction: column;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
-        .checkbox-filters label {
-            display: flex;
-            align-items: center;
-            font-weight: normal;
+        .status-chip {
+            padding: 6px 14px;
+            border: 1px solid #d1d1d1;
+            border-radius: 16px;
+            background: white;
+            color: #323130;
+            font-size: 13px;
             cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
         }
 
-        .checkbox-filters input[type="checkbox"] {
-            margin-right: 8px;
-            width: auto;
+        .status-chip:hover {
+            border-color: #0078d4;
+            background: #f3f9fd;
+        }
+
+        .status-chip.selected {
+            background: #0078d4;
+            color: white;
+            border-color: #0078d4;
         }
 
         .thread-container {
@@ -367,34 +378,13 @@
                 <div class="filter-group">
                     <label>Thread Status</label>
                     <div class="checkbox-filters">
-                        <label>
-                            <input type="checkbox" value="active" checked onchange="applyThreadFilters()">
-                            Active
-                        </label>
-                        <label>
-                            <input type="checkbox" value="fixed" checked onchange="applyThreadFilters()">
-                            Resolved
-                        </label>
-                        <label>
-                            <input type="checkbox" value="closed" checked onchange="applyThreadFilters()">
-                            Closed
-                        </label>
-                        <label>
-                            <input type="checkbox" value="wontFix" checked onchange="applyThreadFilters()">
-                            Won't Fix
-                        </label>
-                        <label>
-                            <input type="checkbox" value="pending" checked onchange="applyThreadFilters()">
-                            Pending
-                        </label>
-                        <label>
-                            <input type="checkbox" value="unknown" onchange="applyThreadFilters()">
-                            Unknown
-                        </label>
-                        <label>
-                            <input type="checkbox" value="noStatus" onchange="applyThreadFilters()">
-                            No status
-                        </label>
+                        <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this)">Active</button>
+                        <button class="status-chip selected" data-status="fixed" onclick="toggleStatusChip(this)">Resolved</button>
+                        <button class="status-chip selected" data-status="closed" onclick="toggleStatusChip(this)">Closed</button>
+                        <button class="status-chip selected" data-status="wontFix" onclick="toggleStatusChip(this)">Won't Fix</button>
+                        <button class="status-chip selected" data-status="pending" onclick="toggleStatusChip(this)">Pending</button>
+                        <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this)">Unknown</button>
+                        <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this)">No status</button>
                     </div>
                 </div>
 
@@ -573,18 +563,18 @@
             isRestoringFromURL = true;
 
             try {
-                // Restore status checkboxes
+                // Restore status chips
                 if (urlParams.status) {
-                    // First uncheck all status checkboxes
-                    document.querySelectorAll('.thread-filters .checkbox-filters input[type="checkbox"][value]').forEach(cb => {
-                        cb.checked = false;
+                    // First deselect all status chips
+                    document.querySelectorAll('.thread-filters .status-chip').forEach(chip => {
+                        chip.classList.remove('selected');
                     });
 
-                    // Then check only the ones in the URL
+                    // Then select only the ones in the URL
                     urlParams.status.forEach(status => {
-                        const checkbox = document.querySelector(`.thread-filters .checkbox-filters input[type="checkbox"][value="${status}"]`);
-                        if (checkbox) {
-                            checkbox.checked = true;
+                        const chip = document.querySelector(`.thread-filters .status-chip[data-status="${status}"]`);
+                        if (chip) {
+                            chip.classList.add('selected');
                         }
                     });
                 }
@@ -745,11 +735,17 @@
             updateURL();
         }
 
+        function toggleStatusChip(button) {
+            button.classList.toggle('selected');
+            applyThreadFilters();
+        }
+
         function getSelectedThreadStatuses() {
-            const checkboxes = document.querySelectorAll('.thread-filters .checkbox-filters input[type="checkbox"][value]:checked');
-            return Array.from(checkboxes).map(cb => {
+            const selectedChips = document.querySelectorAll('.thread-filters .status-chip.selected');
+            return Array.from(selectedChips).map(chip => {
+                const status = chip.dataset.status;
                 // Keep 'noStatus' in camelCase, lowercase everything else
-                return cb.value === 'noStatus' ? cb.value : cb.value.toLowerCase();
+                return status === 'noStatus' ? status : status.toLowerCase();
             });
         }
 
