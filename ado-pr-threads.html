@@ -458,6 +458,7 @@
         let isCompactView = false;
         let isBulkMode = false;
         let selectedThreadIds = new Set();
+        let isRestoringFromURL = false;
 
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
@@ -518,6 +519,103 @@
             `;
         }
 
+        // URL parameter helpers
+        function getURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                prId: params.get('prId') || params.get('id') || null,
+                status: params.get('status') ? params.get('status').split(',') : null,
+                showDeleted: params.get('showDeleted') !== null ? params.get('showDeleted') === 'true' : null,
+                author: params.get('author') || null,
+                view: params.get('view') || null
+            };
+        }
+
+        function updateURL() {
+            if (isRestoringFromURL) return;
+
+            const params = new URLSearchParams();
+
+            // PR ID
+            if (currentPRId) {
+                params.set('prId', currentPRId);
+            }
+
+            // Thread status filters
+            const selectedStatuses = getSelectedThreadStatuses();
+            if (selectedStatuses.length > 0) {
+                params.set('status', selectedStatuses.join(','));
+            }
+
+            // Show deleted checkbox
+            const showDeleted = document.getElementById('showDeleted').checked;
+            if (!showDeleted) {  // Only add to URL if unchecked (default is checked)
+                params.set('showDeleted', 'false');
+            }
+
+            // Author filter
+            const author = document.getElementById('threadAuthorFilter').value;
+            if (author) {
+                params.set('author', author);
+            }
+
+            // View mode
+            if (isCompactView) {  // Only add to URL if compact (default is detailed)
+                params.set('view', 'compact');
+            }
+
+            const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+            history.replaceState(null, '', newURL);
+        }
+
+        function restoreFiltersFromURL() {
+            const urlParams = getURLParams();
+            isRestoringFromURL = true;
+
+            try {
+                // Restore status checkboxes
+                if (urlParams.status) {
+                    // First uncheck all status checkboxes
+                    document.querySelectorAll('.thread-filters .checkbox-filters input[type="checkbox"][value]').forEach(cb => {
+                        cb.checked = false;
+                    });
+
+                    // Then check only the ones in the URL
+                    urlParams.status.forEach(status => {
+                        const checkbox = document.querySelector(`.thread-filters .checkbox-filters input[type="checkbox"][value="${status}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                        }
+                    });
+                }
+
+                // Restore showDeleted checkbox
+                if (urlParams.showDeleted !== null) {
+                    document.getElementById('showDeleted').checked = urlParams.showDeleted;
+                }
+
+                // Restore author filter
+                if (urlParams.author) {
+                    const authorSelect = document.getElementById('threadAuthorFilter');
+                    // Check if the option exists (it might not be populated yet)
+                    const option = Array.from(authorSelect.options).find(opt => opt.value === urlParams.author);
+                    if (option) {
+                        authorSelect.value = urlParams.author;
+                    }
+                }
+
+                // Restore view mode
+                if (urlParams.view === 'compact' && !isCompactView) {
+                    toggleView();
+                }
+            } finally {
+                isRestoringFromURL = false;
+            }
+
+            // Apply filters to show the filtered results
+            applyThreadFilters();
+        }
+
         async function loadPRThreads() {
             const config = ADOConfig.getFromForm({});
 
@@ -565,8 +663,8 @@
                 // Populate author filter
                 populateAuthorFilter();
 
-                // Apply filters and display results
-                applyThreadFilters();
+                // Restore filters from URL (if any) and apply
+                restoreFiltersFromURL();
 
             } catch (error) {
                 ADOUI.showError('results', error.message);
@@ -642,6 +740,9 @@
 
             // Display filtered threads
             displayResults(currentPRData, filtered, allIterations, currentConfig);
+
+            // Update URL with current filter state
+            updateURL();
         }
 
         function getSelectedThreadStatuses() {
