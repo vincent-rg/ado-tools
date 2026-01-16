@@ -338,8 +338,8 @@
         .file-preview-content pre {
             margin: 0;
             padding: 12px;
-            background: #1e1e1e;
-            color: #d4d4d4;
+            background: #f8f8f8;
+            color: #323130;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.5;
@@ -352,7 +352,7 @@
         }
 
         .file-preview-line-number {
-            color: #858585;
+            color: #999;
             text-align: right;
             min-width: 40px;
             user-select: none;
@@ -1083,20 +1083,32 @@
         }
 
         async function renderCodeSuggestion(thread, comment) {
+            console.log('renderCodeSuggestion called for thread:', thread.id);
+
             // Extract suggestion from comment content
             const suggestionMatch = comment.content?.match(/```suggestion\n([\s\S]*?)\n```/);
             if (!suggestionMatch) {
+                console.log('No suggestion match found in comment content');
                 return null;
             }
 
             const suggestion = suggestionMatch[1];
+            console.log('Found suggestion:', suggestion);
+
             const ctx = thread.threadContext;
 
             if (!ctx || !ctx.leftFileStart || !currentConfig || !thread.pullRequestThreadContext) {
+                console.log('Missing required context:', {
+                    hasCtx: !!ctx,
+                    hasLeftFileStart: !!ctx?.leftFileStart,
+                    hasCurrentConfig: !!currentConfig,
+                    hasPullRequestThreadContext: !!thread.pullRequestThreadContext
+                });
                 return null;
             }
 
             try {
+                console.log('Fetching file content for code suggestion...');
                 // Get the iteration to fetch the original code
                 const iterationId = thread.pullRequestThreadContext.iterationContext?.secondComparingIteration;
                 let iteration;
@@ -1231,25 +1243,28 @@
                             let lineContentHtml;
                             if (isInRange && startOffset !== undefined && endOffset !== undefined) {
                                 // Apply character-level highlighting based on offsets
+                                // Adjust offset by -1 to start one character earlier
+                                const adjustedStartOffset = Math.max(0, startOffset - 1);
+
                                 if (lineNum === startLine && lineNum === endLine) {
                                     // Single line: highlight from startOffset to endOffset
-                                    const before = ADOContent.escapeHtml(rawLine.substring(0, startOffset));
-                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(startOffset, endOffset));
+                                    const before = ADOContent.escapeHtml(rawLine.substring(0, adjustedStartOffset));
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(adjustedStartOffset, endOffset));
                                     const after = ADOContent.escapeHtml(rawLine.substring(endOffset));
-                                    lineContentHtml = `${before}<mark style="background: #264f78; color: #d4d4d4;">${highlighted}</mark>${after}`;
+                                    lineContentHtml = `${before}<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>${after}`;
                                 } else if (lineNum === startLine) {
                                     // First line: highlight from startOffset to end
-                                    const before = ADOContent.escapeHtml(rawLine.substring(0, startOffset));
-                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(startOffset));
-                                    lineContentHtml = `${before}<mark style="background: #264f78; color: #d4d4d4;">${highlighted}</mark>`;
+                                    const before = ADOContent.escapeHtml(rawLine.substring(0, adjustedStartOffset));
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(adjustedStartOffset));
+                                    lineContentHtml = `${before}<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>`;
                                 } else if (lineNum === endLine) {
                                     // Last line: highlight from start to endOffset
                                     const highlighted = ADOContent.escapeHtml(rawLine.substring(0, endOffset));
                                     const after = ADOContent.escapeHtml(rawLine.substring(endOffset));
-                                    lineContentHtml = `<mark style="background: #264f78; color: #d4d4d4;">${highlighted}</mark>${after}`;
+                                    lineContentHtml = `<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>${after}`;
                                 } else {
                                     // Middle lines: highlight entire line
-                                    lineContentHtml = `<mark style="background: #264f78; color: #d4d4d4;">${ADOContent.escapeHtml(rawLine)}</mark>`;
+                                    lineContentHtml = `<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${ADOContent.escapeHtml(rawLine)}</mark>`;
                                 }
                             } else {
                                 // No offset highlighting, just escape
@@ -1566,19 +1581,45 @@
 
             // Asynchronously load code suggestions
             setTimeout(async () => {
-                const suggestionDivs = resultsDiv.querySelectorAll('[id^="code-suggestion-"]');
-                for (const div of suggestionDivs) {
-                    const threadId = parseInt(div.dataset.threadId);
-                    const commentIdx = parseInt(div.dataset.commentIdx);
+                try {
+                    const suggestionDivs = resultsDiv.querySelectorAll('[id^="code-suggestion-"]');
+                    console.log(`Found ${suggestionDivs.length} code suggestion divs to process`);
 
-                    const thread = threads.find(t => t.id === threadId);
-                    if (!thread || !thread.comments || !thread.comments[commentIdx]) continue;
+                    for (const div of suggestionDivs) {
+                        try {
+                            const threadId = parseInt(div.dataset.threadId);
+                            const commentIdx = parseInt(div.dataset.commentIdx);
+                            console.log(`Processing code suggestion for thread ${threadId}, comment ${commentIdx}`);
 
-                    const comment = thread.comments[commentIdx];
-                    const suggestionHtml = await renderCodeSuggestion(thread, comment);
-                    if (suggestionHtml) {
-                        div.innerHTML = suggestionHtml;
+                            const thread = threads.find(t => t.id === threadId);
+                            if (!thread) {
+                                console.warn(`Thread ${threadId} not found`);
+                                div.innerHTML = '<div style="padding: 12px; color: #a4262c;">Error: Thread not found</div>';
+                                continue;
+                            }
+
+                            if (!thread.comments || !thread.comments[commentIdx]) {
+                                console.warn(`Comment ${commentIdx} not found in thread ${threadId}`);
+                                div.innerHTML = '<div style="padding: 12px; color: #a4262c;">Error: Comment not found</div>';
+                                continue;
+                            }
+
+                            const comment = thread.comments[commentIdx];
+                            const suggestionHtml = await renderCodeSuggestion(thread, comment);
+                            if (suggestionHtml) {
+                                div.innerHTML = suggestionHtml;
+                                console.log(`Successfully loaded code suggestion for thread ${threadId}`);
+                            } else {
+                                console.log(`No suggestion HTML returned for thread ${threadId}`);
+                                div.innerHTML = ''; // Remove loading message if no suggestion
+                            }
+                        } catch (error) {
+                            console.error('Error processing individual code suggestion:', error);
+                            div.innerHTML = `<div style="padding: 12px; color: #a4262c;">Error loading suggestion: ${ADOContent.escapeHtml(error.message)}</div>`;
+                        }
                     }
+                } catch (error) {
+                    console.error('Error in code suggestion loading:', error);
                 }
             }, 0);
         }
