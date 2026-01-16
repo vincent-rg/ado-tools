@@ -365,17 +365,14 @@
                 </div>
             </div>
             <div class="filter-row">
-                <div class="filter-group">
-                    <label>Show Deleted Threads</label>
-                    <div class="checkbox-filters">
-                        <label>
-                            <input type="checkbox" id="showDeleted" checked onchange="applyThreadFilters()">
-                            Show deleted threads
-                        </label>
-                    </div>
+                <div class="filter-group" style="flex: 0 0 auto; min-width: auto;">
+                    <label>
+                        <input type="checkbox" id="showDeleted" checked onchange="applyThreadFilters()">
+                        Show deleted threads
+                    </label>
                 </div>
 
-                <div class="filter-group">
+                <div class="filter-group" style="flex: 2;">
                     <label>Thread Status</label>
                     <div class="checkbox-filters">
                         <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this)">Active</button>
@@ -388,7 +385,7 @@
                     </div>
                 </div>
 
-                <div class="filter-group">
+                <div class="filter-group" style="flex: 1;">
                     <label for="threadAuthorFilter">Thread Author (First Comment)</label>
                     <select id="threadAuthorFilter" onchange="applyThreadFilters()">
                         <option value="">All authors</option>
