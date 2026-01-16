@@ -1097,9 +1097,12 @@
 
             const ctx = thread.threadContext;
 
-            if (!ctx || !ctx.leftFileStart || !currentConfig || !thread.pullRequestThreadContext) {
+            // For code suggestions, we use rightFileStart (the target/new code location)
+            // leftFileStart is only for diffs that show both old and new code
+            if (!ctx || !ctx.rightFileStart || !currentConfig || !thread.pullRequestThreadContext) {
                 console.log('Missing required context:', {
                     hasCtx: !!ctx,
+                    hasRightFileStart: !!ctx?.rightFileStart,
                     hasLeftFileStart: !!ctx?.leftFileStart,
                     hasCurrentConfig: !!currentConfig,
                     hasPullRequestThreadContext: !!thread.pullRequestThreadContext
@@ -1132,11 +1135,13 @@
                     versionType: 'commit'
                 });
 
-                // Extract the original lines
+                // Extract the original lines that will be replaced
+                // For code suggestions, use rightFileStart (the location in the new/target code)
                 const lines = fileContent.split('\n');
-                const startLine = ctx.leftFileStart.line;
-                const endLine = ctx.leftFileEnd ? ctx.leftFileEnd.line : startLine;
+                const startLine = ctx.rightFileStart.line;
+                const endLine = ctx.rightFileEnd ? ctx.rightFileEnd.line : startLine;
                 const originalCode = lines.slice(startLine - 1, endLine).join('\n');
+                console.log(`Extracting lines ${startLine}-${endLine} from file`);
 
                 // Build the diff view
                 let html = '<div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
@@ -1243,14 +1248,15 @@
                             let lineContentHtml;
                             if (isInRange && startOffset !== undefined && endOffset !== undefined) {
                                 // Apply character-level highlighting based on offsets
-                                // Adjust offset by -1 to start one character earlier
+                                // Adjust offsets by -1 to align correctly (ADO offsets are 1-based)
                                 const adjustedStartOffset = Math.max(0, startOffset - 1);
+                                const adjustedEndOffset = Math.max(0, endOffset - 1);
 
                                 if (lineNum === startLine && lineNum === endLine) {
                                     // Single line: highlight from startOffset to endOffset
                                     const before = ADOContent.escapeHtml(rawLine.substring(0, adjustedStartOffset));
-                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(adjustedStartOffset, endOffset));
-                                    const after = ADOContent.escapeHtml(rawLine.substring(endOffset));
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(adjustedStartOffset, adjustedEndOffset));
+                                    const after = ADOContent.escapeHtml(rawLine.substring(adjustedEndOffset));
                                     lineContentHtml = `${before}<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>${after}`;
                                 } else if (lineNum === startLine) {
                                     // First line: highlight from startOffset to end
@@ -1259,8 +1265,8 @@
                                     lineContentHtml = `${before}<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>`;
                                 } else if (lineNum === endLine) {
                                     // Last line: highlight from start to endOffset
-                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(0, endOffset));
-                                    const after = ADOContent.escapeHtml(rawLine.substring(endOffset));
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(0, adjustedEndOffset));
+                                    const after = ADOContent.escapeHtml(rawLine.substring(adjustedEndOffset));
                                     lineContentHtml = `<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>${after}`;
                                 } else {
                                     // Middle lines: highlight entire line
