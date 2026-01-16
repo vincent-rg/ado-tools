@@ -304,19 +304,24 @@
 
         .file-preview-header {
             padding: 8px 12px;
-            background: #f3f2f1;
-            border-bottom: 1px solid #d1d1d1;
+            background: #fff4ce;
+            border-left: 3px solid #ffb900;
             cursor: pointer;
-            font-size: 12px;
-            color: #0078d4;
-            font-weight: 600;
+            font-size: 13px;
+            color: #323130;
+            font-weight: normal;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
         .file-preview-header:hover {
-            background: #e1dfdd;
+            background: #ffecb3;
+        }
+
+        .file-preview-header span:first-child {
+            color: #0078d4;
+            font-weight: 600;
         }
 
         .file-preview-content {
@@ -1077,30 +1082,47 @@
             return { beforeLink, afterLink, completeLink };
         }
 
-        async function toggleFilePreview(threadId, filePath, startLine, endLine, startOffset, endOffset) {
+        async function toggleFilePreview(threadId, filePath, startLine, endLine, firstIterationId, secondIterationId) {
             const previewDiv = document.getElementById(`file-preview-${threadId}`);
             const headerDiv = previewDiv.previousElementSibling;
             const arrow = headerDiv.querySelector('span:first-child');
+            const label = headerDiv.querySelector('span:last-child');
 
             if (previewDiv.classList.contains('show')) {
                 // Collapse
                 previewDiv.classList.remove('show');
                 arrow.textContent = '▶';
-                headerDiv.querySelector('span:last-child').textContent = 'Show file preview';
+                // Keep the label as is when collapsed
             } else {
                 // Expand
                 previewDiv.classList.add('show');
                 arrow.textContent = '▼';
-                headerDiv.querySelector('span:last-child').textContent = 'Hide file preview';
 
                 // Load content if not already loaded
                 if (!previewDiv.hasAttribute('data-loaded')) {
                     previewDiv.innerHTML = '<div style="padding: 12px; color: #858585;">Loading...</div>';
 
                     try {
-                        // Get the latest iteration to fetch the right file version
-                        const latestIteration = allIterations[allIterations.length - 1];
-                        const commitId = latestIteration?.sourceRefCommit?.commitId || currentPRData.lastMergeSourceCommit?.commitId;
+                        // Use the iteration context to get the correct file version
+                        // secondComparingIteration is the iteration where the comment was made
+                        // firstComparingIteration is the base iteration
+                        let commitId;
+                        let iteration;
+
+                        if (secondIterationId) {
+                            // Find the iteration by ID
+                            iteration = allIterations.find(it => it.id === secondIterationId);
+                        } else if (firstIterationId) {
+                            // Fallback to firstIterationId if secondIterationId is not available
+                            iteration = allIterations.find(it => it.id === firstIterationId);
+                        }
+
+                        if (!iteration) {
+                            // Last resort: use latest iteration
+                            iteration = allIterations[allIterations.length - 1];
+                        }
+
+                        commitId = iteration?.sourceRefCommit?.commitId || currentPRData.lastMergeSourceCommit?.commitId;
 
                         if (!commitId) {
                             throw new Error('Could not determine commit version');
@@ -1303,21 +1325,25 @@
                         const ctx = thread.threadContext;
                         const lineInfo = ctx.rightFileStart ? ` (Line ${ctx.rightFileStart.line}${ctx.rightFileEnd && ctx.rightFileEnd.line !== ctx.rightFileStart.line ? `-${ctx.rightFileEnd.line}` : ''})` : '';
 
-                        html += `
-                            <div class="thread-context">
-                                <strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo}
-                            </div>
-                        `;
-
-                        // Add file preview section if we have line information
+                        // If we have line information, make the file path a collapsible preview header
                         if (ctx.filePath && ctx.rightFileStart) {
+                            const iterationId = thread.threadContext.iterationContext?.firstComparingIteration || null;
+                            const secondIterationId = thread.threadContext.iterationContext?.secondComparingIteration || null;
+
                             html += `
                                 <div class="file-preview">
-                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, '${ctx.rightFileStart.offset || 0}', '${ctx.rightFileEnd ? ctx.rightFileEnd.offset || 0 : ctx.rightFileStart.offset || 0}')">
+                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, ${iterationId}, ${secondIterationId})">
                                         <span>▶</span>
-                                        <span>Show file preview</span>
+                                        <span><strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo} - Click to show file preview</span>
                                     </div>
                                     <div id="file-preview-${threadId}" class="file-preview-content"></div>
+                                </div>
+                            `;
+                        } else {
+                            // No line information, just show as regular context
+                            html += `
+                                <div class="thread-context">
+                                    <strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo}
                                 </div>
                             `;
                         }
