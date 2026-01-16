@@ -365,13 +365,6 @@
                 </div>
             </div>
             <div class="filter-row">
-                <div class="filter-group" style="flex: 0 0 auto; min-width: auto;">
-                    <label>
-                        <input type="checkbox" id="showDeleted" checked onchange="applyThreadFilters()">
-                        Show deleted threads
-                    </label>
-                </div>
-
                 <div class="filter-group" style="flex: 2;">
                     <label>Thread Status</label>
                     <div class="checkbox-filters">
@@ -382,6 +375,12 @@
                         <button class="status-chip selected" data-status="pending" onclick="toggleStatusChip(this)">Pending</button>
                         <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this)">Unknown</button>
                         <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this)">No status</button>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <label>
+                            <input type="checkbox" id="showDeleted" onchange="applyThreadFilters()">
+                            Show deleted threads
+                        </label>
                     </div>
                 </div>
 
@@ -536,8 +535,8 @@
 
             // Show deleted checkbox
             const showDeleted = document.getElementById('showDeleted').checked;
-            if (!showDeleted) {  // Only add to URL if unchecked (default is checked)
-                params.set('showDeleted', 'false');
+            if (showDeleted) {  // Only add to URL if checked (default is unchecked)
+                params.set('showDeleted', 'true');
             }
 
             // Author filter
