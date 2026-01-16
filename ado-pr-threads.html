@@ -579,9 +579,10 @@
         // URL parameter helpers
         function getURLParams() {
             const params = new URLSearchParams(window.location.search);
+            const statusParam = params.get('status');
             return {
                 prId: params.get('prId') || params.get('id') || null,
-                status: params.get('status') ? params.get('status').split(',') : null,
+                status: statusParam ? (statusParam === 'none' ? [] : statusParam.split(',')) : null,
                 showDeleted: params.get('showDeleted') !== null ? params.get('showDeleted') === 'true' : null,
                 author: params.get('author') || null,
                 view: params.get('view') || null
@@ -599,10 +600,9 @@
             }
 
             // Thread status filters
+            // Always include status parameter to preserve chip selection state (even if none selected)
             const selectedStatuses = getSelectedThreadStatuses();
-            if (selectedStatuses.length > 0) {
-                params.set('status', selectedStatuses.join(','));
-            }
+            params.set('status', selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'none');
 
             // Show deleted checkbox
             const showDeleted = document.getElementById('showDeleted').checked;
@@ -631,13 +631,15 @@
 
             try {
                 // Restore status chips
-                if (urlParams.status) {
+                // If status param exists in URL (even if empty/none), restore that selection
+                // If status param is missing, keep HTML defaults
+                if (urlParams.status !== null) {
                     // First deselect all status chips
                     document.querySelectorAll('.thread-filters .status-chip').forEach(chip => {
                         chip.classList.remove('selected');
                     });
 
-                    // Then select only the ones in the URL
+                    // Then select only the ones in the URL (if any)
                     urlParams.status.forEach(status => {
                         const chip = document.querySelector(`.thread-filters .status-chip[data-status="${status}"]`);
                         if (chip) {
@@ -1135,37 +1137,14 @@
                     versionType: 'commit'
                 });
 
-                // Extract the original text that will be replaced using character offsets
+                // Extract the original lines that will be replaced
                 // For code suggestions, use rightFileStart (the location in the new/target code)
+                // Show entire lines, not just character ranges
                 const lines = fileContent.split('\n');
                 const startLine = ctx.rightFileStart.line;
                 const endLine = ctx.rightFileEnd ? ctx.rightFileEnd.line : startLine;
-                const startOffset = ctx.rightFileStart.offset || 0;
-                const endOffset = ctx.rightFileEnd?.offset || 0;
-
-                // Extract text using character offsets (1-based, so adjust by -1)
-                const adjustedStartOffset = Math.max(0, startOffset - 1);
-                const adjustedEndOffset = Math.max(0, endOffset - 1);
-
-                let originalCode = '';
-                if (startLine === endLine) {
-                    // Single line: extract text between offsets
-                    const line = lines[startLine - 1] || '';
-                    originalCode = line.substring(adjustedStartOffset, adjustedEndOffset);
-                } else {
-                    // Multiple lines: extract from start offset to end offset across lines
-                    const firstLine = lines[startLine - 1] || '';
-                    const lastLine = lines[endLine - 1] || '';
-                    const middleLines = lines.slice(startLine, endLine - 1);
-
-                    originalCode = firstLine.substring(adjustedStartOffset);
-                    if (middleLines.length > 0) {
-                        originalCode += '\n' + middleLines.join('\n');
-                    }
-                    originalCode += '\n' + lastLine.substring(0, adjustedEndOffset);
-                }
-
-                console.log(`Extracting character range ${startOffset}-${endOffset} from lines ${startLine}-${endLine}`);
+                const originalCode = lines.slice(startLine - 1, endLine).join('\n');
+                console.log(`Extracting lines ${startLine}-${endLine} from file`);
 
                 // Build the diff view (light theme)
                 let html = '<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 4px; border: 1px solid #d1d1d1; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
