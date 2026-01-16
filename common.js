@@ -425,11 +425,14 @@ const ADOContent = {
 
         // 4. Parse bold
         result = result.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
-        result = result.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        // Only match __ for bold when not part of longer underscore sequences (word boundaries)
+        result = result.replace(/(?<![a-zA-Z0-9_])__([^_]+)__(?![a-zA-Z0-9_])/g, '<strong>$1</strong>');
 
         // 5. Parse italic
         result = result.replace(/(?<!\*)\*(?!\*)([^\*]+)\*(?!\*)/g, '<em>$1</em>');
-        result = result.replace(/(?<!_)_(?!_)([^_]+)_(?!_)/g, '<em>$1</em>');
+        // Only match _ for italic when not part of identifier names (word boundaries)
+        // Must not be preceded or followed by alphanumeric or underscore characters
+        result = result.replace(/(?<![a-zA-Z0-9_])_(?!_)([^_]+)_(?!_)(?![a-zA-Z0-9_])/g, '<em>$1</em>');
 
         // 6. Parse regular links
         result = result.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, text, url) => {
