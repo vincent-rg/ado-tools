@@ -1082,7 +1082,79 @@
             return { beforeLink, afterLink, completeLink };
         }
 
-        async function toggleFilePreview(threadId, filePath, startLine, endLine, firstIterationId, secondIterationId) {
+        async function renderCodeSuggestion(thread, comment) {
+            // Extract suggestion from comment content
+            const suggestionMatch = comment.content?.match(/```suggestion\n([\s\S]*?)\n```/);
+            if (!suggestionMatch) {
+                return null;
+            }
+
+            const suggestion = suggestionMatch[1];
+            const ctx = thread.threadContext;
+
+            if (!ctx || !ctx.leftFileStart || !currentConfig || !thread.pullRequestThreadContext) {
+                return null;
+            }
+
+            try {
+                // Get the iteration to fetch the original code
+                const iterationId = thread.pullRequestThreadContext.iterationContext?.secondComparingIteration;
+                let iteration;
+
+                if (iterationId !== null && iterationId !== undefined) {
+                    iteration = allIterations.find(it => it.id === iterationId);
+                }
+
+                if (!iteration) {
+                    iteration = allIterations[allIterations.length - 1];
+                }
+
+                const commitId = iteration?.sourceRefCommit?.commitId || currentPRData.lastMergeSourceCommit?.commitId;
+                if (!commitId) {
+                    throw new Error('Could not determine commit version');
+                }
+
+                // Fetch the file content
+                const fileContent = await ADOAPI.getFileContent(currentConfig, ctx.filePath, {
+                    version: commitId,
+                    versionType: 'commit'
+                });
+
+                // Extract the original lines
+                const lines = fileContent.split('\n');
+                const startLine = ctx.leftFileStart.line;
+                const endLine = ctx.leftFileEnd ? ctx.leftFileEnd.line : startLine;
+                const originalCode = lines.slice(startLine - 1, endLine).join('\n');
+
+                // Build the diff view
+                let html = '<div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
+                html += '<div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>';
+                html += '<div style="border: 1px solid #3e3e42; border-radius: 4px; overflow: hidden;">';
+
+                // Original code (removed lines)
+                const originalLines = originalCode.split('\n');
+                originalLines.forEach(line => {
+                    html += `<div style="background: #3f1f1f; padding: 2px 8px;"><span style="color: #f48771;">- </span>${ADOContent.escapeHtml(line)}</div>`;
+                });
+
+                // Suggested code (added lines)
+                const suggestionLines = suggestion.split('\n');
+                suggestionLines.forEach(line => {
+                    html += `<div style="background: #1f3f1f; padding: 2px 8px;"><span style="color: #7ec699;">+ </span>${ADOContent.escapeHtml(line)}</div>`;
+                });
+
+                html += '</div></div>';
+                return html;
+            } catch (error) {
+                console.error('Failed to render code suggestion:', error);
+                return `<div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
+                    <div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>
+                    <div style="color: #858585; font-size: 11px;">Could not load suggestion details. Click the iteration links above or "View in ADO" to see the code diff.</div>
+                </div>`;
+            }
+        }
+
+        async function toggleFilePreview(threadId, filePath, startLine, endLine, firstIterationId, secondIterationId, startOffset, endOffset) {
             const previewDiv = document.getElementById(`file-preview-${threadId}`);
             const headerDiv = previewDiv.previousElementSibling;
             const arrow = headerDiv.querySelector('span:first-child');
@@ -1153,11 +1225,38 @@
                         let html = '<pre>';
                         for (let i = startIdx; i < endIdx; i++) {
                             const lineNum = i + 1;
-                            const lineContent = ADOContent.escapeHtml(lines[i] || '');
-                            const isHighlighted = lineNum >= startLine && lineNum <= endLine;
-                            const highlightClass = isHighlighted ? ' highlight' : '';
+                            const rawLine = lines[i] || '';
+                            const isInRange = lineNum >= startLine && lineNum <= endLine;
 
-                            html += `<div class="file-preview-line${highlightClass}"><span class="file-preview-line-number">${lineNum}</span><span class="file-preview-line-content">${lineContent}</span></div>`;
+                            let lineContentHtml;
+                            if (isInRange && startOffset !== undefined && endOffset !== undefined) {
+                                // Apply character-level highlighting based on offsets
+                                if (lineNum === startLine && lineNum === endLine) {
+                                    // Single line: highlight from startOffset to endOffset
+                                    const before = ADOContent.escapeHtml(rawLine.substring(0, startOffset));
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(startOffset, endOffset));
+                                    const after = ADOContent.escapeHtml(rawLine.substring(endOffset));
+                                    lineContentHtml = `${before}<mark style="background: #264f78; color: #d4d4d4;">${highlighted}</mark>${after}`;
+                                } else if (lineNum === startLine) {
+                                    // First line: highlight from startOffset to end
+                                    const before = ADOContent.escapeHtml(rawLine.substring(0, startOffset));
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(startOffset));
+                                    lineContentHtml = `${before}<mark style="background: #264f78; color: #d4d4d4;">${highlighted}</mark>`;
+                                } else if (lineNum === endLine) {
+                                    // Last line: highlight from start to endOffset
+                                    const highlighted = ADOContent.escapeHtml(rawLine.substring(0, endOffset));
+                                    const after = ADOContent.escapeHtml(rawLine.substring(endOffset));
+                                    lineContentHtml = `<mark style="background: #264f78; color: #d4d4d4;">${highlighted}</mark>${after}`;
+                                } else {
+                                    // Middle lines: highlight entire line
+                                    lineContentHtml = `<mark style="background: #264f78; color: #d4d4d4;">${ADOContent.escapeHtml(rawLine)}</mark>`;
+                                }
+                            } else {
+                                // No offset highlighting, just escape
+                                lineContentHtml = ADOContent.escapeHtml(rawLine);
+                            }
+
+                            html += `<div class="file-preview-line"><span class="file-preview-line-number">${lineNum}</span><span class="file-preview-line-content">${lineContentHtml}</span></div>`;
                         }
                         html += '</pre>';
 
@@ -1342,6 +1441,8 @@
                         if (ctx.filePath && ctx.rightFileStart) {
                             const iterationId = thread.pullRequestThreadContext?.iterationContext?.firstComparingIteration;
                             const secondIterationId = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
+                            const startOffset = ctx.rightFileStart.offset || 0;
+                            const endOffset = ctx.rightFileEnd?.offset || 0;
 
                             // Log iteration context for debugging
                             console.log(`Thread ${threadId} iteration context:`, {
@@ -1352,7 +1453,7 @@
 
                             html += `
                                 <div class="file-preview">
-                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, ${iterationId !== undefined ? iterationId : 'null'}, ${secondIterationId !== undefined ? secondIterationId : 'null'})">
+                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, ${iterationId !== undefined ? iterationId : 'null'}, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${startOffset}, ${endOffset})">
                                         <span>▶</span>
                                         <span><strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo} - Click to show file preview</span>
                                     </div>
@@ -1371,12 +1472,15 @@
 
                     // Show all comments in the thread
                     if (thread.comments && thread.comments.length > 0) {
-                        thread.comments.forEach(comment => {
+                        thread.comments.forEach((comment, commentIdx) => {
                             let resolvedContent = ADOContent.processContent(comment.content);
 
                             // Check if content is essentially empty (just whitespace or empty code blocks)
                             const contentStripped = resolvedContent.replace(/<pre><code><\/code><\/pre>/g, '').trim();
                             const hasRealContent = contentStripped.length > 0;
+
+                            // Check if this is a code suggestion
+                            const isCodeSuggestion = comment.content?.includes('```suggestion');
 
                             // Get iteration links for this comment
                             const filePath = thread.threadContext?.filePath || null;
@@ -1446,13 +1550,7 @@
                                     </div>
                                     ${hasRealContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
 
-                                    ${(commentType === 'codeChange' || commentType === 2) && thread.threadContext?.leftFileStart && thread.threadContext?.rightFileStart ? `
-                                    <div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
-                                        <div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>
-                                        <div style="color: #d4d4d4; margin-bottom: 8px;">Suggested changes to lines ${thread.threadContext.leftFileStart.line}${thread.threadContext.leftFileEnd ? `-${thread.threadContext.leftFileEnd.line}` : ''} → ${thread.threadContext.rightFileStart.line}${thread.threadContext.rightFileEnd ? `-${thread.threadContext.rightFileEnd.line}` : ''}</div>
-                                        <div style="color: #858585; font-size: 11px;">💡 Tip: Click the iteration links (←, →, ↔) above or "View in ADO" to see the actual code diff and suggestion details.</div>
-                                    </div>
-                                    ` : ''}
+                                    ${isCodeSuggestion ? `<div id="code-suggestion-${threadId}-${commentIdx}" data-thread-id="${threadId}" data-comment-idx="${commentIdx}"><div style="padding: 12px; color: #858585;">Loading code suggestion...</div></div>` : ''}
                                 </div>
                             `;
                         });
@@ -1465,6 +1563,24 @@
             }
 
             resultsDiv.innerHTML = html;
+
+            // Asynchronously load code suggestions
+            setTimeout(async () => {
+                const suggestionDivs = resultsDiv.querySelectorAll('[id^="code-suggestion-"]');
+                for (const div of suggestionDivs) {
+                    const threadId = parseInt(div.dataset.threadId);
+                    const commentIdx = parseInt(div.dataset.commentIdx);
+
+                    const thread = threads.find(t => t.id === threadId);
+                    if (!thread || !thread.comments || !thread.comments[commentIdx]) continue;
+
+                    const comment = thread.comments[commentIdx];
+                    const suggestionHtml = await renderCodeSuggestion(thread, comment);
+                    if (suggestionHtml) {
+                        div.innerHTML = suggestionHtml;
+                    }
+                }
+            }, 0);
         }
     </script>
 </body>
