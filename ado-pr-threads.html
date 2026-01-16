@@ -1260,7 +1260,7 @@
                     const statusText = ADOUI.getStatusText(status, isThreadDeleted);
 
                     const threadId = thread.id;
-                    const threadUrl = ADOURL.buildThreadUrl(config, prData.pullRequestId, threadId, thread.threadContext?.filePath);
+                    const threadUrl = ADOURL.buildThreadUrl(config, prData.pullRequestId, threadId, thread.pullRequestThreadContext?.filePath);
                     const apiEndpoint = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads/${threadId}?api-version=6.0`;
 
                     const compactClass = isCompactView ? 'compact-view' : '';
@@ -1309,7 +1309,7 @@
                                 <span>
                                     ${isBulkMode ? `<input type="checkbox" class="thread-checkbox" id="thread-checkbox-${threadId}" data-thread-id="${threadId}" ${isChecked} onchange="toggleThreadSelection('${threadId}')">` : ''}
                                     Thread #${index + 1}
-                                    <a href="${threadUrl}" target="_blank" style="font-size: 13px; margin-left: 8px; color: #0078d4; text-decoration: none;" title="Open thread in Azure DevOps (${thread.threadContext ? 'files tab' : 'overview tab'})">🔗</a>
+                                    <a href="${threadUrl}" target="_blank" style="font-size: 13px; margin-left: 8px; color: #0078d4; text-decoration: none;" title="Open thread in Azure DevOps (${thread.pullRequestThreadContext ? 'files tab' : 'overview tab'})">🔗</a>
                                 </span>
                                 <span>
                                     <button class="raw-json-toggle" onclick="ADOUI.toggleRawJson('thread-${index}')">View Raw JSON</button>
@@ -1332,20 +1332,20 @@
                     `;
 
                     // Show thread context if it's a code comment
-                    if (thread.threadContext) {
-                        const ctx = thread.threadContext;
+                    if (thread.pullRequestThreadContext) {
+                        const ctx = thread.pullRequestThreadContext;
                         const lineInfo = ctx.rightFileStart ? ` (Line ${ctx.rightFileStart.line}${ctx.rightFileEnd && ctx.rightFileEnd.line !== ctx.rightFileStart.line ? `-${ctx.rightFileEnd.line}` : ''})` : '';
 
                         // If we have line information, make the file path a collapsible preview header
                         if (ctx.filePath && ctx.rightFileStart) {
-                            const iterationId = thread.threadContext.iterationContext?.firstComparingIteration;
-                            const secondIterationId = thread.threadContext.iterationContext?.secondComparingIteration;
+                            const iterationId = thread.pullRequestThreadContext.iterationContext?.firstComparingIteration;
+                            const secondIterationId = thread.pullRequestThreadContext.iterationContext?.secondComparingIteration;
 
                             // Log iteration context for debugging
                             console.log(`Thread ${threadId} iteration context:`, {
                                 firstComparingIteration: iterationId,
                                 secondComparingIteration: secondIterationId,
-                                fullContext: thread.threadContext.iterationContext
+                                fullContext: thread.pullRequestThreadContext.iterationContext
                             });
 
                             html += `
@@ -1377,7 +1377,7 @@
                             const hasRealContent = contentStripped.length > 0;
 
                             // Get iteration links for this comment
-                            const filePath = thread.threadContext?.filePath || null;
+                            const filePath = thread.pullRequestThreadContext?.filePath || null;
                             const iterationLinks = getIterationLinksForComment(
                                 comment,
                                 thread,
@@ -1444,10 +1444,10 @@
                                     </div>
                                     ${hasRealContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
 
-                                    ${(commentType === 'codeChange' || commentType === 2) && thread.threadContext?.leftFileStart && thread.threadContext?.rightFileStart ? `
+                                    ${(commentType === 'codeChange' || commentType === 2) && thread.pullRequestThreadContext?.leftFileStart && thread.pullRequestThreadContext?.rightFileStart ? `
                                     <div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
                                         <div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>
-                                        <div style="color: #d4d4d4; margin-bottom: 8px;">Suggested changes to lines ${thread.threadContext.leftFileStart.line}${thread.threadContext.leftFileEnd ? `-${thread.threadContext.leftFileEnd.line}` : ''} → ${thread.threadContext.rightFileStart.line}${thread.threadContext.rightFileEnd ? `-${thread.threadContext.rightFileEnd.line}` : ''}</div>
+                                        <div style="color: #d4d4d4; margin-bottom: 8px;">Suggested changes to lines ${thread.pullRequestThreadContext.leftFileStart.line}${thread.pullRequestThreadContext.leftFileEnd ? `-${thread.pullRequestThreadContext.leftFileEnd.line}` : ''} → ${thread.pullRequestThreadContext.rightFileStart.line}${thread.pullRequestThreadContext.rightFileEnd ? `-${thread.pullRequestThreadContext.rightFileEnd.line}` : ''}</div>
                                         <div style="color: #858585; font-size: 11px;">💡 Tip: Click the iteration links (←, →, ↔) above or "View in ADO" to see the actual code diff and suggestion details.</div>
                                     </div>
                                     ` : ''}
