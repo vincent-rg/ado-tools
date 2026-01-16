@@ -134,6 +134,25 @@ const ADOAPI = {
     },
 
     /**
+     * Get file content at a specific version/iteration
+     */
+    async getFileContent(config, filePath, versionDescriptor) {
+        // versionDescriptor can be like: { version: commitId, versionType: 'commit' }
+        // or { version: iterationId, versionType: 'iteration' }
+        const versionParam = versionDescriptor ? `&versionDescriptor.version=${versionDescriptor.version}&versionDescriptor.versionType=${versionDescriptor.versionType}` : '';
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/items?path=${encodeURIComponent(filePath)}${versionParam}&api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch file content: ${response.status} ${response.statusText}`);
+        }
+
+        return response.text(); // Return as text since it's file content
+    },
+
+    /**
      * Update thread status
      */
     async updateThreadStatus(config, prId, threadId, status) {
