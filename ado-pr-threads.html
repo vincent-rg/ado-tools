@@ -1135,43 +1135,67 @@
                     versionType: 'commit'
                 });
 
-                // Extract the original lines that will be replaced
+                // Extract the original text that will be replaced using character offsets
                 // For code suggestions, use rightFileStart (the location in the new/target code)
                 const lines = fileContent.split('\n');
                 const startLine = ctx.rightFileStart.line;
                 const endLine = ctx.rightFileEnd ? ctx.rightFileEnd.line : startLine;
-                const originalCode = lines.slice(startLine - 1, endLine).join('\n');
-                console.log(`Extracting lines ${startLine}-${endLine} from file`);
+                const startOffset = ctx.rightFileStart.offset || 0;
+                const endOffset = ctx.rightFileEnd?.offset || 0;
 
-                // Build the diff view
-                let html = '<div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
-                html += '<div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>';
-                html += '<div style="border: 1px solid #3e3e42; border-radius: 4px; overflow: hidden;">';
+                // Extract text using character offsets (1-based, so adjust by -1)
+                const adjustedStartOffset = Math.max(0, startOffset - 1);
+                const adjustedEndOffset = Math.max(0, endOffset - 1);
+
+                let originalCode = '';
+                if (startLine === endLine) {
+                    // Single line: extract text between offsets
+                    const line = lines[startLine - 1] || '';
+                    originalCode = line.substring(adjustedStartOffset, adjustedEndOffset);
+                } else {
+                    // Multiple lines: extract from start offset to end offset across lines
+                    const firstLine = lines[startLine - 1] || '';
+                    const lastLine = lines[endLine - 1] || '';
+                    const middleLines = lines.slice(startLine, endLine - 1);
+
+                    originalCode = firstLine.substring(adjustedStartOffset);
+                    if (middleLines.length > 0) {
+                        originalCode += '\n' + middleLines.join('\n');
+                    }
+                    originalCode += '\n' + lastLine.substring(0, adjustedEndOffset);
+                }
+
+                console.log(`Extracting character range ${startOffset}-${endOffset} from lines ${startLine}-${endLine}`);
+
+                // Build the diff view (light theme)
+                let html = '<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 4px; border: 1px solid #d1d1d1; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
+                html += '<div style="color: #8a6d3b; font-weight: 600; margin-bottom: 8px;">💡 Code change suggestion</div>';
+                html += '<div style="border: 1px solid #d1d1d1; border-radius: 4px; overflow: hidden; background: white;">';
 
                 // Original code (removed lines)
                 const originalLines = originalCode.split('\n');
                 originalLines.forEach(line => {
-                    html += `<div style="background: #3f1f1f; padding: 2px 8px;"><span style="color: #f48771;">- </span>${ADOContent.escapeHtml(line)}</div>`;
+                    html += `<div style="background: #ffeef0; padding: 2px 8px; border-left: 2px solid #d73a49;"><span style="color: #d73a49; font-weight: 600;">- </span>${ADOContent.escapeHtml(line)}</div>`;
                 });
 
                 // Suggested code (added lines)
                 const suggestionLines = suggestion.split('\n');
                 suggestionLines.forEach(line => {
-                    html += `<div style="background: #1f3f1f; padding: 2px 8px;"><span style="color: #7ec699;">+ </span>${ADOContent.escapeHtml(line)}</div>`;
+                    html += `<div style="background: #e6ffed; padding: 2px 8px; border-left: 2px solid #28a745;"><span style="color: #28a745; font-weight: 600;">+ </span>${ADOContent.escapeHtml(line)}</div>`;
                 });
 
                 html += '</div></div>';
                 return html;
             } catch (error) {
                 console.error('Failed to render code suggestion:', error);
-                return `<div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
-                    <div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>
-                    <div style="color: #858585; font-size: 11px;">Could not load suggestion details. Click the iteration links above or "View in ADO" to see the code diff.</div>
+                return `<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 4px; border: 1px solid #d1d1d1; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
+                    <div style="color: #8a6d3b; font-weight: 600; margin-bottom: 8px;">💡 Code change suggestion</div>
+                    <div style="color: #605e5c; font-size: 11px;">Could not load suggestion details. Click the iteration links above or "View in ADO" to see the code diff.</div>
                 </div>`;
             }
         }
 
-        async function toggleFilePreview(threadId, filePath, startLine, endLine, firstIterationId, secondIterationId, startOffset, endOffset) {
+        async function toggleFilePreview(threadId, filePath, startLine, endLine, firstIterationId, secondIterationId, startOffset, endOffset, useRight = true) {
             const previewDiv = document.getElementById(`file-preview-${threadId}`);
             const headerDiv = previewDiv.previousElementSibling;
             const arrow = headerDiv.querySelector('span:first-child');
@@ -1201,18 +1225,22 @@
                         console.log(`Loading file preview for thread ${threadId}:`, {
                             firstIterationId,
                             secondIterationId,
+                            useRight,
                             totalIterations: allIterations.length
                         });
 
-                        // Use secondComparingIteration (the target/right side) as it represents the state when the comment was made
-                        if (secondIterationId !== null && secondIterationId !== undefined) {
-                            // Find the iteration by ID
-                            iteration = allIterations.find(it => it.id === secondIterationId);
-                            console.log(`Using secondIterationId ${secondIterationId}, found:`, iteration?.id);
-                        } else if (firstIterationId !== null && firstIterationId !== undefined) {
-                            // Fallback to firstIterationId if secondIterationId is not available
-                            iteration = allIterations.find(it => it.id === firstIterationId);
-                            console.log(`Using firstIterationId ${firstIterationId}, found:`, iteration?.id);
+                        // Choose iteration based on whether we're showing right (new) or left (old/deleted) file
+                        // Right file: use secondComparingIteration (the target/right side)
+                        // Left file: use firstComparingIteration (the base/left side)
+                        const targetIterationId = useRight ? secondIterationId : firstIterationId;
+                        const fallbackIterationId = useRight ? firstIterationId : secondIterationId;
+
+                        if (targetIterationId !== null && targetIterationId !== undefined) {
+                            iteration = allIterations.find(it => it.id === targetIterationId);
+                            console.log(`Using ${useRight ? 'secondIterationId' : 'firstIterationId'} ${targetIterationId}, found:`, iteration?.id);
+                        } else if (fallbackIterationId !== null && fallbackIterationId !== undefined) {
+                            iteration = allIterations.find(it => it.id === fallbackIterationId);
+                            console.log(`Using fallback ${useRight ? 'firstIterationId' : 'secondIterationId'} ${fallbackIterationId}, found:`, iteration?.id);
                         }
 
                         if (!iteration) {
@@ -1257,20 +1285,20 @@
                                     const before = ADOContent.escapeHtml(rawLine.substring(0, adjustedStartOffset));
                                     const highlighted = ADOContent.escapeHtml(rawLine.substring(adjustedStartOffset, adjustedEndOffset));
                                     const after = ADOContent.escapeHtml(rawLine.substring(adjustedEndOffset));
-                                    lineContentHtml = `${before}<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>${after}`;
+                                    lineContentHtml = `${before}<mark style="background: #ffe082; color: #000000; font-weight: 600;">${highlighted}</mark>${after}`;
                                 } else if (lineNum === startLine) {
                                     // First line: highlight from startOffset to end
                                     const before = ADOContent.escapeHtml(rawLine.substring(0, adjustedStartOffset));
                                     const highlighted = ADOContent.escapeHtml(rawLine.substring(adjustedStartOffset));
-                                    lineContentHtml = `${before}<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>`;
+                                    lineContentHtml = `${before}<mark style="background: #ffe082; color: #000000; font-weight: 600;">${highlighted}</mark>`;
                                 } else if (lineNum === endLine) {
                                     // Last line: highlight from start to endOffset
                                     const highlighted = ADOContent.escapeHtml(rawLine.substring(0, adjustedEndOffset));
                                     const after = ADOContent.escapeHtml(rawLine.substring(adjustedEndOffset));
-                                    lineContentHtml = `<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${highlighted}</mark>${after}`;
+                                    lineContentHtml = `<mark style="background: #ffe082; color: #000000; font-weight: 600;">${highlighted}</mark>${after}`;
                                 } else {
                                     // Middle lines: highlight entire line
-                                    lineContentHtml = `<mark style="background: #fff4ce; color: #323130; font-weight: 600;">${ADOContent.escapeHtml(rawLine)}</mark>`;
+                                    lineContentHtml = `<mark style="background: #ffe082; color: #000000; font-weight: 600;">${ADOContent.escapeHtml(rawLine)}</mark>`;
                                 }
                             } else {
                                 // No offset highlighting, just escape
@@ -1456,27 +1484,33 @@
                     // pullRequestThreadContext has iteration context
                     if (thread.threadContext) {
                         const ctx = thread.threadContext;
-                        const lineInfo = ctx.rightFileStart ? ` (Line ${ctx.rightFileStart.line}${ctx.rightFileEnd && ctx.rightFileEnd.line !== ctx.rightFileStart.line ? `-${ctx.rightFileEnd.line}` : ''})` : '';
+
+                        // Determine which file location to use (rightFile for new code, leftFile for deleted code)
+                        const useRight = !!ctx.rightFileStart;
+                        const fileStart = useRight ? ctx.rightFileStart : ctx.leftFileStart;
+                        const fileEnd = useRight ? ctx.rightFileEnd : ctx.leftFileEnd;
+                        const lineInfo = fileStart ? ` (Line ${fileStart.line}${fileEnd && fileEnd.line !== fileStart.line ? `-${fileEnd.line}` : ''})` : '';
 
                         // If we have line information, make the file path a collapsible preview header
-                        if (ctx.filePath && ctx.rightFileStart) {
+                        if (ctx.filePath && fileStart) {
                             const iterationId = thread.pullRequestThreadContext?.iterationContext?.firstComparingIteration;
                             const secondIterationId = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
-                            const startOffset = ctx.rightFileStart.offset || 0;
-                            const endOffset = ctx.rightFileEnd?.offset || 0;
+                            const startOffset = fileStart.offset || 0;
+                            const endOffset = fileEnd?.offset || 0;
 
                             // Log iteration context for debugging
                             console.log(`Thread ${threadId} iteration context:`, {
                                 firstComparingIteration: iterationId,
                                 secondComparingIteration: secondIterationId,
+                                useRight: useRight,
                                 fullContext: thread.pullRequestThreadContext?.iterationContext
                             });
 
                             html += `
                                 <div class="file-preview">
-                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, ${iterationId !== undefined ? iterationId : 'null'}, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${startOffset}, ${endOffset})">
+                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${fileStart.line}, ${fileEnd ? fileEnd.line : fileStart.line}, ${iterationId !== undefined ? iterationId : 'null'}, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${startOffset}, ${endOffset}, ${useRight})">
                                         <span>▶</span>
-                                        <span><strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo} - Click to show file preview</span>
+                                        <span><strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo}${useRight ? '' : ' <span style="color: #a4262c; font-size: 11px;">(deleted)</span>'} - Click to show file preview</span>
                                     </div>
                                     <div id="file-preview-${threadId}" class="file-preview-content"></div>
                                 </div>
@@ -1494,14 +1528,20 @@
                     // Show all comments in the thread
                     if (thread.comments && thread.comments.length > 0) {
                         thread.comments.forEach((comment, commentIdx) => {
-                            let resolvedContent = ADOContent.processContent(comment.content);
+                            // Check if this is a code suggestion
+                            const isCodeSuggestion = comment.content?.includes('```suggestion');
+
+                            // Remove suggestion block from content before processing to avoid duplicate display
+                            let contentToProcess = comment.content;
+                            if (isCodeSuggestion) {
+                                contentToProcess = contentToProcess.replace(/```suggestion\n[\s\S]*?\n```/g, '');
+                            }
+
+                            let resolvedContent = ADOContent.processContent(contentToProcess);
 
                             // Check if content is essentially empty (just whitespace or empty code blocks)
                             const contentStripped = resolvedContent.replace(/<pre><code><\/code><\/pre>/g, '').trim();
                             const hasRealContent = contentStripped.length > 0;
-
-                            // Check if this is a code suggestion
-                            const isCodeSuggestion = comment.content?.includes('```suggestion');
 
                             // Get iteration links for this comment
                             const filePath = thread.threadContext?.filePath || null;
