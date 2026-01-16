@@ -1104,25 +1104,36 @@
 
                     try {
                         // Use the iteration context to get the correct file version
-                        // secondComparingIteration is the iteration where the comment was made
-                        // firstComparingIteration is the base iteration
+                        // secondComparingIteration is the iteration where the comment was made (the "right" side of the diff)
+                        // firstComparingIteration is the base iteration (the "left" side of the diff)
                         let commitId;
                         let iteration;
 
-                        if (secondIterationId) {
+                        console.log(`Loading file preview for thread ${threadId}:`, {
+                            firstIterationId,
+                            secondIterationId,
+                            totalIterations: allIterations.length
+                        });
+
+                        // Use secondComparingIteration (the target/right side) as it represents the state when the comment was made
+                        if (secondIterationId !== null && secondIterationId !== undefined) {
                             // Find the iteration by ID
                             iteration = allIterations.find(it => it.id === secondIterationId);
-                        } else if (firstIterationId) {
+                            console.log(`Using secondIterationId ${secondIterationId}, found:`, iteration?.id);
+                        } else if (firstIterationId !== null && firstIterationId !== undefined) {
                             // Fallback to firstIterationId if secondIterationId is not available
                             iteration = allIterations.find(it => it.id === firstIterationId);
+                            console.log(`Using firstIterationId ${firstIterationId}, found:`, iteration?.id);
                         }
 
                         if (!iteration) {
                             // Last resort: use latest iteration
                             iteration = allIterations[allIterations.length - 1];
+                            console.log('Using latest iteration as fallback:', iteration?.id);
                         }
 
                         commitId = iteration?.sourceRefCommit?.commitId || currentPRData.lastMergeSourceCommit?.commitId;
+                        console.log(`Using commit ID: ${commitId}`);
 
                         if (!commitId) {
                             throw new Error('Could not determine commit version');
@@ -1327,12 +1338,19 @@
 
                         // If we have line information, make the file path a collapsible preview header
                         if (ctx.filePath && ctx.rightFileStart) {
-                            const iterationId = thread.threadContext.iterationContext?.firstComparingIteration || null;
-                            const secondIterationId = thread.threadContext.iterationContext?.secondComparingIteration || null;
+                            const iterationId = thread.threadContext.iterationContext?.firstComparingIteration;
+                            const secondIterationId = thread.threadContext.iterationContext?.secondComparingIteration;
+
+                            // Log iteration context for debugging
+                            console.log(`Thread ${threadId} iteration context:`, {
+                                firstComparingIteration: iterationId,
+                                secondComparingIteration: secondIterationId,
+                                fullContext: thread.threadContext.iterationContext
+                            });
 
                             html += `
                                 <div class="file-preview">
-                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, ${iterationId}, ${secondIterationId})">
+                                    <div class="file-preview-header" onclick="toggleFilePreview('${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${ctx.rightFileStart.line}, ${ctx.rightFileEnd ? ctx.rightFileEnd.line : ctx.rightFileStart.line}, ${iterationId !== undefined ? iterationId : 'null'}, ${secondIterationId !== undefined ? secondIterationId : 'null'})">
                                         <span>▶</span>
                                         <span><strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo} - Click to show file preview</span>
                                     </div>
@@ -1352,7 +1370,11 @@
                     // Show all comments in the thread
                     if (thread.comments && thread.comments.length > 0) {
                         thread.comments.forEach(comment => {
-                            const resolvedContent = ADOContent.processContent(comment.content);
+                            let resolvedContent = ADOContent.processContent(comment.content);
+
+                            // Check if content is essentially empty (just whitespace or empty code blocks)
+                            const contentStripped = resolvedContent.replace(/<pre><code><\/code><\/pre>/g, '').trim();
+                            const hasRealContent = contentStripped.length > 0;
 
                             // Get iteration links for this comment
                             const filePath = thread.threadContext?.filePath || null;
@@ -1420,12 +1442,13 @@
                                             ` : ''}
                                         </div>
                                     </div>
-                                    ${resolvedContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
+                                    ${hasRealContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
 
-                                    ${thread.threadContext?.leftFileStart && thread.threadContext?.rightFileStart ? `
+                                    ${(commentType === 'codeChange' || commentType === 2) && thread.threadContext?.leftFileStart && thread.threadContext?.rightFileStart ? `
                                     <div style="background: #1e1e1e; color: #d4d4d4; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
-                                        <div style="color: #ce9178; margin-bottom: 8px;">Code change suggestion (lines ${thread.threadContext.leftFileStart.line}-${thread.threadContext.leftFileEnd?.line || thread.threadContext.leftFileStart.line} → ${thread.threadContext.rightFileStart.line}-${thread.threadContext.rightFileEnd?.line || thread.threadContext.rightFileStart.line})</div>
-                                        <div style="color: #858585; font-size: 11px;">Note: To see the actual code diff, click the iteration links above or open in ADO.</div>
+                                        <div style="color: #ce9178; margin-bottom: 8px;">💡 Code change suggestion</div>
+                                        <div style="color: #d4d4d4; margin-bottom: 8px;">Suggested changes to lines ${thread.threadContext.leftFileStart.line}${thread.threadContext.leftFileEnd ? `-${thread.threadContext.leftFileEnd.line}` : ''} → ${thread.threadContext.rightFileStart.line}${thread.threadContext.rightFileEnd ? `-${thread.threadContext.rightFileEnd.line}` : ''}</div>
+                                        <div style="color: #858585; font-size: 11px;">💡 Tip: Click the iteration links (←, →, ↔) above or "View in ADO" to see the actual code diff and suggestion details.</div>
                                     </div>
                                     ` : ''}
                                 </div>
