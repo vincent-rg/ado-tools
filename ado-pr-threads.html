@@ -772,8 +772,11 @@
                         }
                     } else {
                         // Thread has a status field
+                        // Lowercase both the thread status and selected statuses for comparison
+                        // (selectedStatuses contains camelCase values like 'wontFix', 'active', etc.)
                         const status = thread.status.toLowerCase();
-                        if (!selectedStatuses.includes(status)) {
+                        const selectedStatusesLower = selectedStatuses.map(s => s.toLowerCase());
+                        if (!selectedStatusesLower.includes(status)) {
                             return false;
                         }
                     }
@@ -812,9 +815,9 @@
         function getSelectedThreadStatuses() {
             const selectedChips = document.querySelectorAll('.thread-filters .status-chip.selected');
             return Array.from(selectedChips).map(chip => {
-                const status = chip.dataset.status;
-                // Keep 'noStatus' in camelCase, lowercase everything else
-                return status === 'noStatus' ? status : status.toLowerCase();
+                // Return original camelCase value (e.g., 'wontFix', 'noStatus', 'active')
+                // This preserves the exact data-status attribute value for URL persistence
+                return chip.dataset.status;
             });
         }
 
