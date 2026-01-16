@@ -1030,6 +1030,7 @@
             }, {});
 
             const prUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}`;
+            const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">DRAFT</span>' : '';
 
             let html = `
                 <div class="pr-info">
@@ -1038,7 +1039,7 @@
                         <a href="${prUrl}" target="_blank" style="font-size: 16px; margin-left: 10px; color: #0078d4; text-decoration: none;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
                     </h2>
                     <p><strong>Author:</strong> ${ADOContent.escapeHtml(prData.createdBy.displayName)}</p>
-                    <p><strong>Status:</strong> ${prData.status}</p>
+                    <p><strong>Status:</strong> ${prData.status}${draftBadge}</p>
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <details style="margin-top: 15px;">
                         <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📡 API Endpoints Used</summary>

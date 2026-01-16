@@ -746,6 +746,7 @@
             filteredPRs.forEach(pr => {
                 const statusClass = ADOUI.getStatusBadgeClass(pr.status);
                 const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}`;
+                const draftBadge = pr.isDraft ? '<span class="badge badge-draft" style="margin-left: 5px;">DRAFT</span>' : '';
 
                 html += `
                     <tr>
@@ -769,7 +770,7 @@
                             ${ADOContent.escapeHtml(pr._project)}<br>
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
                         </td>
-                        <td><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span></td>
+                        <td><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
                         <td class="pr-meta">${ADOUI.formatDate(pr.creationDate)}</td>
                     </tr>
                 `;
