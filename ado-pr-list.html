@@ -51,6 +51,149 @@
             width: auto;
         }
 
+        /* Search input styling */
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+
+        /* Bulk action buttons */
+        .bulk-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .bulk-action-btn {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+            transition: all 0.2s;
+        }
+
+        .bulk-action-btn:hover {
+            background: #e1f3ff;
+            border-color: #0078d4;
+            color: #0078d4;
+        }
+
+        /* Project tree structure */
+        .project-tree {
+            background: white;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .project-item {
+            border-bottom: 1px solid #edebe9;
+        }
+
+        .project-item:last-child {
+            border-bottom: none;
+        }
+
+        .project-item.hidden {
+            display: none;
+        }
+
+        .project-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            cursor: pointer;
+            background: white;
+            transition: background 0.2s;
+        }
+
+        .project-header:hover {
+            background: #f8f8f8;
+        }
+
+        .project-toggle {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+            font-size: 14px;
+            color: #605e5c;
+            user-select: none;
+        }
+
+        .project-checkbox {
+            margin-right: 8px;
+        }
+
+        .project-name {
+            flex: 1;
+            font-weight: 500;
+            color: #323130;
+        }
+
+        .project-count {
+            font-size: 12px;
+            color: #8a8886;
+            margin-left: 8px;
+        }
+
+        .repo-list {
+            background: #faf9f8;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .repo-list.expanded {
+            max-height: 2000px;
+        }
+
+        .repo-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px 8px 48px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .repo-item:hover {
+            background: #e1f3ff;
+        }
+
+        .repo-item.hidden {
+            display: none;
+        }
+
+        .repo-checkbox {
+            margin-right: 8px;
+        }
+
+        .repo-name {
+            color: #323130;
+            font-size: 14px;
+        }
+
+        .no-results {
+            padding: 20px;
+            text-align: center;
+            color: #8a8886;
+            font-style: italic;
+        }
+
         .filter-input {
             display: flex;
             gap: 10px;
@@ -224,16 +367,22 @@
             <div id="selectedFilters" class="selected-filters"></div>
 
             <div class="filter-section">
-                <h4>Projects</h4>
-                <div id="projectFilters" class="checkbox-group">
-                    <div class="loading">Loading projects...</div>
-                </div>
-            </div>
+                <h4>Projects & Repositories</h4>
+                <input type="text"
+                       id="projectSearch"
+                       class="search-input"
+                       placeholder="🔍 Search projects and repositories..."
+                       oninput="filterProjectTree()">
 
-            <div class="filter-section">
-                <h4>Repositories</h4>
-                <div id="repoFilters" class="checkbox-group">
-                    <div style="color: #605e5c; font-size: 13px;">Select projects first</div>
+                <div class="bulk-actions">
+                    <button class="bulk-action-btn" onclick="selectAllProjects()">✓ Select All Projects</button>
+                    <button class="bulk-action-btn" onclick="clearAllProjects()">✗ Clear All</button>
+                    <button class="bulk-action-btn" onclick="expandAllProjects()">▼ Expand All</button>
+                    <button class="bulk-action-btn" onclick="collapseAllProjects()">▶ Collapse All</button>
+                </div>
+
+                <div id="projectTree" class="project-tree">
+                    <div class="loading">Loading projects...</div>
                 </div>
             </div>
 
@@ -372,23 +521,20 @@
             isRestoringFromURL = true;
 
             try {
-                // Restore project selections
-                if (urlParams.projects) {
-                    urlParams.projects.forEach(projectName => {
-                        const checkbox = document.querySelector(`#projectFilters input[type="checkbox"][value="${projectName}"]`);
-                        if (checkbox) {
-                            checkbox.checked = true;
-                        }
-                    });
-                    await loadRepos();
-                }
-
                 // Restore repo selections
                 if (urlParams.repos) {
                     urlParams.repos.forEach(repoId => {
-                        const checkbox = document.querySelector(`#repoFilters input[type="checkbox"][value="${repoId}"]`);
+                        const checkbox = document.querySelector(`.repo-checkbox[data-repo-id="${repoId}"]`);
                         if (checkbox) {
                             checkbox.checked = true;
+                            // Update parent project state
+                            const projectItem = checkbox.closest('.project-item');
+                            if (projectItem) {
+                                const projectId = projectItem.querySelector('.project-header').onclick.toString().match(/'([^']+)'/)[1];
+                                updateProjectState(projectId);
+                                // Auto-expand projects with selected repos
+                                toggleProject(projectId, true);
+                            }
                         }
                     });
                 }
@@ -429,99 +575,282 @@
 
         async function loadProjects() {
             const config = ADOConfig.get();
-            const projectFiltersDiv = document.getElementById('projectFilters');
+            const projectTreeDiv = document.getElementById('projectTree');
 
             try {
-                ADOUI.showLoading('projectFilters', 'Loading projects...');
+                ADOUI.showLoading('projectTree', 'Loading projects...');
 
                 const projectsData = await ADOAPI.getProjects(config);
                 allProjects = projectsData.value || [];
 
                 if (allProjects.length === 0) {
-                    projectFiltersDiv.innerHTML = '<div style="color: #605e5c;">No projects found</div>';
+                    projectTreeDiv.innerHTML = '<div class="no-results">No projects found</div>';
                     return;
                 }
 
-                let html = '';
-                allProjects.forEach(project => {
-                    const isDefault = project.name === config.project;
-                    html += `
-                        <label class="checkbox-label">
-                            <input type="checkbox" value="${ADOContent.escapeHtml(project.name)}" ${isDefault ? 'checked' : ''} onchange="onProjectChange()">
-                            ${ADOContent.escapeHtml(project.name)}
-                        </label>
-                    `;
-                });
-
-                projectFiltersDiv.innerHTML = html;
-
-                // Load repos for selected projects
-                await loadRepos();
-
-            } catch (error) {
-                projectFiltersDiv.innerHTML = `<div class="error">Error: ${ADOContent.escapeHtml(error.message)}</div>`;
-            }
-        }
-
-        async function onProjectChange() {
-            await loadRepos();
-            updateURL();
-            applyFilters();
-        }
-
-        async function loadRepos() {
-            const config = ADOConfig.get();
-            const repoFiltersDiv = document.getElementById('repoFilters');
-            const selectedProjects = getSelectedProjects();
-
-            if (selectedProjects.length === 0) {
-                repoFiltersDiv.innerHTML = '<div style="color: #605e5c; font-size: 13px;">Select projects first</div>';
-                allRepos = [];
-                return;
-            }
-
-            try {
-                ADOUI.showLoading('repoFilters', 'Loading repositories...');
-
-                // Load repos for all selected projects in parallel
-                const repoPromises = selectedProjects.map(project =>
-                    ADOAPI.getRepositories(config, project)
+                // Load repos for all projects in parallel
+                const repoPromises = allProjects.map(project =>
+                    ADOAPI.getRepositories(config, project.name)
+                        .then(data => ({
+                            project: project.name,
+                            repos: data.value || []
+                        }))
+                        .catch(() => ({
+                            project: project.name,
+                            repos: []
+                        }))
                 );
 
                 const reposResults = await Promise.all(repoPromises);
 
-                allRepos = [];
-                reposResults.forEach((reposData, index) => {
-                    const repos = reposData.value || [];
-                    repos.forEach(repo => {
-                        allRepos.push({
-                            ...repo,
-                            projectName: selectedProjects[index]
-                        });
-                    });
+                // Build project-repo map
+                const projectRepoMap = {};
+                reposResults.forEach(result => {
+                    projectRepoMap[result.project] = result.repos;
                 });
 
-                if (allRepos.length === 0) {
-                    repoFiltersDiv.innerHTML = '<div style="color: #605e5c;">No repositories found</div>';
-                    return;
-                }
+                // Build tree HTML
+                buildProjectTree(projectRepoMap, config);
 
-                let html = '';
-                allRepos.forEach(repo => {
-                    const isDefault = repo.name === config.repository && repo.projectName === config.project;
+            } catch (error) {
+                projectTreeDiv.innerHTML = `<div class="error">Error: ${ADOContent.escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function buildProjectTree(projectRepoMap, config) {
+            const projectTreeDiv = document.getElementById('projectTree');
+            let html = '';
+
+            allProjects.forEach(project => {
+                const repos = projectRepoMap[project.name] || [];
+                const isDefaultProject = project.name === config.project;
+                const projectId = `project-${project.id}`;
+
+                // Count checked repos (will be updated dynamically)
+                const checkedRepos = repos.filter(repo =>
+                    repo.name === config.repository && isDefaultProject
+                ).length;
+
+                html += `
+                    <div class="project-item" data-project-name="${ADOContent.escapeHtml(project.name)}">
+                        <div class="project-header" onclick="toggleProject('${projectId}')">
+                            <span class="project-toggle" id="${projectId}-toggle">▶</span>
+                            <input type="checkbox"
+                                   class="project-checkbox"
+                                   id="${projectId}-checkbox"
+                                   data-project="${ADOContent.escapeHtml(project.name)}"
+                                   onclick="event.stopPropagation(); onProjectCheckboxChange('${projectId}')"
+                                   ${isDefaultProject && checkedRepos > 0 ? '' : ''}>
+                            <span class="project-name">${ADOContent.escapeHtml(project.name)}</span>
+                            <span class="project-count" id="${projectId}-count">(0/${repos.length} repos)</span>
+                        </div>
+                        <div class="repo-list" id="${projectId}-repos">
+                `;
+
+                // Add repositories
+                repos.forEach(repo => {
+                    const isDefaultRepo = repo.name === config.repository && isDefaultProject;
                     html += `
-                        <label class="checkbox-label" title="${ADOContent.escapeHtml(repo.projectName)} / ${ADOContent.escapeHtml(repo.name)}">
-                            <input type="checkbox" value="${ADOContent.escapeHtml(repo.id)}" ${isDefault ? 'checked' : ''} onchange="applyFilters()">
-                            ${ADOContent.escapeHtml(repo.projectName)} / ${ADOContent.escapeHtml(repo.name)}
-                        </label>
+                        <div class="repo-item" data-repo-name="${ADOContent.escapeHtml(repo.name)}">
+                            <input type="checkbox"
+                                   class="repo-checkbox"
+                                   data-project="${ADOContent.escapeHtml(project.name)}"
+                                   data-repo-id="${ADOContent.escapeHtml(repo.id)}"
+                                   data-repo-name="${ADOContent.escapeHtml(repo.name)}"
+                                   onclick="onRepoCheckboxChange('${projectId}')"
+                                   ${isDefaultRepo ? 'checked' : ''}>
+                            <span class="repo-name">${ADOContent.escapeHtml(repo.name)}</span>
+                        </div>
                     `;
                 });
 
-                repoFiltersDiv.innerHTML = html;
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
 
-            } catch (error) {
-                repoFiltersDiv.innerHTML = `<div class="error">Error: ${ADOContent.escapeHtml(error.message)}</div>`;
+            projectTreeDiv.innerHTML = html;
+
+            // Update all project counts and states
+            allProjects.forEach(project => {
+                const projectId = `project-${project.id}`;
+                updateProjectState(projectId);
+            });
+
+            // Auto-expand default project if it has selected repos
+            if (config.project) {
+                const defaultProject = allProjects.find(p => p.name === config.project);
+                if (defaultProject) {
+                    const projectId = `project-${defaultProject.id}`;
+                    const checkedRepos = document.querySelectorAll(`#${projectId}-repos .repo-checkbox:checked`);
+                    if (checkedRepos.length > 0) {
+                        toggleProject(projectId, true);
+                    }
+                }
             }
+        }
+
+        // Tree interaction functions
+        function toggleProject(projectId, forceExpand = null) {
+            const repoList = document.getElementById(`${projectId}-repos`);
+            const toggle = document.getElementById(`${projectId}-toggle`);
+
+            if (forceExpand === true) {
+                repoList.classList.add('expanded');
+                toggle.textContent = '▼';
+            } else if (forceExpand === false) {
+                repoList.classList.remove('expanded');
+                toggle.textContent = '▶';
+            } else {
+                repoList.classList.toggle('expanded');
+                toggle.textContent = repoList.classList.contains('expanded') ? '▼' : '▶';
+            }
+        }
+
+        function updateProjectState(projectId) {
+            const projectCheckbox = document.getElementById(`${projectId}-checkbox`);
+            const repoCheckboxes = document.querySelectorAll(`#${projectId}-repos .repo-checkbox`);
+            const countSpan = document.getElementById(`${projectId}-count`);
+
+            const checkedCount = Array.from(repoCheckboxes).filter(cb => cb.checked).length;
+            const totalCount = repoCheckboxes.length;
+
+            // Update count display
+            countSpan.textContent = `(${checkedCount}/${totalCount} repos)`;
+
+            // Update project checkbox state
+            if (checkedCount === 0) {
+                projectCheckbox.checked = false;
+                projectCheckbox.indeterminate = false;
+            } else if (checkedCount === totalCount) {
+                projectCheckbox.checked = true;
+                projectCheckbox.indeterminate = false;
+            } else {
+                projectCheckbox.checked = true;
+                projectCheckbox.indeterminate = true;
+            }
+        }
+
+        function onProjectCheckboxChange(projectId) {
+            const projectCheckbox = document.getElementById(`${projectId}-checkbox`);
+            const repoCheckboxes = document.querySelectorAll(`#${projectId}-repos .repo-checkbox`);
+
+            // Select/deselect all repos in this project
+            repoCheckboxes.forEach(cb => {
+                if (!cb.closest('.repo-item').classList.contains('hidden')) {
+                    cb.checked = projectCheckbox.checked;
+                }
+            });
+
+            updateProjectState(projectId);
+            updateURL();
+            applyFilters();
+        }
+
+        function onRepoCheckboxChange(projectId) {
+            updateProjectState(projectId);
+            updateURL();
+            applyFilters();
+        }
+
+        // Search filter function
+        function filterProjectTree() {
+            const searchTerm = document.getElementById('projectSearch').value.toLowerCase().trim();
+            const projectItems = document.querySelectorAll('.project-item');
+
+            if (!searchTerm) {
+                // Show all
+                projectItems.forEach(projectItem => {
+                    projectItem.classList.remove('hidden');
+                    const repoItems = projectItem.querySelectorAll('.repo-item');
+                    repoItems.forEach(repoItem => repoItem.classList.remove('hidden'));
+                });
+                return;
+            }
+
+            projectItems.forEach(projectItem => {
+                const projectName = projectItem.dataset.projectName.toLowerCase();
+                const repoItems = projectItem.querySelectorAll('.repo-item');
+
+                let projectMatch = projectName.includes(searchTerm);
+                let hasVisibleRepo = false;
+
+                repoItems.forEach(repoItem => {
+                    const repoName = repoItem.dataset.repoName.toLowerCase();
+                    const repoMatch = repoName.includes(searchTerm);
+
+                    if (repoMatch || projectMatch) {
+                        repoItem.classList.remove('hidden');
+                        hasVisibleRepo = true;
+                    } else {
+                        repoItem.classList.add('hidden');
+                    }
+                });
+
+                // Show project if it matches or has visible repos
+                if (projectMatch || hasVisibleRepo) {
+                    projectItem.classList.remove('hidden');
+                    // Auto-expand projects with matches
+                    if (searchTerm) {
+                        const projectId = projectItem.querySelector('.project-header').onclick.toString().match(/'([^']+)'/)[1];
+                        toggleProject(projectId, true);
+                    }
+                } else {
+                    projectItem.classList.add('hidden');
+                }
+            });
+        }
+
+        // Bulk action functions
+        function selectAllProjects() {
+            const projectCheckboxes = document.querySelectorAll('.project-checkbox');
+            projectCheckboxes.forEach(cb => {
+                if (!cb.closest('.project-item').classList.contains('hidden')) {
+                    cb.checked = true;
+                    const projectId = cb.id.replace('-checkbox', '');
+                    const repoCheckboxes = document.querySelectorAll(`#${projectId}-repos .repo-checkbox`);
+                    repoCheckboxes.forEach(repoCb => {
+                        if (!repoCb.closest('.repo-item').classList.contains('hidden')) {
+                            repoCb.checked = true;
+                        }
+                    });
+                    updateProjectState(projectId);
+                }
+            });
+            updateURL();
+            applyFilters();
+        }
+
+        function clearAllProjects() {
+            const projectCheckboxes = document.querySelectorAll('.project-checkbox');
+            projectCheckboxes.forEach(cb => {
+                cb.checked = false;
+                const projectId = cb.id.replace('-checkbox', '');
+                const repoCheckboxes = document.querySelectorAll(`#${projectId}-repos .repo-checkbox`);
+                repoCheckboxes.forEach(repoCb => repoCb.checked = false);
+                updateProjectState(projectId);
+            });
+            updateURL();
+            applyFilters();
+        }
+
+        function expandAllProjects() {
+            const projectItems = document.querySelectorAll('.project-item');
+            projectItems.forEach(projectItem => {
+                if (!projectItem.classList.contains('hidden')) {
+                    const projectId = projectItem.querySelector('.project-header').onclick.toString().match(/'([^']+)'/)[1];
+                    toggleProject(projectId, true);
+                }
+            });
+        }
+
+        function collapseAllProjects() {
+            const projectItems = document.querySelectorAll('.project-item');
+            projectItems.forEach(projectItem => {
+                const projectId = projectItem.querySelector('.project-header').onclick.toString().match(/'([^']+)'/)[1];
+                toggleProject(projectId, false);
+            });
         }
 
         async function loadData() {
@@ -593,14 +922,21 @@
         }
 
         function getSelectedProjects() {
-            const checkboxes = document.querySelectorAll('#projectFilters input[type="checkbox"]:checked');
-            return Array.from(checkboxes).map(cb => cb.value);
+            const repoCheckboxes = document.querySelectorAll('.repo-checkbox:checked');
+            const projects = new Set();
+            repoCheckboxes.forEach(cb => {
+                projects.add(cb.dataset.project);
+            });
+            return Array.from(projects);
         }
 
         function getSelectedRepos() {
-            const checkboxes = document.querySelectorAll('#repoFilters input[type="checkbox"]:checked');
-            const selectedRepoIds = Array.from(checkboxes).map(cb => cb.value);
-            return allRepos.filter(repo => selectedRepoIds.includes(repo.id));
+            const repoCheckboxes = document.querySelectorAll('.repo-checkbox:checked');
+            return Array.from(repoCheckboxes).map(cb => ({
+                id: cb.dataset.repoId,
+                name: cb.dataset.repoName,
+                projectName: cb.dataset.project
+            }));
         }
 
         function getSelectedStatuses() {
