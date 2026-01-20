@@ -32,6 +32,10 @@ body {
     max-width: 800px;
 }
 
+.container.wide {
+    max-width: none;
+}
+
 /* Typography */
 h1 {
     color: #0078d4;
