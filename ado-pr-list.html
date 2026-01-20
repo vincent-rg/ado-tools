@@ -343,6 +343,125 @@
         .filter-tag button:hover {
             color: #0078d4;
         }
+
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #edebe9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #323130;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #605e5c;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #f3f2f1;
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #edebe9;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-secondary {
+            padding: 8px 16px;
+            background: #f3f2f1;
+            color: #323130;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #e1dfdd;
+        }
+
+        /* Source display */
+        .pr-source-display {
+            background: #e1f3ff;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: #004578;
+            font-size: 14px;
+            display: none;
+        }
+
+        .pr-source-display.show {
+            display: block;
+        }
+
+        .pr-source-display strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pr-source-item {
+            margin-left: 10px;
+            margin-bottom: 2px;
+        }
     </style>
 </head>
 <body>
@@ -358,33 +477,16 @@
             </div>
         </div>
 
+        <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="margin-bottom: 20px; width: auto; padding: 10px 20px;">Load Pull Requests</button>
+
+        <div id="prSourceDisplay" class="pr-source-display"></div>
+
         <div class="filters">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h3 style="margin: 0;">Filters</h3>
-                <button onclick="loadData()" class="btn-primary" id="loadButton">Load Pull Requests</button>
             </div>
 
             <div id="selectedFilters" class="selected-filters"></div>
-
-            <div class="filter-section">
-                <h4>Projects & Repositories</h4>
-                <input type="text"
-                       id="projectSearch"
-                       class="search-input"
-                       placeholder="🔍 Search projects and repositories..."
-                       oninput="filterProjectTree()">
-
-                <div class="bulk-actions">
-                    <button class="bulk-action-btn" onclick="selectAllProjects()">✓ Select All Projects</button>
-                    <button class="bulk-action-btn" onclick="clearAllProjects()">✗ Clear All</button>
-                    <button class="bulk-action-btn" onclick="expandAllProjects()">▼ Expand All</button>
-                    <button class="bulk-action-btn" onclick="collapseAllProjects()">▶ Collapse All</button>
-                </div>
-
-                <div id="projectTree" class="project-tree">
-                    <div class="loading">Loading projects...</div>
-                </div>
-            </div>
 
             <div class="filter-section">
                 <h4>PR Status</h4>
@@ -435,6 +537,38 @@
         <div id="results"></div>
     </div>
 
+    <!-- Modal for selecting projects and repositories -->
+    <div id="loadPRModal" class="modal-overlay" onclick="closeLoadPRModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Select Projects & Repositories</h3>
+                <button class="modal-close" onclick="closeLoadPRModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text"
+                       id="modalProjectSearch"
+                       class="search-input"
+                       placeholder="🔍 Search projects and repositories..."
+                       oninput="filterProjectTree()">
+
+                <div class="bulk-actions">
+                    <button class="bulk-action-btn" onclick="selectAllProjects()">✓ Select All Projects</button>
+                    <button class="bulk-action-btn" onclick="clearAllProjects()">✗ Clear All</button>
+                    <button class="bulk-action-btn" onclick="expandAllProjects()">▼ Expand All</button>
+                    <button class="bulk-action-btn" onclick="collapseAllProjects()">▶ Collapse All</button>
+                </div>
+
+                <div id="projectTree" class="project-tree">
+                    <div class="loading">Loading projects...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeLoadPRModal()">Cancel</button>
+                <button class="btn-primary" onclick="loadDataFromModal()">Load Pull Requests</button>
+            </div>
+        </div>
+    </div>
+
     <script src="common.js"></script>
     <script>
         let allProjects = [];
@@ -456,6 +590,9 @@
 
             await loadProjects();
             await restoreFiltersFromURL();
+
+            // Show source display if repos are already selected from URL
+            updatePRSourceDisplay();
         });
 
         // URL parameter helpers
@@ -754,9 +891,22 @@
             applyFilters();
         }
 
+        // Modal functions
+        function openLoadPRModal() {
+            document.getElementById('loadPRModal').classList.add('show');
+        }
+
+        function closeLoadPRModal(event) {
+            // If event is provided, only close if clicking the overlay directly
+            if (event && event.target !== event.currentTarget) {
+                return;
+            }
+            document.getElementById('loadPRModal').classList.remove('show');
+        }
+
         // Search filter function
         function filterProjectTree() {
-            const searchTerm = document.getElementById('projectSearch').value.toLowerCase().trim();
+            const searchTerm = document.getElementById('modalProjectSearch').value.toLowerCase().trim();
             const projectItems = document.querySelectorAll('.project-item');
 
             if (!searchTerm) {
@@ -853,7 +1003,7 @@
             });
         }
 
-        async function loadData() {
+        async function loadDataFromModal() {
             const config = ADOConfig.get();
             const selectedProjects = getSelectedProjects();
             const selectedRepos = getSelectedRepos();
@@ -867,6 +1017,9 @@
                 ADOUI.showError('results', 'Please select at least one repository.');
                 return;
             }
+
+            // Close the modal
+            closeLoadPRModal();
 
             ADOUI.showLoading('results', `Loading Pull Requests from ${selectedRepos.length} repositories...`);
 
@@ -914,11 +1067,40 @@
                     }
                 });
 
+                updatePRSourceDisplay();
                 applyFilters();
 
             } catch (error) {
                 ADOUI.showError('results', error.message);
             }
+        }
+
+        function updatePRSourceDisplay() {
+            const selectedRepos = getSelectedRepos();
+            const prSourceDisplay = document.getElementById('prSourceDisplay');
+
+            if (selectedRepos.length === 0) {
+                prSourceDisplay.classList.remove('show');
+                return;
+            }
+
+            // Group repos by project
+            const projectRepoMap = {};
+            selectedRepos.forEach(repo => {
+                if (!projectRepoMap[repo.projectName]) {
+                    projectRepoMap[repo.projectName] = [];
+                }
+                projectRepoMap[repo.projectName].push(repo.name);
+            });
+
+            let html = '<strong>Loaded from:</strong>';
+            Object.keys(projectRepoMap).sort().forEach(projectName => {
+                const repos = projectRepoMap[projectName];
+                html += `<div class="pr-source-item"><strong>${ADOContent.escapeHtml(projectName)}:</strong> ${repos.map(r => ADOContent.escapeHtml(r)).join(', ')}</div>`;
+            });
+
+            prSourceDisplay.innerHTML = html;
+            prSourceDisplay.classList.add('show');
         }
 
         function getSelectedProjects() {
@@ -1175,6 +1357,16 @@
                 document.querySelectorAll('.autocomplete-results').forEach(div => {
                     div.classList.remove('show');
                 });
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('loadPRModal');
+                if (modal.classList.contains('show')) {
+                    closeLoadPRModal();
+                }
             }
         });
 
