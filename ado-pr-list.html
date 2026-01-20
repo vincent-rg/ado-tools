@@ -1590,7 +1590,8 @@
             try {
                 const threads = await ADOAPI.getThreads(config, pr._project, pr._repo.id, pr.pullRequestId);
                 const activeCount = (threads.value || []).filter(thread =>
-                    thread.status === 'active' || thread.status === 'Active' || thread.status === 1
+                    !thread.isDeleted &&
+                    (thread.status === 'active' || thread.status === 'Active' || thread.status === 1)
                 ).length;
 
                 prCommentCounts[prKey] = activeCount;
