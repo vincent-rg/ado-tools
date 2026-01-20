@@ -687,6 +687,7 @@
         let currentOrder = 'desc';
         let prCommentCounts = {}; // Cache for active comment counts by PR ID
         let isFetchingComments = false;
+        let loadedRepoKeys = new Set(); // Track which repos have been loaded (project/repoId)
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -1175,15 +1176,62 @@
                 return;
             }
 
-            ADOUI.showLoading('results', `Loading Pull Requests from ${selectedRepos.length} repositories...`);
+            // Determine which repos need to be loaded (not already loaded)
+            const reposToLoad = [];
+            const reposToRemove = [];
 
-            try {
-                allPRs = [];
+            selectedRepos.forEach(repo => {
+                const repoKey = `${repo.projectName}/${repo.id}`;
+                if (!loadedRepoKeys.has(repoKey)) {
+                    reposToLoad.push(repo);
+                }
+            });
+
+            // Find repos that were previously loaded but are no longer selected
+            const selectedRepoKeys = new Set(selectedRepos.map(r => `${r.projectName}/${r.id}`));
+            loadedRepoKeys.forEach(repoKey => {
+                if (!selectedRepoKeys.has(repoKey)) {
+                    reposToRemove.push(repoKey);
+                }
+            });
+
+            // Remove PRs from deselected repos
+            if (reposToRemove.length > 0) {
+                allPRs = allPRs.filter(pr => {
+                    const prRepoKey = `${pr._project}/${pr._repo.id}`;
+                    return !reposToRemove.includes(prRepoKey);
+                });
+
+                // Remove from loaded set
+                reposToRemove.forEach(key => loadedRepoKeys.delete(key));
+
+                // Rebuild authors/reviewers from remaining PRs
                 allAuthors = new Set();
                 allReviewers = new Set();
+                allPRs.forEach(pr => {
+                    if (pr.createdBy) {
+                        allAuthors.add(pr.createdBy.displayName);
+                    }
+                    if (pr.reviewers) {
+                        pr.reviewers.forEach(reviewer => {
+                            allReviewers.add(reviewer.displayName);
+                        });
+                    }
+                });
+            }
 
-                // Load PRs from all selected repos in parallel
-                const prPromises = selectedRepos.map(repo =>
+            // If no new repos to load, just apply filters and return
+            if (reposToLoad.length === 0) {
+                updatePRSourceDisplay();
+                applyFilters();
+                return;
+            }
+
+            ADOUI.showLoading('results', `Loading Pull Requests from ${reposToLoad.length} new repositories...`);
+
+            try {
+                // Load PRs from new repos only
+                const prPromises = reposToLoad.map(repo =>
                     ADOAPI.getPRs(config, repo.projectName, repo.name, 'all')
                         .then(data => ({
                             repo: repo,
@@ -1198,7 +1246,7 @@
 
                 const prResults = await Promise.all(prPromises);
 
-                // Collect all PRs and build author/reviewer lists
+                // Add new PRs and update author/reviewer lists
                 prResults.forEach(result => {
                     if (result.prs.length > 0) {
                         result.prs.forEach(pr => {
@@ -1218,6 +1266,10 @@
                                 });
                             }
                         });
+
+                        // Mark repo as loaded
+                        const repoKey = `${result.repo.projectName}/${result.repo.id}`;
+                        loadedRepoKeys.add(repoKey);
                     }
                 });
 
