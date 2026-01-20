@@ -603,6 +603,13 @@
                 </div>
 
                 <div class="filter-section">
+                    <h4>Title</h4>
+                    <div class="filter-input">
+                        <input type="text" id="titleFilter" placeholder="Search in title" oninput="applyFilters()">
+                    </div>
+                </div>
+
+                <div class="filter-section">
                     <h4>Created By</h4>
                     <div class="autocomplete-container">
                         <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
@@ -706,6 +713,7 @@
                 repos: params.get('repos') ? params.get('repos').split(',') : null,
                 status: params.get('status') ? params.get('status').split(',') : null,
                 prId: params.get('prId') || null,
+                title: params.get('title') || null,
                 createdBy: params.get('createdBy') || null,
                 assignedTo: params.get('assignedTo') || null,
                 sort: params.get('sort') || 'id',
@@ -743,6 +751,12 @@
             const prId = document.getElementById('prIdFilter').value.trim();
             if (prId) {
                 params.set('prId', prId);
+            }
+
+            // Title
+            const title = document.getElementById('titleFilter').value.trim();
+            if (title) {
+                params.set('title', title);
             }
 
             // Created By
@@ -814,6 +828,9 @@
                 // Restore text filters
                 if (urlParams.prId) {
                     document.getElementById('prIdFilter').value = urlParams.prId;
+                }
+                if (urlParams.title) {
+                    document.getElementById('titleFilter').value = urlParams.title;
                 }
                 if (urlParams.createdBy) {
                     document.getElementById('createdByFilter').value = urlParams.createdBy;
@@ -1260,6 +1277,7 @@
 
         function applyFilters() {
             const prIdFilter = document.getElementById('prIdFilter').value.trim();
+            const titleFilter = document.getElementById('titleFilter').value.trim();
             const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
             const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
             const selectedStatuses = getSelectedStatuses();
@@ -1268,6 +1286,21 @@
                 // PR ID filter
                 if (prIdFilter && pr.pullRequestId.toString() !== prIdFilter) {
                     return false;
+                }
+
+                // Title filter - subsequence matching
+                if (titleFilter) {
+                    const titleLower = pr.title.toLowerCase();
+                    const pieces = titleFilter.toLowerCase().split(/\s+/).filter(p => p.length > 0);
+
+                    let lastIndex = -1;
+                    for (const piece of pieces) {
+                        const index = titleLower.indexOf(piece, lastIndex + 1);
+                        if (index === -1) {
+                            return false;
+                        }
+                        lastIndex = index;
+                    }
                 }
 
                 // Status filter (if no statuses selected, show all)
@@ -1308,6 +1341,14 @@
             if (prIdFilter) {
                 filters.push({ label: `PR ID: ${prIdFilter}`, clear: () => {
                     document.getElementById('prIdFilter').value = '';
+                    applyFilters();
+                }});
+            }
+
+            const titleFilter = document.getElementById('titleFilter').value.trim();
+            if (titleFilter) {
+                filters.push({ label: `Title: ${titleFilter}`, clear: () => {
+                    document.getElementById('titleFilter').value = '';
                     applyFilters();
                 }});
             }
@@ -1600,6 +1641,7 @@
 
         function clearFilters() {
             document.getElementById('prIdFilter').value = '';
+            document.getElementById('titleFilter').value = '';
             document.getElementById('createdByFilter').value = '';
             document.getElementById('assignedToFilter').value = '';
 
