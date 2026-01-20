@@ -585,8 +585,11 @@
             await loadProjects();
             await restoreFiltersFromURL();
 
-            // Show source display if repos are already selected from URL
-            updatePRSourceDisplay();
+            // Auto-load PRs if repos are selected from URL
+            const selectedRepos = getSelectedRepos();
+            if (selectedRepos.length > 0) {
+                await loadPRsFromSelection();
+            }
         });
 
         // URL parameter helpers
@@ -998,7 +1001,6 @@
         }
 
         async function loadDataFromModal() {
-            const config = ADOConfig.get();
             const selectedProjects = getSelectedProjects();
             const selectedRepos = getSelectedRepos();
 
@@ -1014,6 +1016,17 @@
 
             // Close the modal
             closeLoadPRModal();
+
+            await loadPRsFromSelection();
+        }
+
+        async function loadPRsFromSelection() {
+            const config = ADOConfig.get();
+            const selectedRepos = getSelectedRepos();
+
+            if (selectedRepos.length === 0) {
+                return;
+            }
 
             ADOUI.showLoading('results', `Loading Pull Requests from ${selectedRepos.length} repositories...`);
 
