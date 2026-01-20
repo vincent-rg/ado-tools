@@ -709,6 +709,9 @@
             const selectedStatuses = getSelectedStatuses();
             if (selectedStatuses.length > 0) {
                 params.set('status', selectedStatuses.join(','));
+            } else {
+                // If no statuses selected, use "all" to indicate show all
+                params.set('status', 'all');
             }
 
             // PR ID
@@ -765,13 +768,18 @@
                             checkbox.checked = false;
                         }
                     });
-                    // Then check only URL-specified statuses
-                    urlParams.status.forEach(status => {
-                        const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
-                        if (checkbox) {
-                            checkbox.checked = true;
-                        }
-                    });
+                    // If status is "all", leave all unchecked
+                    if (urlParams.status.length === 1 && urlParams.status[0] === 'all') {
+                        // All unchecked means show all
+                    } else {
+                        // Then check only URL-specified statuses
+                        urlParams.status.forEach(status => {
+                            const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                        });
+                    }
                 }
 
                 // Restore text filters
