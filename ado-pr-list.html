@@ -838,6 +838,10 @@
             const projectTreeDiv = document.getElementById('projectTree');
             let html = '';
 
+            // Check if URL has repos parameter - if so, don't select default repo
+            const urlParams = getURLParams();
+            const hasUrlRepos = urlParams.repos && urlParams.repos.length > 0;
+
             allProjects.forEach(project => {
                 const repos = projectRepoMap[project.name] || [];
                 const isDefaultProject = project.name === config.project;
@@ -845,7 +849,7 @@
 
                 // Count checked repos (will be updated dynamically)
                 const checkedRepos = repos.filter(repo =>
-                    repo.name === config.repository && isDefaultProject
+                    repo.name === config.repository && isDefaultProject && !hasUrlRepos
                 ).length;
 
                 html += `
@@ -866,7 +870,7 @@
 
                 // Add repositories
                 repos.forEach(repo => {
-                    const isDefaultRepo = repo.name === config.repository && isDefaultProject;
+                    const isDefaultRepo = repo.name === config.repository && isDefaultProject && !hasUrlRepos;
                     html += `
                         <div class="repo-item" data-repo-name="${ADOContent.escapeHtml(repo.name)}">
                             <input type="checkbox"
