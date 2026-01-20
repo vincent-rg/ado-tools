@@ -6,13 +6,6 @@
     <title>Azure DevOps - PR List</title>
     <link rel="stylesheet" href="common.css">
     <style>
-        .filters {
-            background: #f3f2f1;
-            padding: 20px;
-            border-radius: 6px;
-            margin-bottom: 30px;
-        }
-
         .filter-section {
             margin-bottom: 20px;
         }
@@ -23,13 +16,15 @@
 
         .filter-section h4 {
             margin-bottom: 10px;
+            margin-top: 0;
             color: #323130;
+            font-size: 14px;
         }
 
         .checkbox-group {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .checkbox-label {
@@ -194,14 +189,22 @@
             font-style: italic;
         }
 
-        .filter-input {
-            display: flex;
-            gap: 10px;
-            align-items: center;
+        .filter-input input,
+        .filter-section input[type="text"],
+        .filter-section input[type="number"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
         }
 
-        .filter-input input {
-            flex: 1;
+        .filter-input input:focus,
+        .filter-section input[type="text"]:focus,
+        .filter-section input[type="number"]:focus {
+            outline: none;
+            border-color: #0078d4;
         }
 
         .autocomplete-container {
@@ -303,9 +306,15 @@
         }
 
         .clear-filters {
-            background: #f3f2f1;
+            background: white;
             color: #323130;
             border: 1px solid #d1d1d1;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+            width: 100%;
         }
 
         .clear-filters:hover {
@@ -315,8 +324,12 @@
         .selected-filters {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             margin-bottom: 15px;
+        }
+
+        .selected-filters:empty {
+            display: none;
         }
 
         .filter-tag {
@@ -456,6 +469,69 @@
             letter-spacing: 0.5px;
             margin-right: 8px;
         }
+
+        /* Sidebar layout */
+        .page-layout {
+            display: flex;
+            gap: 0;
+            height: calc(100vh - 120px);
+        }
+
+        .sidebar {
+            width: 300px;
+            min-width: 200px;
+            max-width: 600px;
+            background: #f3f2f1;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover {
+            background: rgba(0, 120, 212, 0.2);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-left: 20px;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar .btn-primary {
+            margin: 0;
+        }
+
+        .pr-source-display {
+            flex: 1;
+            margin: 0;
+        }
+
+        .results-container {
+            flex: 1;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -471,64 +547,71 @@
             </div>
         </div>
 
-        <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="margin-bottom: 20px; width: auto; padding: 10px 20px;">Load Pull Requests</button>
+        <div class="page-layout">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <div class="resize-handle" id="resizeHandle"></div>
 
-        <div id="prSourceDisplay" class="pr-source-display"></div>
+                <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
 
-        <div class="filters">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Filters</h3>
-            </div>
+                <div id="selectedFilters" class="selected-filters"></div>
 
-            <div id="selectedFilters" class="selected-filters"></div>
+                <div class="filter-section">
+                    <h4>PR Status</h4>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="active" checked onchange="applyFilters()">
+                            Active
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="completed" onchange="applyFilters()">
+                            Completed
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="abandoned" onchange="applyFilters()">
+                            Abandoned
+                        </label>
+                    </div>
+                </div>
 
-            <div class="filter-section">
-                <h4>PR Status</h4>
-                <div class="checkbox-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" value="active" checked onchange="applyFilters()">
-                        Active
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" value="completed" onchange="applyFilters()">
-                        Completed
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" value="abandoned" onchange="applyFilters()">
-                        Abandoned
-                    </label>
+                <div class="filter-section">
+                    <h4>PR ID</h4>
+                    <div class="filter-input">
+                        <input type="number" id="prIdFilter" placeholder="Filter by PR ID" oninput="applyFilters()">
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Created By</h4>
+                    <div class="autocomplete-container">
+                        <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
+                        <div id="createdByAutocomplete" class="autocomplete-results"></div>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Assigned To</h4>
+                    <div class="autocomplete-container">
+                        <input type="text" id="assignedToFilter" placeholder="Start typing to filter by reviewer" oninput="showAutocomplete('assignedTo')">
+                        <div id="assignedToAutocomplete" class="autocomplete-results"></div>
+                    </div>
+                </div>
+
+                <div class="filter-actions">
+                    <button onclick="clearFilters()" class="clear-filters">Clear All Filters</button>
                 </div>
             </div>
 
-            <div class="filter-section">
-                <h4>PR ID</h4>
-                <div class="filter-input">
-                    <input type="number" id="prIdFilter" placeholder="Filter by PR ID" oninput="applyFilters()">
+            <!-- Main Content -->
+            <div class="main-content">
+                <div class="toolbar">
+                    <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="width: auto; padding: 10px 20px;">Load Pull Requests</button>
+                    <div id="prSourceDisplay" class="pr-source-display"></div>
                 </div>
-            </div>
 
-            <div class="filter-section">
-                <h4>Created By</h4>
-                <div class="autocomplete-container">
-                    <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
-                    <div id="createdByAutocomplete" class="autocomplete-results"></div>
-                </div>
-            </div>
-
-            <div class="filter-section">
-                <h4>Assigned To</h4>
-                <div class="autocomplete-container">
-                    <input type="text" id="assignedToFilter" placeholder="Start typing to filter by reviewer" oninput="showAutocomplete('assignedTo')">
-                    <div id="assignedToAutocomplete" class="autocomplete-results"></div>
-                </div>
-            </div>
-
-            <div class="filter-actions">
-                <button onclick="clearFilters()" class="clear-filters">Clear All Filters</button>
+                <div id="results" class="results-container"></div>
             </div>
         </div>
-
-        <div id="results"></div>
     </div>
 
     <!-- Modal for selecting projects and repositories -->
@@ -1366,6 +1449,44 @@
                 }
             }
         });
+
+        // Sidebar resize functionality
+        (function initSidebarResize() {
+            const resizeHandle = document.getElementById('resizeHandle');
+            const sidebar = document.querySelector('.sidebar');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const delta = e.clientX - startX;
+                const newWidth = startWidth + delta;
+
+                // Apply min/max constraints
+                if (newWidth >= 200 && newWidth <= 600) {
+                    sidebar.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
 
         function clearFilters() {
             document.getElementById('prIdFilter').value = '';
