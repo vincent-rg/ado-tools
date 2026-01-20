@@ -451,16 +451,10 @@
         }
 
         .pr-source-display strong {
-            display: block;
-            margin-bottom: 6px;
             font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-        }
-
-        .pr-source-item {
-            margin-left: 10px;
-            margin-bottom: 2px;
+            margin-right: 8px;
         }
     </style>
 </head>
@@ -1084,22 +1078,12 @@
                 return;
             }
 
-            // Group repos by project
-            const projectRepoMap = {};
-            selectedRepos.forEach(repo => {
-                if (!projectRepoMap[repo.projectName]) {
-                    projectRepoMap[repo.projectName] = [];
-                }
-                projectRepoMap[repo.projectName].push(repo.name);
-            });
+            // Create list of project/repo pairs
+            const repoList = selectedRepos
+                .map(repo => `${ADOContent.escapeHtml(repo.projectName)}/${ADOContent.escapeHtml(repo.name)}`)
+                .join(', ');
 
-            let html = '<strong>Loaded from:</strong>';
-            Object.keys(projectRepoMap).sort().forEach(projectName => {
-                const repos = projectRepoMap[projectName];
-                html += `<div class="pr-source-item"><strong>${ADOContent.escapeHtml(projectName)}:</strong> ${repos.map(r => ADOContent.escapeHtml(r)).join(', ')}</div>`;
-            });
-
-            prSourceDisplay.innerHTML = html;
+            prSourceDisplay.innerHTML = `<strong>Loaded from:</strong> ${repoList}`;
             prSourceDisplay.classList.add('show');
         }
 
