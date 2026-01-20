@@ -685,6 +685,8 @@
         let isRestoringFromURL = false;
         let currentSort = 'id';
         let currentOrder = 'desc';
+        let prCommentCounts = {}; // Cache for active comment counts by PR ID
+        let isFetchingComments = false;
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -1486,6 +1488,7 @@
                             <th class="sortable" onclick="sortPRs('author')" style="width: 150px;">Author${getSortIndicator('author')}</th>
                             <th class="sortable" onclick="sortPRs('repository')" style="width: 200px;">Repository${getSortIndicator('repository')}</th>
                             <th class="sortable" onclick="sortPRs('status')" style="width: 100px;">Status${getSortIndicator('status')}</th>
+                            <th style="width: 90px;">Comments</th>
                             <th class="sortable" onclick="sortPRs('created')" style="width: 150px;">Created${getSortIndicator('created')}</th>
                         </tr>
                     </thead>
@@ -1497,8 +1500,16 @@
                 const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}`;
                 const draftBadge = pr.isDraft ? '<span class="badge badge-draft" style="margin-left: 5px;">DRAFT</span>' : '';
 
+                // Get comment count display
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                let commentDisplay = '<span style="color: #8a8886;">-</span>';
+                if (prCommentCounts[prKey] !== undefined) {
+                    const count = prCommentCounts[prKey];
+                    commentDisplay = count > 0 ? `<span style="color: #d13438; font-weight: 600;">${count}</span>` : '<span style="color: #8a8886;">0</span>';
+                }
+
                 html += `
-                    <tr>
+                    <tr data-pr-key="${prKey}">
                         <td>
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
@@ -1520,6 +1531,7 @@
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
                         </td>
                         <td><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
+                        <td class="pr-meta pr-comments" style="text-align: center;">${commentDisplay}</td>
                         <td class="pr-meta">${ADOUI.formatDate(pr.creationDate)}</td>
                     </tr>
                 `;
@@ -1531,6 +1543,77 @@
             `;
 
             resultsDiv.innerHTML = html;
+
+            // Start fetching comment counts after rendering
+            fetchCommentCounts();
+        }
+
+        async function fetchCommentCounts() {
+            if (isFetchingComments) return;
+            isFetchingComments = true;
+
+            const config = ADOConfig.get();
+
+            // Phase 1: Fetch for visible PRs first
+            const visiblePRs = getSortedPRs();
+            await fetchCommentCountsBatch(config, visiblePRs, 5);
+
+            // Phase 2: Fetch for remaining PRs in background
+            const remainingPRs = allPRs.filter(pr => {
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                return prCommentCounts[prKey] === undefined;
+            });
+
+            if (remainingPRs.length > 0) {
+                await fetchCommentCountsBatch(config, remainingPRs, 5);
+            }
+
+            isFetchingComments = false;
+        }
+
+        async function fetchCommentCountsBatch(config, prs, batchSize) {
+            for (let i = 0; i < prs.length; i += batchSize) {
+                const batch = prs.slice(i, i + batchSize);
+                const promises = batch.map(pr => fetchPRCommentCount(config, pr));
+                await Promise.all(promises);
+            }
+        }
+
+        async function fetchPRCommentCount(config, pr) {
+            const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+
+            // Skip if already fetched
+            if (prCommentCounts[prKey] !== undefined) {
+                return;
+            }
+
+            try {
+                const threads = await ADOAPI.getThreads(config, pr._project, pr._repo.id, pr.pullRequestId);
+                const activeCount = (threads.value || []).filter(thread =>
+                    thread.status === 'active' || thread.status === 'Active' || thread.status === 1
+                ).length;
+
+                prCommentCounts[prKey] = activeCount;
+                updatePRCommentDisplay(prKey, activeCount);
+            } catch (error) {
+                // On error, mark as fetched with 0 to avoid retrying
+                prCommentCounts[prKey] = 0;
+                updatePRCommentDisplay(prKey, 0);
+            }
+        }
+
+        function updatePRCommentDisplay(prKey, count) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            const commentCell = row.querySelector('.pr-comments');
+            if (!commentCell) return;
+
+            if (count > 0) {
+                commentCell.innerHTML = `<span style="color: #d13438; font-weight: 600;">${count}</span>`;
+            } else {
+                commentCell.innerHTML = '<span style="color: #8a8886;">0</span>';
+            }
         }
 
         function openPRLink(project, repository, prId) {
