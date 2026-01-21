@@ -251,6 +251,7 @@
             border-radius: 6px;
             overflow: hidden;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-sizing: border-box;
         }
 
         .pr-table thead {
@@ -518,6 +519,7 @@
             gap: 15px;
             margin-bottom: 20px;
             flex-wrap: wrap;
+            max-width: 100%;
         }
 
         .toolbar .btn-primary {
@@ -527,12 +529,19 @@
         .pr-source-display {
             flex: 1;
             margin: 0;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .results-container {
             flex: 1;
             overflow-y: auto;
             overflow-x: auto;
+        }
+
+        #results {
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         /* Sortable table headers */
