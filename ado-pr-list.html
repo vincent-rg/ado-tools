@@ -688,6 +688,8 @@
         let prCommentCounts = {}; // Cache for active comment counts by PR ID
         let isFetchingComments = false;
         let loadedRepoKeys = new Set(); // Track which repos have been loaded (project/repoId)
+        let lastLoadTimestamp = null; // Track when PRs were last loaded
+        let updateTimeInterval = null; // Interval for updating "time ago" display
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -1273,6 +1275,9 @@
                     }
                 });
 
+                // Update timestamp
+                lastLoadTimestamp = Date.now();
+
                 updatePRSourceDisplay();
                 applyFilters();
 
@@ -1287,6 +1292,7 @@
 
             if (selectedRepos.length === 0) {
                 prSourceDisplay.classList.remove('show');
+                stopUpdateTimeInterval();
                 return;
             }
 
@@ -1295,8 +1301,56 @@
                 .map(repo => `${ADOContent.escapeHtml(repo.projectName)}/${ADOContent.escapeHtml(repo.name)}`)
                 .join(', ');
 
-            prSourceDisplay.innerHTML = `<strong>Loaded from:</strong> ${repoList}`;
+            const timeAgo = lastLoadTimestamp ? getTimeAgo(lastLoadTimestamp) : '';
+            const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(${timeAgo})</span>` : '';
+            const refreshButton = lastLoadTimestamp ? `<button onclick="refreshPRs()" style="margin-left: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; font-size: 12px; color: #0078d4;" title="Refresh PRs">↻ Refresh</button>` : '';
+
+            prSourceDisplay.innerHTML = `<strong>Loaded from:</strong> ${repoList}${timeDisplay}${refreshButton}`;
             prSourceDisplay.classList.add('show');
+
+            // Start updating time display if not already running
+            if (lastLoadTimestamp && !updateTimeInterval) {
+                startUpdateTimeInterval();
+            }
+        }
+
+        function getTimeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+            const days = Math.floor(hours / 24);
+            return `${days} day${days !== 1 ? 's' : ''} ago`;
+        }
+
+        function startUpdateTimeInterval() {
+            // Update time display every 30 seconds
+            updateTimeInterval = setInterval(() => {
+                if (lastLoadTimestamp) {
+                    const timeAgoElement = document.getElementById('timeAgo');
+                    if (timeAgoElement) {
+                        timeAgoElement.textContent = `(${getTimeAgo(lastLoadTimestamp)})`;
+                    }
+                }
+            }, 30000);
+        }
+
+        function stopUpdateTimeInterval() {
+            if (updateTimeInterval) {
+                clearInterval(updateTimeInterval);
+                updateTimeInterval = null;
+            }
+        }
+
+        async function refreshPRs() {
+            // Clear cache and reload all selected repos
+            loadedRepoKeys.clear();
+            prCommentCounts = {};
+            lastLoadTimestamp = null;
+            await loadPRsFromSelection();
         }
 
         function getSelectedProjects() {
@@ -1780,6 +1834,17 @@
                 }
             });
         })();
+
+        // Auto-refresh on tab visibility (if data is older than 5 minutes)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && lastLoadTimestamp) {
+                const minutesSinceLoad = (Date.now() - lastLoadTimestamp) / 1000 / 60;
+                if (minutesSinceLoad > 5 && loadedRepoKeys.size > 0) {
+                    console.log('Tab became visible and data is stale, auto-refreshing...');
+                    refreshPRs();
+                }
+            }
+        });
 
         function clearFilters() {
             document.getElementById('prIdFilter').value = '';
