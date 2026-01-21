@@ -689,6 +689,8 @@
         let isFetchingComments = false;
         let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
         let updateTimeInterval = null; // Interval for updating "time ago" display
+        let currentPage = 1;
+        let itemsPerPage = 50;
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -721,7 +723,9 @@
                 createdBy: params.get('createdBy') || null,
                 assignedTo: params.get('assignedTo') || null,
                 sort: params.get('sort') || 'id',
-                order: params.get('order') || 'desc'
+                order: params.get('order') || 'desc',
+                page: parseInt(params.get('page')) || 1,
+                perPage: parseInt(params.get('perPage')) || 50
             };
         }
 
@@ -778,6 +782,10 @@
             // Sort and Order
             params.set('sort', currentSort);
             params.set('order', currentOrder);
+
+            // Pagination
+            params.set('page', currentPage);
+            params.set('perPage', itemsPerPage);
 
             const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
             history.replaceState(null, '', newURL);
@@ -846,6 +854,10 @@
                 // Restore sort and order
                 currentSort = urlParams.sort;
                 currentOrder = urlParams.order;
+
+                // Restore pagination
+                currentPage = urlParams.page;
+                itemsPerPage = urlParams.perPage;
 
             } finally {
                 isRestoringFromURL = false;
@@ -1460,6 +1472,9 @@
                 return true;
             });
 
+            // Reset to page 1 when filters change
+            currentPage = 1;
+
             displayPRs();
             updateSelectedFilters();
             updateURL();
@@ -1537,6 +1552,9 @@
                 currentOrder = 'desc';
             }
 
+            // Reset to page 1 when sorting changes
+            currentPage = 1;
+
             updateURL();
             displayPRs();
         }
@@ -1599,6 +1617,22 @@
 
             const sortedPRs = getSortedPRs();
 
+            // Pagination calculations
+            const totalPRs = sortedPRs.length;
+            const totalPages = Math.ceil(totalPRs / itemsPerPage);
+
+            // Ensure current page is within bounds
+            if (currentPage > totalPages && totalPages > 0) {
+                currentPage = totalPages;
+            }
+            if (currentPage < 1) {
+                currentPage = 1;
+            }
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, totalPRs);
+            const pagePRs = sortedPRs.slice(startIndex, endIndex);
+
             const getSortIndicator = (column) => {
                 if (currentSort === column) {
                     return `<span class="sort-indicator">${currentOrder === 'asc' ? '↑' : '↓'}</span>`;
@@ -1607,8 +1641,19 @@
             };
 
             let html = `
-                <div style="margin-bottom: 15px; color: #605e5c;">
-                    Showing ${filteredPRs.length} of ${allPRs.length} Pull Requests
+                <div style="margin-bottom: 15px; color: #605e5c; display: flex; justify-content: space-between; align-items: center;">
+                    <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="font-size: 14px;">
+                            Show:
+                            <select onchange="changePerPage(this.value)" style="margin-left: 5px; padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;">
+                                <option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option>
+                                <option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option>
+                                <option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option>
+                            </select>
+                            per page
+                        </label>
+                    </div>
                 </div>
                 <table class="pr-table">
                     <thead>
@@ -1626,7 +1671,7 @@
                     <tbody>
             `;
 
-            sortedPRs.forEach(pr => {
+            pagePRs.forEach(pr => {
                 const statusClass = ADOUI.getStatusBadgeClass(pr.status);
                 const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}`;
                 const draftBadge = pr.isDraft ? '<span class="badge badge-draft" style="margin-left: 5px;">DRAFT</span>' : '';
@@ -1678,10 +1723,85 @@
                 </table>
             `;
 
+            // Add pagination controls
+            if (totalPages > 1) {
+                html += '<div style="margin-top: 20px; display: flex; justify-content: center; align-items: center; gap: 10px;">';
+
+                // Previous button
+                if (currentPage > 1) {
+                    html += `<button onclick="changePage(${currentPage - 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">← Previous</button>`;
+                } else {
+                    html += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">← Previous</button>`;
+                }
+
+                // Page numbers
+                html += '<div style="display: flex; gap: 5px;">';
+
+                const maxVisiblePages = 7;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                // Adjust start if we're near the end
+                if (endPage - startPage < maxVisiblePages - 1) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                // First page + ellipsis
+                if (startPage > 1) {
+                    html += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; min-width: 40px;">1</button>`;
+                    if (startPage > 2) {
+                        html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                    }
+                }
+
+                // Page number buttons
+                for (let i = startPage; i <= endPage; i++) {
+                    if (i === currentPage) {
+                        html += `<button disabled style="padding: 8px 12px; background: #0078d4; border: 1px solid #0078d4; border-radius: 4px; color: white; font-weight: 600; min-width: 40px;">${i}</button>`;
+                    } else {
+                        html += `<button onclick="changePage(${i})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${i}</button>`;
+                    }
+                }
+
+                // Ellipsis + last page
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                    }
+                    html += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; min-width: 40px;">${totalPages}</button>`;
+                }
+
+                html += '</div>';
+
+                // Next button
+                if (currentPage < totalPages) {
+                    html += `<button onclick="changePage(${currentPage + 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">Next →</button>`;
+                } else {
+                    html += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">Next →</button>`;
+                }
+
+                html += '</div>';
+            }
+
             resultsDiv.innerHTML = html;
 
             // Start fetching comment counts after rendering
             fetchCommentCounts();
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            updateURL();
+            displayPRs();
+            // Scroll to top of results
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function changePerPage(perPage) {
+            itemsPerPage = parseInt(perPage);
+            currentPage = 1; // Reset to first page
+            updateURL();
+            displayPRs();
         }
 
         async function fetchCommentCounts() {
@@ -1690,8 +1810,11 @@
 
             const config = ADOConfig.get();
 
-            // Phase 1: Fetch for visible PRs first
-            const visiblePRs = getSortedPRs();
+            // Phase 1: Fetch for visible PRs on current page first
+            const sortedPRs = getSortedPRs();
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, sortedPRs.length);
+            const visiblePRs = sortedPRs.slice(startIndex, endIndex);
             await fetchCommentCountsBatch(config, visiblePRs, 5);
 
             // Phase 2: Fetch for remaining PRs in background
