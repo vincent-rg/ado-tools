@@ -509,6 +509,7 @@
             flex-direction: column;
             overflow: hidden;
             padding-left: 20px;
+            min-width: 0;
         }
 
         .toolbar {
@@ -531,6 +532,7 @@
         .results-container {
             flex: 1;
             overflow-y: auto;
+            overflow-x: auto;
         }
 
         /* Sortable table headers */
@@ -1748,9 +1750,15 @@
 
                 // First page + ellipsis
                 if (startPage > 1) {
-                    html += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; min-width: 40px;">1</button>`;
+                    html += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">1</button>`;
                     if (startPage > 2) {
                         html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        // Add middle page in the gap
+                        const middlePage = Math.round((1 + startPage) / 2);
+                        if (middlePage > 1 && middlePage < startPage) {
+                            html += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
+                            html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        }
                     }
                 }
 
@@ -1767,8 +1775,14 @@
                 if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
                         html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        // Add middle page in the gap
+                        const middlePage = Math.round((endPage + totalPages) / 2);
+                        if (middlePage > endPage && middlePage < totalPages) {
+                            html += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
+                            html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        }
                     }
-                    html += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; min-width: 40px;">${totalPages}</button>`;
+                    html += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">${totalPages}</button>`;
                 }
 
                 html += '</div>';
