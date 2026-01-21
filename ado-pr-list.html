@@ -264,6 +264,10 @@
             font-weight: 600;
             color: #323130;
             border-bottom: 2px solid #edebe9;
+            position: sticky;
+            top: 0;
+            background: #f3f2f1;
+            z-index: 10;
         }
 
         .pr-table td {
@@ -544,6 +548,22 @@
             box-sizing: border-box;
         }
 
+        .info-bar {
+            margin-bottom: 15px;
+            color: #605e5c;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pagination-bar {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
         /* Sortable table headers */
         .pr-table th.sortable {
             cursor: pointer;
@@ -648,7 +668,13 @@
                     <div id="prSourceDisplay" class="pr-source-display"></div>
                 </div>
 
-                <div id="results" class="results-container"></div>
+                <div id="infoBar" class="info-bar"></div>
+
+                <div class="results-container">
+                    <div id="results"></div>
+                </div>
+
+                <div id="paginationBar" class="pagination-bar"></div>
             </div>
         </div>
     </div>
@@ -1615,14 +1641,20 @@
 
         function displayPRs() {
             const resultsDiv = document.getElementById('results');
+            const infoBar = document.getElementById('infoBar');
+            const paginationBar = document.getElementById('paginationBar');
 
             if (allPRs.length === 0) {
                 resultsDiv.innerHTML = '<div class="info">No Pull Requests loaded yet. Click "Load Pull Requests" to fetch data.</div>';
+                infoBar.innerHTML = '';
+                paginationBar.innerHTML = '';
                 return;
             }
 
             if (filteredPRs.length === 0) {
                 resultsDiv.innerHTML = '<div class="warning">No Pull Requests match the current filters.</div>';
+                infoBar.innerHTML = '';
+                paginationBar.innerHTML = '';
                 return;
             }
 
@@ -1651,13 +1683,16 @@
                 return '';
             };
 
-            let html = `
-                <div style="margin-bottom: 15px; color: #605e5c; display: flex; justify-content: space-between; align-items: center;">
-                    <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <label style="font-size: 14px;">Show: <select onchange="changePerPage(this.value)" style="margin-left: 5px; padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select> per page</label>
-                    </div>
+            // Build info bar
+            const infoBarHtml = `
+                <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-size: 14px;">Show: <select onchange="changePerPage(this.value)" style="margin-left: 5px; padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select> per page</label>
                 </div>
+            `;
+
+            // Build table
+            let tableHtml = `
                 <table class="pr-table">
                     <thead>
                         <tr>
@@ -1721,24 +1756,24 @@
                 `;
             });
 
-            html += `
+            tableHtml += `
                     </tbody>
                 </table>
             `;
 
-            // Add pagination controls
+            // Build pagination controls
+            let paginationHtml = '';
             if (totalPages > 1) {
-                html += '<div style="margin-top: 20px; display: flex; justify-content: center; align-items: center; gap: 10px;">';
 
                 // Previous button
                 if (currentPage > 1) {
-                    html += `<button onclick="changePage(${currentPage - 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">← Previous</button>`;
+                    paginationHtml += `<button onclick="changePage(${currentPage - 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">← Previous</button>`;
                 } else {
-                    html += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">← Previous</button>`;
+                    paginationHtml += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">← Previous</button>`;
                 }
 
                 // Page numbers
-                html += '<div style="display: flex; gap: 5px;">';
+                paginationHtml += '<div style="display: flex; gap: 5px;">';
 
                 const maxVisiblePages = 7;
                 let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
@@ -1751,14 +1786,14 @@
 
                 // First page + ellipsis
                 if (startPage > 1) {
-                    html += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">1</button>`;
+                    paginationHtml += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">1</button>`;
                     if (startPage > 2) {
-                        html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
                         // Add middle page in the gap
                         const middlePage = Math.round((1 + startPage) / 2);
                         if (middlePage > 1 && middlePage < startPage) {
-                            html += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
-                            html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                            paginationHtml += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
+                            paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
                         }
                     }
                 }
@@ -1766,39 +1801,40 @@
                 // Page number buttons
                 for (let i = startPage; i <= endPage; i++) {
                     if (i === currentPage) {
-                        html += `<button disabled style="padding: 8px 12px; background: #0078d4; border: 1px solid #0078d4; border-radius: 4px; color: white; font-weight: 600; min-width: 40px;">${i}</button>`;
+                        paginationHtml += `<button disabled style="padding: 8px 12px; background: #0078d4; border: 1px solid #0078d4; border-radius: 4px; color: white; font-weight: 600; min-width: 40px;">${i}</button>`;
                     } else {
-                        html += `<button onclick="changePage(${i})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${i}</button>`;
+                        paginationHtml += `<button onclick="changePage(${i})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${i}</button>`;
                     }
                 }
 
                 // Ellipsis + last page
                 if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
-                        html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
                         // Add middle page in the gap
                         const middlePage = Math.round((endPage + totalPages) / 2);
                         if (middlePage > endPage && middlePage < totalPages) {
-                            html += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
-                            html += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                            paginationHtml += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
+                            paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
                         }
                     }
-                    html += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">${totalPages}</button>`;
+                    paginationHtml += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">${totalPages}</button>`;
                 }
 
-                html += '</div>';
+                paginationHtml += '</div>';
 
                 // Next button
                 if (currentPage < totalPages) {
-                    html += `<button onclick="changePage(${currentPage + 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">Next →</button>`;
+                    paginationHtml += `<button onclick="changePage(${currentPage + 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">Next →</button>`;
                 } else {
-                    html += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">Next →</button>`;
+                    paginationHtml += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">Next →</button>`;
                 }
-
-                html += '</div>';
             }
 
-            resultsDiv.innerHTML = html;
+            // Update DOM
+            infoBar.innerHTML = infoBarHtml;
+            resultsDiv.innerHTML = tableHtml;
+            paginationBar.innerHTML = paginationHtml;
 
             // Start fetching comment counts after rendering
             fetchCommentCounts();
