@@ -1371,6 +1371,9 @@
             // Clear cache and reload all selected repos
             loadedRepoKeys.clear();
             prCommentCounts = {};
+            allPRs = [];
+            allAuthors = new Set();
+            allReviewers = new Set();
             await loadPRsFromSelection();
         }
 
