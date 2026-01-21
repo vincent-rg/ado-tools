@@ -687,8 +687,7 @@
         let currentOrder = 'desc';
         let prCommentCounts = {}; // Cache for active comment counts by PR ID
         let isFetchingComments = false;
-        let loadedRepoKeys = new Set(); // Track which repos have been loaded (project/repoId)
-        let lastLoadTimestamp = null; // Track when PRs were last loaded
+        let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
         let updateTimeInterval = null; // Interval for updating "time ago" display
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -1269,14 +1268,11 @@
                             }
                         });
 
-                        // Mark repo as loaded
+                        // Mark repo as loaded with current timestamp
                         const repoKey = `${result.repo.projectName}/${result.repo.id}`;
-                        loadedRepoKeys.add(repoKey);
+                        loadedRepoKeys.set(repoKey, Date.now());
                     }
                 });
-
-                // Update timestamp
-                lastLoadTimestamp = Date.now();
 
                 updatePRSourceDisplay();
                 applyFilters();
@@ -1301,15 +1297,27 @@
                 .map(repo => `${ADOContent.escapeHtml(repo.projectName)}/${ADOContent.escapeHtml(repo.name)}`)
                 .join(', ');
 
-            const timeAgo = lastLoadTimestamp ? getTimeAgo(lastLoadTimestamp) : '';
-            const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(${timeAgo})</span>` : '';
-            const refreshButton = lastLoadTimestamp ? `<button onclick="refreshPRs()" style="margin-left: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; font-size: 12px; color: #0078d4;" title="Refresh PRs">↻ Refresh</button>` : '';
+            // Find oldest (most stale) timestamp from selected repos
+            let oldestTimestamp = null;
+            selectedRepos.forEach(repo => {
+                const repoKey = `${repo.projectName}/${repo.id}`;
+                const timestamp = loadedRepoKeys.get(repoKey);
+                if (timestamp) {
+                    if (!oldestTimestamp || timestamp < oldestTimestamp) {
+                        oldestTimestamp = timestamp;
+                    }
+                }
+            });
+
+            const timeAgo = oldestTimestamp ? getTimeAgo(oldestTimestamp) : '';
+            const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(oldest: ${timeAgo})</span>` : '';
+            const refreshButton = oldestTimestamp ? `<button onclick="refreshPRs()" style="margin-left: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; font-size: 12px; color: #0078d4;" title="Refresh PRs">↻ Refresh</button>` : '';
 
             prSourceDisplay.innerHTML = `<strong>Loaded from:</strong> ${repoList}${timeDisplay}${refreshButton}`;
             prSourceDisplay.classList.add('show');
 
             // Start updating time display if not already running
-            if (lastLoadTimestamp && !updateTimeInterval) {
+            if (oldestTimestamp && !updateTimeInterval) {
                 startUpdateTimeInterval();
             }
         }
@@ -1329,10 +1337,24 @@
         function startUpdateTimeInterval() {
             // Update time display every 30 seconds
             updateTimeInterval = setInterval(() => {
-                if (lastLoadTimestamp) {
+                const selectedRepos = getSelectedRepos();
+
+                // Find oldest timestamp from selected repos
+                let oldestTimestamp = null;
+                selectedRepos.forEach(repo => {
+                    const repoKey = `${repo.projectName}/${repo.id}`;
+                    const timestamp = loadedRepoKeys.get(repoKey);
+                    if (timestamp) {
+                        if (!oldestTimestamp || timestamp < oldestTimestamp) {
+                            oldestTimestamp = timestamp;
+                        }
+                    }
+                });
+
+                if (oldestTimestamp) {
                     const timeAgoElement = document.getElementById('timeAgo');
                     if (timeAgoElement) {
-                        timeAgoElement.textContent = `(${getTimeAgo(lastLoadTimestamp)})`;
+                        timeAgoElement.textContent = `(oldest: ${getTimeAgo(oldestTimestamp)})`;
                     }
                 }
             }, 30000);
@@ -1349,7 +1371,6 @@
             // Clear cache and reload all selected repos
             loadedRepoKeys.clear();
             prCommentCounts = {};
-            lastLoadTimestamp = null;
             await loadPRsFromSelection();
         }
 
@@ -1837,11 +1858,27 @@
 
         // Auto-refresh on tab visibility (if data is older than 5 minutes)
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && lastLoadTimestamp) {
-                const minutesSinceLoad = (Date.now() - lastLoadTimestamp) / 1000 / 60;
-                if (minutesSinceLoad > 5 && loadedRepoKeys.size > 0) {
-                    console.log('Tab became visible and data is stale, auto-refreshing...');
-                    refreshPRs();
+            if (!document.hidden && loadedRepoKeys.size > 0) {
+                const selectedRepos = getSelectedRepos();
+
+                // Find oldest timestamp from selected repos
+                let oldestTimestamp = null;
+                selectedRepos.forEach(repo => {
+                    const repoKey = `${repo.projectName}/${repo.id}`;
+                    const timestamp = loadedRepoKeys.get(repoKey);
+                    if (timestamp) {
+                        if (!oldestTimestamp || timestamp < oldestTimestamp) {
+                            oldestTimestamp = timestamp;
+                        }
+                    }
+                });
+
+                if (oldestTimestamp) {
+                    const minutesSinceLoad = (Date.now() - oldestTimestamp) / 1000 / 60;
+                    if (minutesSinceLoad > 5) {
+                        console.log('Tab became visible and data is stale, auto-refreshing...');
+                        refreshPRs();
+                    }
                 }
             }
         });
