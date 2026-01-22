@@ -6,13 +6,6 @@
     <title>Azure DevOps - PR List</title>
     <link rel="stylesheet" href="common.css">
     <style>
-        .filters {
-            background: #f3f2f1;
-            padding: 20px;
-            border-radius: 6px;
-            margin-bottom: 30px;
-        }
-
         .filter-section {
             margin-bottom: 20px;
         }
@@ -23,13 +16,15 @@
 
         .filter-section h4 {
             margin-bottom: 10px;
+            margin-top: 0;
             color: #323130;
+            font-size: 14px;
         }
 
         .checkbox-group {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .checkbox-label {
@@ -194,14 +189,22 @@
             font-style: italic;
         }
 
-        .filter-input {
-            display: flex;
-            gap: 10px;
-            align-items: center;
+        .filter-input input,
+        .filter-section input[type="text"],
+        .filter-section input[type="number"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
         }
 
-        .filter-input input {
-            flex: 1;
+        .filter-input input:focus,
+        .filter-section input[type="text"]:focus,
+        .filter-section input[type="number"]:focus {
+            outline: none;
+            border-color: #0078d4;
         }
 
         .autocomplete-container {
@@ -243,11 +246,12 @@
 
         .pr-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             background: white;
             border-radius: 6px;
-            overflow: hidden;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-sizing: border-box;
         }
 
         .pr-table thead {
@@ -260,6 +264,11 @@
             font-weight: 600;
             color: #323130;
             border-bottom: 2px solid #edebe9;
+            position: sticky;
+            top: 0;
+            background: #f3f2f1;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .pr-table td {
@@ -303,9 +312,15 @@
         }
 
         .clear-filters {
-            background: #f3f2f1;
+            background: white;
             color: #323130;
             border: 1px solid #d1d1d1;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+            width: 100%;
         }
 
         .clear-filters:hover {
@@ -315,8 +330,12 @@
         .selected-filters {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             margin-bottom: 15px;
+        }
+
+        .selected-filters:empty {
+            display: none;
         }
 
         .filter-tag {
@@ -343,6 +362,248 @@
         .filter-tag button:hover {
             color: #0078d4;
         }
+
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #edebe9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #323130;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #605e5c;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #f3f2f1;
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #edebe9;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-secondary {
+            padding: 8px 16px;
+            background: #f3f2f1;
+            color: #323130;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #e1dfdd;
+        }
+
+        /* Source display */
+        .pr-source-display {
+            background: #e1f3ff;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: #004578;
+            font-size: 14px;
+            display: none;
+        }
+
+        .pr-source-display.show {
+            display: block;
+        }
+
+        .pr-source-display strong {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 8px;
+        }
+
+        /* Sidebar layout */
+        .page-layout {
+            display: flex;
+            gap: 0;
+            height: calc(100vh - 170px);
+        }
+
+        .sidebar {
+            width: 300px;
+            min-width: 200px;
+            max-width: 600px;
+            background: #f3f2f1;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover {
+            background: rgba(0, 120, 212, 0.2);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-left: 20px;
+            min-width: 0;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            max-width: 100%;
+        }
+
+        .toolbar .btn-primary {
+            margin: 0;
+        }
+
+        .pr-source-display {
+            flex: 1;
+            margin: 0;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .results-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            min-height: 0;
+        }
+
+        #results {
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .info-bar {
+            margin-bottom: 15px;
+            color: #605e5c;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .info-bar > span:first-child {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .info-bar > div:last-child {
+            flex-shrink: 0;
+        }
+
+        .info-bar label {
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .pagination-bar {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Sortable table headers */
+        .pr-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            padding-right: 24px;
+        }
+
+        .pr-table th.sortable:hover {
+            background: #e1dfdd;
+        }
+
+        .sort-indicator {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: #0078d4;
+        }
     </style>
 </head>
 <body>
@@ -358,18 +619,96 @@
             </div>
         </div>
 
-        <div class="filters">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Filters</h3>
-                <button onclick="loadData()" class="btn-primary" id="loadButton">Load Pull Requests</button>
+        <div class="page-layout">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <div class="resize-handle" id="resizeHandle"></div>
+
+                <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
+
+                <div id="selectedFilters" class="selected-filters"></div>
+
+                <div class="filter-section">
+                    <h4>PR Status</h4>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="active" checked onchange="applyFilters()">
+                            Active
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="completed" onchange="applyFilters()">
+                            Completed
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="abandoned" onchange="applyFilters()">
+                            Abandoned
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>PR ID</h4>
+                    <div class="filter-input">
+                        <input type="number" id="prIdFilter" placeholder="Filter by PR ID" oninput="applyFilters()">
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Title</h4>
+                    <div class="filter-input">
+                        <input type="text" id="titleFilter" placeholder="Search in title" oninput="applyFilters()">
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Created By</h4>
+                    <div class="autocomplete-container">
+                        <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
+                        <div id="createdByAutocomplete" class="autocomplete-results"></div>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Assigned To</h4>
+                    <div class="autocomplete-container">
+                        <input type="text" id="assignedToFilter" placeholder="Start typing to filter by reviewer" oninput="showAutocomplete('assignedTo')">
+                        <div id="assignedToAutocomplete" class="autocomplete-results"></div>
+                    </div>
+                </div>
+
+                <div class="filter-actions">
+                    <button onclick="clearFilters()" class="clear-filters">Clear All Filters</button>
+                </div>
             </div>
 
-            <div id="selectedFilters" class="selected-filters"></div>
+            <!-- Main Content -->
+            <div class="main-content">
+                <div class="toolbar">
+                    <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="width: auto; padding: 10px 20px;">Load Pull Requests</button>
+                    <div id="prSourceDisplay" class="pr-source-display"></div>
+                </div>
 
-            <div class="filter-section">
-                <h4>Projects & Repositories</h4>
+                <div id="infoBar" class="info-bar"></div>
+
+                <div class="results-container">
+                    <div id="results"></div>
+                </div>
+
+                <div id="paginationBar" class="pagination-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for selecting projects and repositories -->
+    <div id="loadPRModal" class="modal-overlay" onclick="closeLoadPRModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Select Projects & Repositories</h3>
+                <button class="modal-close" onclick="closeLoadPRModal()">&times;</button>
+            </div>
+            <div class="modal-body">
                 <input type="text"
-                       id="projectSearch"
+                       id="modalProjectSearch"
                        class="search-input"
                        placeholder="🔍 Search projects and repositories..."
                        oninput="filterProjectTree()">
@@ -385,54 +724,11 @@
                     <div class="loading">Loading projects...</div>
                 </div>
             </div>
-
-            <div class="filter-section">
-                <h4>PR Status</h4>
-                <div class="checkbox-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" value="active" checked onchange="applyFilters()">
-                        Active
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" value="completed" onchange="applyFilters()">
-                        Completed
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" value="abandoned" onchange="applyFilters()">
-                        Abandoned
-                    </label>
-                </div>
-            </div>
-
-            <div class="filter-section">
-                <h4>PR ID</h4>
-                <div class="filter-input">
-                    <input type="number" id="prIdFilter" placeholder="Filter by PR ID" oninput="applyFilters()">
-                </div>
-            </div>
-
-            <div class="filter-section">
-                <h4>Created By</h4>
-                <div class="autocomplete-container">
-                    <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
-                    <div id="createdByAutocomplete" class="autocomplete-results"></div>
-                </div>
-            </div>
-
-            <div class="filter-section">
-                <h4>Assigned To</h4>
-                <div class="autocomplete-container">
-                    <input type="text" id="assignedToFilter" placeholder="Start typing to filter by reviewer" oninput="showAutocomplete('assignedTo')">
-                    <div id="assignedToAutocomplete" class="autocomplete-results"></div>
-                </div>
-            </div>
-
-            <div class="filter-actions">
-                <button onclick="clearFilters()" class="clear-filters">Clear All Filters</button>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeLoadPRModal()">Cancel</button>
+                <button class="btn-primary" onclick="loadDataFromModal()">Load Pull Requests</button>
             </div>
         </div>
-
-        <div id="results"></div>
     </div>
 
     <script src="common.js"></script>
@@ -444,6 +740,14 @@
         let allAuthors = new Set();
         let allReviewers = new Set();
         let isRestoringFromURL = false;
+        let currentSort = 'id';
+        let currentOrder = 'desc';
+        let prCommentCounts = {}; // Cache for active comment counts by PR ID
+        let isFetchingComments = false;
+        let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
+        let updateTimeInterval = null; // Interval for updating "time ago" display
+        let currentPage = 1;
+        let itemsPerPage = 50;
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -456,6 +760,12 @@
 
             await loadProjects();
             await restoreFiltersFromURL();
+
+            // Auto-load PRs if repos are selected from URL
+            const selectedRepos = getSelectedRepos();
+            if (selectedRepos.length > 0) {
+                await loadPRsFromSelection();
+            }
         });
 
         // URL parameter helpers
@@ -466,8 +776,13 @@
                 repos: params.get('repos') ? params.get('repos').split(',') : null,
                 status: params.get('status') ? params.get('status').split(',') : null,
                 prId: params.get('prId') || null,
+                title: params.get('title') || null,
                 createdBy: params.get('createdBy') || null,
-                assignedTo: params.get('assignedTo') || null
+                assignedTo: params.get('assignedTo') || null,
+                sort: params.get('sort') || 'id',
+                order: params.get('order') || 'desc',
+                page: parseInt(params.get('page')) || 1,
+                perPage: parseInt(params.get('perPage')) || 50
             };
         }
 
@@ -492,12 +807,21 @@
             const selectedStatuses = getSelectedStatuses();
             if (selectedStatuses.length > 0) {
                 params.set('status', selectedStatuses.join(','));
+            } else {
+                // If no statuses selected, use "all" to indicate show all
+                params.set('status', 'all');
             }
 
             // PR ID
             const prId = document.getElementById('prIdFilter').value.trim();
             if (prId) {
                 params.set('prId', prId);
+            }
+
+            // Title
+            const title = document.getElementById('titleFilter').value.trim();
+            if (title) {
+                params.set('title', title);
             }
 
             // Created By
@@ -511,6 +835,14 @@
             if (assignedTo) {
                 params.set('assignedTo', assignedTo);
             }
+
+            // Sort and Order
+            params.set('sort', currentSort);
+            params.set('order', currentOrder);
+
+            // Pagination
+            params.set('page', currentPage);
+            params.set('perPage', itemsPerPage);
 
             const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
             history.replaceState(null, '', newURL);
@@ -548,18 +880,26 @@
                             checkbox.checked = false;
                         }
                     });
-                    // Then check only URL-specified statuses
-                    urlParams.status.forEach(status => {
-                        const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
-                        if (checkbox) {
-                            checkbox.checked = true;
-                        }
-                    });
+                    // If status is "all", leave all unchecked
+                    if (urlParams.status.length === 1 && urlParams.status[0] === 'all') {
+                        // All unchecked means show all
+                    } else {
+                        // Then check only URL-specified statuses
+                        urlParams.status.forEach(status => {
+                            const checkbox = document.querySelector(`input[type="checkbox"][value="${status}"]`);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                        });
+                    }
                 }
 
                 // Restore text filters
                 if (urlParams.prId) {
                     document.getElementById('prIdFilter').value = urlParams.prId;
+                }
+                if (urlParams.title) {
+                    document.getElementById('titleFilter').value = urlParams.title;
                 }
                 if (urlParams.createdBy) {
                     document.getElementById('createdByFilter').value = urlParams.createdBy;
@@ -567,6 +907,14 @@
                 if (urlParams.assignedTo) {
                     document.getElementById('assignedToFilter').value = urlParams.assignedTo;
                 }
+
+                // Restore sort and order
+                currentSort = urlParams.sort;
+                currentOrder = urlParams.order;
+
+                // Restore pagination
+                currentPage = urlParams.page;
+                itemsPerPage = urlParams.perPage;
 
             } finally {
                 isRestoringFromURL = false;
@@ -621,6 +969,10 @@
             const projectTreeDiv = document.getElementById('projectTree');
             let html = '';
 
+            // Check if URL has repos parameter - if so, don't select default repo
+            const urlParams = getURLParams();
+            const hasUrlRepos = urlParams.repos && urlParams.repos.length > 0;
+
             allProjects.forEach(project => {
                 const repos = projectRepoMap[project.name] || [];
                 const isDefaultProject = project.name === config.project;
@@ -628,7 +980,7 @@
 
                 // Count checked repos (will be updated dynamically)
                 const checkedRepos = repos.filter(repo =>
-                    repo.name === config.repository && isDefaultProject
+                    repo.name === config.repository && isDefaultProject && !hasUrlRepos
                 ).length;
 
                 html += `
@@ -649,7 +1001,7 @@
 
                 // Add repositories
                 repos.forEach(repo => {
-                    const isDefaultRepo = repo.name === config.repository && isDefaultProject;
+                    const isDefaultRepo = repo.name === config.repository && isDefaultProject && !hasUrlRepos;
                     html += `
                         <div class="repo-item" data-repo-name="${ADOContent.escapeHtml(repo.name)}">
                             <input type="checkbox"
@@ -754,9 +1106,22 @@
             applyFilters();
         }
 
+        // Modal functions
+        function openLoadPRModal() {
+            document.getElementById('loadPRModal').classList.add('show');
+        }
+
+        function closeLoadPRModal(event) {
+            // If event is provided, only close if clicking the overlay directly
+            if (event && event.target !== event.currentTarget) {
+                return;
+            }
+            document.getElementById('loadPRModal').classList.remove('show');
+        }
+
         // Search filter function
         function filterProjectTree() {
-            const searchTerm = document.getElementById('projectSearch').value.toLowerCase().trim();
+            const searchTerm = document.getElementById('modalProjectSearch').value.toLowerCase().trim();
             const projectItems = document.querySelectorAll('.project-item');
 
             if (!searchTerm) {
@@ -853,8 +1218,7 @@
             });
         }
 
-        async function loadData() {
-            const config = ADOConfig.get();
+        async function loadDataFromModal() {
             const selectedProjects = getSelectedProjects();
             const selectedRepos = getSelectedRepos();
 
@@ -868,15 +1232,76 @@
                 return;
             }
 
-            ADOUI.showLoading('results', `Loading Pull Requests from ${selectedRepos.length} repositories...`);
+            // Close the modal
+            closeLoadPRModal();
 
-            try {
-                allPRs = [];
+            await loadPRsFromSelection();
+        }
+
+        async function loadPRsFromSelection() {
+            const config = ADOConfig.get();
+            const selectedRepos = getSelectedRepos();
+
+            if (selectedRepos.length === 0) {
+                return;
+            }
+
+            // Determine which repos need to be loaded (not already loaded)
+            const reposToLoad = [];
+            const reposToRemove = [];
+
+            selectedRepos.forEach(repo => {
+                const repoKey = `${repo.projectName}/${repo.id}`;
+                if (!loadedRepoKeys.has(repoKey)) {
+                    reposToLoad.push(repo);
+                }
+            });
+
+            // Find repos that were previously loaded but are no longer selected
+            const selectedRepoKeys = new Set(selectedRepos.map(r => `${r.projectName}/${r.id}`));
+            loadedRepoKeys.forEach(repoKey => {
+                if (!selectedRepoKeys.has(repoKey)) {
+                    reposToRemove.push(repoKey);
+                }
+            });
+
+            // Remove PRs from deselected repos
+            if (reposToRemove.length > 0) {
+                allPRs = allPRs.filter(pr => {
+                    const prRepoKey = `${pr._project}/${pr._repo.id}`;
+                    return !reposToRemove.includes(prRepoKey);
+                });
+
+                // Remove from loaded set
+                reposToRemove.forEach(key => loadedRepoKeys.delete(key));
+
+                // Rebuild authors/reviewers from remaining PRs
                 allAuthors = new Set();
                 allReviewers = new Set();
+                allPRs.forEach(pr => {
+                    if (pr.createdBy) {
+                        allAuthors.add(pr.createdBy.displayName);
+                    }
+                    if (pr.reviewers) {
+                        pr.reviewers.forEach(reviewer => {
+                            allReviewers.add(reviewer.displayName);
+                        });
+                    }
+                });
+            }
 
-                // Load PRs from all selected repos in parallel
-                const prPromises = selectedRepos.map(repo =>
+            // If no new repos to load, just apply filters and return
+            if (reposToLoad.length === 0) {
+                updatePRSourceDisplay();
+                applyFilters();
+                return;
+            }
+
+            ADOUI.showLoading('results', `Loading Pull Requests from ${reposToLoad.length} new repositories...`);
+
+            try {
+                // Load PRs from new repos only
+                const prPromises = reposToLoad.map(repo =>
                     ADOAPI.getPRs(config, repo.projectName, repo.name, 'all')
                         .then(data => ({
                             repo: repo,
@@ -891,7 +1316,7 @@
 
                 const prResults = await Promise.all(prPromises);
 
-                // Collect all PRs and build author/reviewer lists
+                // Add new PRs and update author/reviewer lists
                 prResults.forEach(result => {
                     if (result.prs.length > 0) {
                         result.prs.forEach(pr => {
@@ -911,14 +1336,114 @@
                                 });
                             }
                         });
+
+                        // Mark repo as loaded with current timestamp
+                        const repoKey = `${result.repo.projectName}/${result.repo.id}`;
+                        loadedRepoKeys.set(repoKey, Date.now());
                     }
                 });
 
+                updatePRSourceDisplay();
                 applyFilters();
 
             } catch (error) {
                 ADOUI.showError('results', error.message);
             }
+        }
+
+        function updatePRSourceDisplay() {
+            const selectedRepos = getSelectedRepos();
+            const prSourceDisplay = document.getElementById('prSourceDisplay');
+
+            if (selectedRepos.length === 0) {
+                prSourceDisplay.classList.remove('show');
+                stopUpdateTimeInterval();
+                return;
+            }
+
+            // Create list of project/repo pairs
+            const repoList = selectedRepos
+                .map(repo => `${ADOContent.escapeHtml(repo.projectName)}/${ADOContent.escapeHtml(repo.name)}`)
+                .join(', ');
+
+            // Find oldest (most stale) timestamp from selected repos
+            let oldestTimestamp = null;
+            selectedRepos.forEach(repo => {
+                const repoKey = `${repo.projectName}/${repo.id}`;
+                const timestamp = loadedRepoKeys.get(repoKey);
+                if (timestamp) {
+                    if (!oldestTimestamp || timestamp < oldestTimestamp) {
+                        oldestTimestamp = timestamp;
+                    }
+                }
+            });
+
+            const timeAgo = oldestTimestamp ? getTimeAgo(oldestTimestamp) : '';
+            const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(oldest: ${timeAgo})</span>` : '';
+            const refreshButton = oldestTimestamp ? `<button onclick="refreshPRs()" style="margin-left: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; font-size: 12px; color: #0078d4;" title="Refresh PRs">↻ Refresh</button>` : '';
+
+            prSourceDisplay.innerHTML = `<strong>Loaded from:</strong> ${repoList}${timeDisplay}${refreshButton}`;
+            prSourceDisplay.classList.add('show');
+
+            // Start updating time display if not already running
+            if (oldestTimestamp && !updateTimeInterval) {
+                startUpdateTimeInterval();
+            }
+        }
+
+        function getTimeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+            const days = Math.floor(hours / 24);
+            return `${days} day${days !== 1 ? 's' : ''} ago`;
+        }
+
+        function startUpdateTimeInterval() {
+            // Update time display every 30 seconds
+            updateTimeInterval = setInterval(() => {
+                const selectedRepos = getSelectedRepos();
+
+                // Find oldest timestamp from selected repos
+                let oldestTimestamp = null;
+                selectedRepos.forEach(repo => {
+                    const repoKey = `${repo.projectName}/${repo.id}`;
+                    const timestamp = loadedRepoKeys.get(repoKey);
+                    if (timestamp) {
+                        if (!oldestTimestamp || timestamp < oldestTimestamp) {
+                            oldestTimestamp = timestamp;
+                        }
+                    }
+                });
+
+                if (oldestTimestamp) {
+                    const timeAgoElement = document.getElementById('timeAgo');
+                    if (timeAgoElement) {
+                        timeAgoElement.textContent = `(oldest: ${getTimeAgo(oldestTimestamp)})`;
+                    }
+                }
+            }, 30000);
+        }
+
+        function stopUpdateTimeInterval() {
+            if (updateTimeInterval) {
+                clearInterval(updateTimeInterval);
+                updateTimeInterval = null;
+            }
+        }
+
+        async function refreshPRs() {
+            // Clear cache and reload all selected repos
+            loadedRepoKeys.clear();
+            prCommentCounts = {};
+            allPRs = [];
+            allAuthors = new Set();
+            allReviewers = new Set();
+            await loadPRsFromSelection();
         }
 
         function getSelectedProjects() {
@@ -953,6 +1478,7 @@
 
         function applyFilters() {
             const prIdFilter = document.getElementById('prIdFilter').value.trim();
+            const titleFilter = document.getElementById('titleFilter').value.trim();
             const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
             const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
             const selectedStatuses = getSelectedStatuses();
@@ -961,6 +1487,21 @@
                 // PR ID filter
                 if (prIdFilter && pr.pullRequestId.toString() !== prIdFilter) {
                     return false;
+                }
+
+                // Title filter - subsequence matching
+                if (titleFilter) {
+                    const titleLower = pr.title.toLowerCase();
+                    const pieces = titleFilter.toLowerCase().split(/\s+/).filter(p => p.length > 0);
+
+                    let lastIndex = -1;
+                    for (const piece of pieces) {
+                        const index = titleLower.indexOf(piece, lastIndex + 1);
+                        if (index === -1) {
+                            return false;
+                        }
+                        lastIndex = index;
+                    }
                 }
 
                 // Status filter (if no statuses selected, show all)
@@ -988,6 +1529,9 @@
                 return true;
             });
 
+            // Reset to page 1 when filters change
+            currentPage = 1;
+
             displayPRs();
             updateSelectedFilters();
             updateURL();
@@ -1001,6 +1545,14 @@
             if (prIdFilter) {
                 filters.push({ label: `PR ID: ${prIdFilter}`, clear: () => {
                     document.getElementById('prIdFilter').value = '';
+                    applyFilters();
+                }});
+            }
+
+            const titleFilter = document.getElementById('titleFilter').value.trim();
+            if (titleFilter) {
+                filters.push({ label: `Title: ${titleFilter}`, clear: () => {
+                    document.getElementById('titleFilter').value = '';
                     applyFilters();
                 }});
             }
@@ -1048,44 +1600,150 @@
             }
         }
 
+        function sortPRs(column) {
+            // Toggle order if clicking same column, otherwise default to desc
+            if (currentSort === column) {
+                currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort = column;
+                currentOrder = 'desc';
+            }
+
+            // Reset to page 1 when sorting changes
+            currentPage = 1;
+
+            updateURL();
+            displayPRs();
+        }
+
+        function getSortedPRs() {
+            const sorted = [...filteredPRs];
+
+            sorted.sort((a, b) => {
+                let aVal, bVal;
+
+                switch (currentSort) {
+                    case 'id':
+                        aVal = a.pullRequestId;
+                        bVal = b.pullRequestId;
+                        break;
+                    case 'title':
+                        aVal = a.title.toLowerCase();
+                        bVal = b.title.toLowerCase();
+                        break;
+                    case 'author':
+                        aVal = a.createdBy.displayName.toLowerCase();
+                        bVal = b.createdBy.displayName.toLowerCase();
+                        break;
+                    case 'repository':
+                        aVal = `${a._project}/${a._repo.name}`.toLowerCase();
+                        bVal = `${b._project}/${b._repo.name}`.toLowerCase();
+                        break;
+                    case 'status':
+                        aVal = a.status.toLowerCase();
+                        bVal = b.status.toLowerCase();
+                        break;
+                    case 'created':
+                        aVal = new Date(a.creationDate);
+                        bVal = new Date(b.creationDate);
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aVal < bVal) return currentOrder === 'asc' ? -1 : 1;
+                if (aVal > bVal) return currentOrder === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            return sorted;
+        }
+
         function displayPRs() {
             const resultsDiv = document.getElementById('results');
+            const infoBar = document.getElementById('infoBar');
+            const paginationBar = document.getElementById('paginationBar');
 
             if (allPRs.length === 0) {
                 resultsDiv.innerHTML = '<div class="info">No Pull Requests loaded yet. Click "Load Pull Requests" to fetch data.</div>';
+                infoBar.innerHTML = '';
+                paginationBar.innerHTML = '';
                 return;
             }
 
             if (filteredPRs.length === 0) {
                 resultsDiv.innerHTML = '<div class="warning">No Pull Requests match the current filters.</div>';
+                infoBar.innerHTML = '';
+                paginationBar.innerHTML = '';
                 return;
             }
 
-            let html = `
-                <div style="margin-bottom: 15px; color: #605e5c;">
-                    Showing ${filteredPRs.length} of ${allPRs.length} Pull Requests
+            const sortedPRs = getSortedPRs();
+
+            // Pagination calculations
+            const totalPRs = sortedPRs.length;
+            const totalPages = Math.ceil(totalPRs / itemsPerPage);
+
+            // Ensure current page is within bounds
+            if (currentPage > totalPages && totalPages > 0) {
+                currentPage = totalPages;
+            }
+            if (currentPage < 1) {
+                currentPage = 1;
+            }
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, totalPRs);
+            const pagePRs = sortedPRs.slice(startIndex, endIndex);
+
+            const getSortIndicator = (column) => {
+                if (currentSort === column) {
+                    return `<span class="sort-indicator">${currentOrder === 'asc' ? '↑' : '↓'}</span>`;
+                }
+                return '';
+            };
+
+            // Build info bar
+            const infoBarHtml = `
+                <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-size: 14px;"><span>Show:</span><select onchange="changePerPage(this.value)" style="padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select><span>per page</span></label>
                 </div>
+            `;
+
+            // Build table
+            let tableHtml = `
                 <table class="pr-table">
                     <thead>
                         <tr>
-                            <th style="width: 80px;">ID</th>
-                            <th>Title</th>
-                            <th style="width: 150px;">Author</th>
-                            <th style="width: 200px;">Repository</th>
-                            <th style="width: 100px;">Status</th>
-                            <th style="width: 150px;">Created</th>
+                            <th class="sortable" onclick="sortPRs('id')" style="width: 80px;">ID${getSortIndicator('id')}</th>
+                            <th class="sortable" onclick="sortPRs('title')">Title${getSortIndicator('title')}</th>
+                            <th class="sortable" onclick="sortPRs('author')" style="width: 150px;">Author${getSortIndicator('author')}</th>
+                            <th class="sortable" onclick="sortPRs('repository')" style="width: 200px;">Repository${getSortIndicator('repository')}</th>
+                            <th style="width: 180px;">Reviewers</th>
+                            <th class="sortable" onclick="sortPRs('status')" style="width: 100px;">Status${getSortIndicator('status')}</th>
+                            <th style="width: 90px;">Comments</th>
+                            <th class="sortable" onclick="sortPRs('created')" style="width: 150px;">Created${getSortIndicator('created')}</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            filteredPRs.forEach(pr => {
+            pagePRs.forEach(pr => {
                 const statusClass = ADOUI.getStatusBadgeClass(pr.status);
                 const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}`;
                 const draftBadge = pr.isDraft ? '<span class="badge badge-draft" style="margin-left: 5px;">DRAFT</span>' : '';
 
-                html += `
-                    <tr>
+                // Get comment count display
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                let commentDisplay = '<span style="color: #8a8886;">-</span>';
+                if (prCommentCounts[prKey] !== undefined) {
+                    const count = prCommentCounts[prKey];
+                    commentDisplay = count > 0 ? `<span style="color: #d13438; font-weight: 600;">${count}</span>` : '<span style="color: #8a8886;">0</span>';
+                }
+
+                tableHtml += `
+                    <tr data-pr-key="${prKey}">
                         <td>
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
@@ -1106,18 +1764,187 @@
                             ${ADOContent.escapeHtml(pr._project)}<br>
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
                         </td>
+                        <td class="pr-meta" style="font-size: 12px;">
+                            ${pr.reviewers && pr.reviewers.length > 0
+                                ? pr.reviewers.map(r => ADOContent.escapeHtml(r.displayName)).join(', ')
+                                : '<span style="color: #8a8886;">-</span>'}
+                        </td>
                         <td><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
+                        <td class="pr-meta pr-comments" style="text-align: center;">${commentDisplay}</td>
                         <td class="pr-meta">${ADOUI.formatDate(pr.creationDate)}</td>
                     </tr>
                 `;
             });
 
-            html += `
+            tableHtml += `
                     </tbody>
                 </table>
             `;
 
-            resultsDiv.innerHTML = html;
+            // Build pagination controls
+            let paginationHtml = '';
+            if (totalPages > 1) {
+
+                // Previous button
+                if (currentPage > 1) {
+                    paginationHtml += `<button onclick="changePage(${currentPage - 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">← Previous</button>`;
+                } else {
+                    paginationHtml += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">← Previous</button>`;
+                }
+
+                // Page numbers
+                paginationHtml += '<div style="display: flex; gap: 5px;">';
+
+                const maxVisiblePages = 7;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                // Adjust start if we're near the end
+                if (endPage - startPage < maxVisiblePages - 1) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                // First page + ellipsis
+                if (startPage > 1) {
+                    paginationHtml += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">1</button>`;
+                    if (startPage > 2) {
+                        paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        // Add middle page in the gap
+                        const middlePage = Math.round((1 + startPage) / 2);
+                        if (middlePage > 1 && middlePage < startPage) {
+                            paginationHtml += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
+                            paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        }
+                    }
+                }
+
+                // Page number buttons
+                for (let i = startPage; i <= endPage; i++) {
+                    if (i === currentPage) {
+                        paginationHtml += `<button disabled style="padding: 8px 12px; background: #0078d4; border: 1px solid #0078d4; border-radius: 4px; color: white; font-weight: 600; min-width: 40px;">${i}</button>`;
+                    } else {
+                        paginationHtml += `<button onclick="changePage(${i})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${i}</button>`;
+                    }
+                }
+
+                // Ellipsis + last page
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        // Add middle page in the gap
+                        const middlePage = Math.round((endPage + totalPages) / 2);
+                        if (middlePage > endPage && middlePage < totalPages) {
+                            paginationHtml += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
+                            paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
+                        }
+                    }
+                    paginationHtml += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">${totalPages}</button>`;
+                }
+
+                paginationHtml += '</div>';
+
+                // Next button
+                if (currentPage < totalPages) {
+                    paginationHtml += `<button onclick="changePage(${currentPage + 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 4px; cursor: pointer; color: #0078d4;">Next →</button>`;
+                } else {
+                    paginationHtml += `<button disabled style="padding: 8px 12px; background: #f3f2f1; border: 1px solid #d1d1d1; border-radius: 4px; cursor: not-allowed; color: #8a8886;">Next →</button>`;
+                }
+            }
+
+            // Update DOM
+            infoBar.innerHTML = infoBarHtml;
+            resultsDiv.innerHTML = tableHtml;
+            paginationBar.innerHTML = paginationHtml;
+
+            // Start fetching comment counts after rendering
+            fetchCommentCounts();
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            updateURL();
+            displayPRs();
+            // Scroll to top of results
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function changePerPage(perPage) {
+            itemsPerPage = parseInt(perPage);
+            currentPage = 1; // Reset to first page
+            updateURL();
+            displayPRs();
+        }
+
+        async function fetchCommentCounts() {
+            if (isFetchingComments) return;
+            isFetchingComments = true;
+
+            const config = ADOConfig.get();
+
+            // Phase 1: Fetch for visible PRs on current page first
+            const sortedPRs = getSortedPRs();
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, sortedPRs.length);
+            const visiblePRs = sortedPRs.slice(startIndex, endIndex);
+            await fetchCommentCountsBatch(config, visiblePRs, 5);
+
+            // Phase 2: Fetch for remaining PRs in background
+            const remainingPRs = allPRs.filter(pr => {
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                return prCommentCounts[prKey] === undefined;
+            });
+
+            if (remainingPRs.length > 0) {
+                await fetchCommentCountsBatch(config, remainingPRs, 5);
+            }
+
+            isFetchingComments = false;
+        }
+
+        async function fetchCommentCountsBatch(config, prs, batchSize) {
+            for (let i = 0; i < prs.length; i += batchSize) {
+                const batch = prs.slice(i, i + batchSize);
+                const promises = batch.map(pr => fetchPRCommentCount(config, pr));
+                await Promise.all(promises);
+            }
+        }
+
+        async function fetchPRCommentCount(config, pr) {
+            const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+
+            // Skip if already fetched
+            if (prCommentCounts[prKey] !== undefined) {
+                return;
+            }
+
+            try {
+                const threads = await ADOAPI.getThreads(config, pr._project, pr._repo.id, pr.pullRequestId);
+                const activeCount = (threads.value || []).filter(thread =>
+                    !thread.isDeleted &&
+                    (thread.status === 'active' || thread.status === 'Active' || thread.status === 1)
+                ).length;
+
+                prCommentCounts[prKey] = activeCount;
+                updatePRCommentDisplay(prKey, activeCount);
+            } catch (error) {
+                // On error, mark as fetched with 0 to avoid retrying
+                prCommentCounts[prKey] = 0;
+                updatePRCommentDisplay(prKey, 0);
+            }
+        }
+
+        function updatePRCommentDisplay(prKey, count) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            const commentCell = row.querySelector('.pr-comments');
+            if (!commentCell) return;
+
+            if (count > 0) {
+                commentCell.innerHTML = `<span style="color: #d13438; font-weight: 600;">${count}</span>`;
+            } else {
+                commentCell.innerHTML = '<span style="color: #8a8886;">0</span>';
+            }
         }
 
         function openPRLink(project, repository, prId) {
@@ -1178,8 +2005,84 @@
             }
         });
 
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('loadPRModal');
+                if (modal.classList.contains('show')) {
+                    closeLoadPRModal();
+                }
+            }
+        });
+
+        // Sidebar resize functionality
+        (function initSidebarResize() {
+            const resizeHandle = document.getElementById('resizeHandle');
+            const sidebar = document.querySelector('.sidebar');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const delta = e.clientX - startX;
+                const newWidth = startWidth + delta;
+
+                // Apply min/max constraints
+                if (newWidth >= 200 && newWidth <= 600) {
+                    sidebar.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
+
+        // Auto-refresh on tab visibility (if data is older than 5 minutes)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && loadedRepoKeys.size > 0) {
+                const selectedRepos = getSelectedRepos();
+
+                // Find oldest timestamp from selected repos
+                let oldestTimestamp = null;
+                selectedRepos.forEach(repo => {
+                    const repoKey = `${repo.projectName}/${repo.id}`;
+                    const timestamp = loadedRepoKeys.get(repoKey);
+                    if (timestamp) {
+                        if (!oldestTimestamp || timestamp < oldestTimestamp) {
+                            oldestTimestamp = timestamp;
+                        }
+                    }
+                });
+
+                if (oldestTimestamp) {
+                    const minutesSinceLoad = (Date.now() - oldestTimestamp) / 1000 / 60;
+                    if (minutesSinceLoad > 5) {
+                        console.log('Tab became visible and data is stale, auto-refreshing...');
+                        refreshPRs();
+                    }
+                }
+            }
+        });
+
         function clearFilters() {
             document.getElementById('prIdFilter').value = '';
+            document.getElementById('titleFilter').value = '';
             document.getElementById('createdByFilter').value = '';
             document.getElementById('assignedToFilter').value = '';
 
