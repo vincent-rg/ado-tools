@@ -604,9 +604,180 @@
             font-size: 12px;
             color: #0078d4;
         }
+
+        /* Live update notification banner */
+        .notification-banner {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #0078d4;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 2000;
+            max-width: 400px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification-banner.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(450px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .notification-icon {
+            font-size: 20px;
+        }
+
+        .notification-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .notification-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .notification-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .notification-btn-primary {
+            background: white;
+            color: #0078d4;
+        }
+
+        .notification-btn-primary:hover {
+            background: #f3f2f1;
+        }
+
+        .notification-btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .notification-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Grayed out PR rows */
+        .pr-table tbody tr.grayed-out {
+            opacity: 0.4;
+            background: #faf9f8;
+        }
+
+        .pr-table tbody tr.grayed-out:hover {
+            opacity: 0.5;
+            background: #f3f2f1;
+        }
+
+        .filter-indicator {
+            display: inline-block;
+            font-size: 11px;
+            color: #8a8886;
+            font-style: italic;
+            margin-left: 8px;
+        }
+
+        /* Row update highlight animation */
+        @keyframes rowHighlight {
+            0% {
+                background: #fff4ce;
+            }
+            100% {
+                background: transparent;
+            }
+        }
+
+        .pr-table tbody tr.updated {
+            animation: rowHighlight 2s ease;
+        }
+
+        /* Live update indicator */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #605e5c;
+            padding: 4px 8px;
+            background: white;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+        }
+
+        .live-indicator.active {
+            color: #107c10;
+            border-color: #107c10;
+        }
+
+        .live-indicator.paused {
+            color: #8a8886;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #8a8886;
+        }
+
+        .live-dot.active {
+            background: #107c10;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.4;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Notification Banner -->
+    <div id="notificationBanner" class="notification-banner">
+        <div class="notification-content">
+            <span class="notification-icon">🔔</span>
+            <div>
+                <div class="notification-text" id="notificationText"></div>
+                <div class="notification-actions">
+                    <button class="notification-btn notification-btn-primary" onclick="applyLiveUpdates()">Refresh Now</button>
+                    <button class="notification-btn notification-btn-secondary" onclick="dismissNotification()">Dismiss</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container wide">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
@@ -685,6 +856,10 @@
             <div class="main-content">
                 <div class="toolbar">
                     <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="width: auto; padding: 10px 20px;">Load Pull Requests</button>
+                    <div id="liveIndicator" class="live-indicator" style="display: none;">
+                        <span class="live-dot"></span>
+                        <span id="liveIndicatorText">Live</span>
+                    </div>
                     <div id="prSourceDisplay" class="pr-source-display"></div>
                 </div>
 
@@ -749,6 +924,16 @@
         let currentPage = 1;
         let itemsPerPage = 50;
 
+        // Live update system
+        let backgroundPollInterval = null;
+        let lastUserInteraction = Date.now();
+        let isBackgroundPolling = false;
+        let POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
+        let USER_INTERACTION_PAUSE = 10 * 1000; // 10 seconds
+        let newPRsDetected = [];
+        let newFilterMatchesDetected = [];
+        let grayedOutPRKeys = new Set(); // Track PRs that no longer match filters
+
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
 
@@ -766,6 +951,9 @@
             if (selectedRepos.length > 0) {
                 await loadPRsFromSelection();
             }
+
+            // Initialize user interaction tracking
+            initializeUserInteractionTracking();
         });
 
         // URL parameter helpers
@@ -1346,6 +1534,9 @@
                 updatePRSourceDisplay();
                 applyFilters();
 
+                // Start background polling after successful load
+                startBackgroundPolling();
+
             } catch (error) {
                 ADOUI.showError('results', error.message);
             }
@@ -1443,6 +1634,13 @@
             allPRs = [];
             allAuthors = new Set();
             allReviewers = new Set();
+
+            // Clear live update state
+            grayedOutPRKeys.clear();
+            newPRsDetected = [];
+            newFilterMatchesDetected = [];
+            dismissNotification();
+
             await loadPRsFromSelection();
         }
 
@@ -1477,6 +1675,9 @@
         }
 
         function applyFilters() {
+            // Clear grayed out PRs when filters change
+            grayedOutPRKeys.clear();
+
             const prIdFilter = document.getElementById('prIdFilter').value.trim();
             const titleFilter = document.getElementById('titleFilter').value.trim();
             const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
@@ -1742,8 +1943,13 @@
                     commentDisplay = count > 0 ? `<span style="color: #d13438; font-weight: 600;">${count}</span>` : '<span style="color: #8a8886;">0</span>';
                 }
 
+                // Check if row should be grayed out
+                const isGrayedOut = grayedOutPRKeys.has(prKey);
+                const grayedOutClass = isGrayedOut ? ' grayed-out' : '';
+                const filterIndicator = isGrayedOut ? '<span class="filter-indicator">(no longer matches filters)</span>' : '';
+
                 tableHtml += `
-                    <tr data-pr-key="${prKey}">
+                    <tr data-pr-key="${prKey}" class="${grayedOutClass}">
                         <td>
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
@@ -1755,7 +1961,7 @@
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
-                                <div class="pr-title">${ADOContent.escapeHtml(pr.title)}</div>
+                                <div class="pr-title">${ADOContent.escapeHtml(pr.title)}${filterIndicator}</div>
                                 ${pr.description ? `<div class="pr-description">${ADOContent.escapeHtml(pr.description)}</div>` : ''}
                             </a>
                         </td>
@@ -1861,6 +2067,9 @@
         }
 
         function changePage(page) {
+            // Clear grayed out PRs when page changes
+            grayedOutPRKeys.clear();
+
             currentPage = page;
             updateURL();
             displayPRs();
@@ -2054,6 +2263,7 @@
         })();
 
         // Auto-refresh on tab visibility (if data is older than 5 minutes)
+        // Now handled by background polling, but keep for very stale data
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && loadedRepoKeys.size > 0) {
                 const selectedRepos = getSelectedRepos();
@@ -2072,9 +2282,15 @@
 
                 if (oldestTimestamp) {
                     const minutesSinceLoad = (Date.now() - oldestTimestamp) / 1000 / 60;
-                    if (minutesSinceLoad > 5) {
-                        console.log('Tab became visible and data is stale, auto-refreshing...');
+                    if (minutesSinceLoad > 10) {
+                        // Only refresh if data is very stale (>10 minutes)
+                        // Background polling handles fresher data
+                        console.log('Tab became visible and data is very stale, auto-refreshing...');
                         refreshPRs();
+                    } else if (backgroundPollInterval) {
+                        // Trigger an immediate background poll when tab becomes visible
+                        console.log('Tab became visible, triggering background poll...');
+                        performBackgroundPoll();
                     }
                 }
             }
@@ -2095,6 +2311,469 @@
             });
 
             applyFilters(); // This will call updateURL()
+        }
+
+        // ============================================
+        // Live Update System
+        // ============================================
+
+        function initializeUserInteractionTracking() {
+            // Track various user interactions
+            const interactionEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+
+            interactionEvents.forEach(eventType => {
+                document.addEventListener(eventType, () => {
+                    lastUserInteraction = Date.now();
+                }, { passive: true });
+            });
+        }
+
+        function isUserActivelyInteracting() {
+            const timeSinceInteraction = Date.now() - lastUserInteraction;
+            return timeSinceInteraction < USER_INTERACTION_PAUSE;
+        }
+
+        function startBackgroundPolling() {
+            if (backgroundPollInterval) {
+                return; // Already running
+            }
+
+            updateLiveIndicator(true);
+
+            backgroundPollInterval = setInterval(async () => {
+                if (document.hidden) {
+                    // Don't poll if tab is hidden
+                    return;
+                }
+
+                if (isUserActivelyInteracting()) {
+                    // Don't update if user is actively interacting
+                    console.log('User is actively interacting, skipping background poll');
+                    return;
+                }
+
+                const selectedRepos = getSelectedRepos();
+                if (selectedRepos.length === 0) {
+                    stopBackgroundPolling();
+                    return;
+                }
+
+                await performBackgroundPoll();
+            }, POLL_INTERVAL);
+
+            console.log('Background polling started');
+        }
+
+        function stopBackgroundPolling() {
+            if (backgroundPollInterval) {
+                clearInterval(backgroundPollInterval);
+                backgroundPollInterval = null;
+                updateLiveIndicator(false);
+                console.log('Background polling stopped');
+            }
+        }
+
+        function updateLiveIndicator(isActive) {
+            const indicator = document.getElementById('liveIndicator');
+            const dot = indicator.querySelector('.live-dot');
+            const text = document.getElementById('liveIndicatorText');
+
+            if (isActive && loadedRepoKeys.size > 0) {
+                indicator.style.display = 'inline-flex';
+                indicator.classList.add('active');
+                indicator.classList.remove('paused');
+                dot.classList.add('active');
+                text.textContent = 'Live';
+            } else if (loadedRepoKeys.size > 0) {
+                indicator.style.display = 'inline-flex';
+                indicator.classList.remove('active');
+                indicator.classList.add('paused');
+                dot.classList.remove('active');
+                text.textContent = 'Paused';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+
+        async function performBackgroundPoll() {
+            if (isBackgroundPolling) {
+                return; // Already polling
+            }
+
+            isBackgroundPolling = true;
+            console.log('Performing background poll...');
+
+            try {
+                const config = ADOConfig.get();
+                const selectedRepos = getSelectedRepos();
+
+                // Fetch fresh PR data
+                const prPromises = selectedRepos.map(repo =>
+                    ADOAPI.getPRs(config, repo.projectName, repo.name, 'all')
+                        .then(data => ({
+                            repo: repo,
+                            prs: data.value || []
+                        }))
+                        .catch(error => ({
+                            repo: repo,
+                            prs: [],
+                            error: error.message
+                        }))
+                );
+
+                const prResults = await Promise.all(prPromises);
+
+                // Build fresh PR list with metadata
+                const freshPRs = [];
+                prResults.forEach(result => {
+                    result.prs.forEach(pr => {
+                        pr._repo = result.repo;
+                        pr._project = result.repo.projectName;
+                        freshPRs.push(pr);
+                    });
+                });
+
+                // Detect changes
+                const changes = detectChanges(allPRs, freshPRs);
+
+                if (changes.hasChanges) {
+                    console.log('Changes detected:', changes);
+                    await handleDetectedChanges(changes, freshPRs);
+                }
+
+                // Update timestamps
+                selectedRepos.forEach(repo => {
+                    const repoKey = `${repo.projectName}/${repo.id}`;
+                    loadedRepoKeys.set(repoKey, Date.now());
+                });
+
+                updatePRSourceDisplay();
+
+            } catch (error) {
+                console.error('Background poll error:', error);
+            } finally {
+                isBackgroundPolling = false;
+            }
+        }
+
+        function getPRKey(pr) {
+            return `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+        }
+
+        function detectChanges(oldPRs, freshPRs) {
+            const changes = {
+                hasChanges: false,
+                newPRs: [],
+                updatedPRs: [],
+                removedPRKeys: [],
+                newFilterMatches: []
+            };
+
+            // Create maps for quick lookup
+            const oldPRMap = new Map();
+            oldPRs.forEach(pr => {
+                oldPRMap.set(getPRKey(pr), pr);
+            });
+
+            const freshPRMap = new Map();
+            freshPRs.forEach(pr => {
+                freshPRMap.set(getPRKey(pr), pr);
+            });
+
+            // Detect new and updated PRs
+            freshPRs.forEach(freshPR => {
+                const prKey = getPRKey(freshPR);
+                const oldPR = oldPRMap.get(prKey);
+
+                if (!oldPR) {
+                    // New PR
+                    changes.newPRs.push(freshPR);
+                    changes.hasChanges = true;
+
+                    // Check if it matches current filters
+                    if (prMatchesFilters(freshPR)) {
+                        changes.newFilterMatches.push(freshPR);
+                    }
+                } else {
+                    // Check if PR has been updated
+                    if (hasPRChanged(oldPR, freshPR)) {
+                        changes.updatedPRs.push({
+                            old: oldPR,
+                            fresh: freshPR,
+                            prKey: prKey
+                        });
+                        changes.hasChanges = true;
+                    }
+                }
+            });
+
+            // Detect removed PRs
+            oldPRs.forEach(oldPR => {
+                const prKey = getPRKey(oldPR);
+                if (!freshPRMap.has(prKey)) {
+                    changes.removedPRKeys.push(prKey);
+                    changes.hasChanges = true;
+                }
+            });
+
+            return changes;
+        }
+
+        function hasPRChanged(oldPR, freshPR) {
+            // Check if important fields have changed
+            return (
+                oldPR.status !== freshPR.status ||
+                oldPR.title !== freshPR.title ||
+                oldPR.isDraft !== freshPR.isDraft ||
+                JSON.stringify(oldPR.reviewers) !== JSON.stringify(freshPR.reviewers) ||
+                oldPR.description !== freshPR.description
+            );
+        }
+
+        function prMatchesFilters(pr) {
+            const prIdFilter = document.getElementById('prIdFilter').value.trim();
+            const titleFilter = document.getElementById('titleFilter').value.trim();
+            const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
+            const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
+            const selectedStatuses = getSelectedStatuses();
+
+            // PR ID filter
+            if (prIdFilter && pr.pullRequestId.toString() !== prIdFilter) {
+                return false;
+            }
+
+            // Title filter
+            if (titleFilter) {
+                const titleLower = pr.title.toLowerCase();
+                const pieces = titleFilter.toLowerCase().split(/\s+/).filter(p => p.length > 0);
+
+                let lastIndex = -1;
+                for (const piece of pieces) {
+                    const index = titleLower.indexOf(piece, lastIndex + 1);
+                    if (index === -1) {
+                        return false;
+                    }
+                    lastIndex = index;
+                }
+            }
+
+            // Status filter
+            if (selectedStatuses.length > 0) {
+                if (!selectedStatuses.includes(pr.status.toLowerCase())) {
+                    return false;
+                }
+            }
+
+            // Created by filter
+            if (createdByFilter && !pr.createdBy.displayName.toLowerCase().includes(createdByFilter)) {
+                return false;
+            }
+
+            // Assigned to filter
+            if (assignedToFilter) {
+                const hasReviewer = pr.reviewers.some(reviewer =>
+                    reviewer.displayName.toLowerCase().includes(assignedToFilter)
+                );
+                if (!hasReviewer) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        async function handleDetectedChanges(changes, freshPRs) {
+            // Handle updated PRs (in-place updates)
+            if (changes.updatedPRs.length > 0) {
+                changes.updatedPRs.forEach(update => {
+                    // Update the PR in allPRs
+                    const index = allPRs.findIndex(pr => getPRKey(pr) === update.prKey);
+                    if (index !== -1) {
+                        allPRs[index] = update.fresh;
+                    }
+
+                    // Check if PR still matches filters
+                    const stillMatches = prMatchesFilters(update.fresh);
+                    const wasVisible = filteredPRs.some(pr => getPRKey(pr) === update.prKey);
+
+                    if (wasVisible && !stillMatches) {
+                        // PR no longer matches, gray it out
+                        grayedOutPRKeys.add(update.prKey);
+                    } else if (wasVisible && stillMatches) {
+                        // Update in place with highlight
+                        updatePRRowInPlace(update.prKey, update.fresh);
+                    }
+                });
+
+                // Update authors/reviewers
+                updateAuthorsAndReviewers();
+            }
+
+            // Handle removed PRs
+            if (changes.removedPRKeys.length > 0) {
+                changes.removedPRKeys.forEach(prKey => {
+                    grayedOutPRKeys.add(prKey);
+                });
+            }
+
+            // Store new PRs for notification
+            if (changes.newPRs.length > 0) {
+                newPRsDetected = changes.newPRs;
+            }
+
+            // Store new filter matches for notification
+            if (changes.newFilterMatches.length > 0) {
+                // Only add if they're truly new (not already in newPRsDetected from before)
+                const existingNewPRKeys = new Set(newPRsDetected.map(pr => getPRKey(pr)));
+                const additionalMatches = changes.newFilterMatches.filter(pr =>
+                    !existingNewPRKeys.has(getPRKey(pr))
+                );
+
+                if (additionalMatches.length > 0) {
+                    newFilterMatchesDetected = [...newFilterMatchesDetected, ...additionalMatches];
+                }
+            }
+
+            // Show notification if needed
+            if ((newPRsDetected.length > 0 || newFilterMatchesDetected.length > 0) && !document.getElementById('notificationBanner').classList.contains('show')) {
+                showNotification();
+            }
+
+            // Re-apply filters to update grayed out rows
+            if (changes.updatedPRs.length > 0 || changes.removedPRKeys.length > 0) {
+                applyFiltersWithoutReset();
+            }
+        }
+
+        function updatePRRowInPlace(prKey, freshPR) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            // Update status badge
+            const statusCell = row.querySelector('.badge');
+            if (statusCell) {
+                const statusClass = ADOUI.getStatusBadgeClass(freshPR.status);
+                statusCell.className = `badge ${statusClass}`;
+                statusCell.textContent = freshPR.status.toUpperCase();
+            }
+
+            // Update draft badge
+            const titleCell = row.querySelector('.pr-title').parentElement;
+            const existingDraftBadge = titleCell.querySelector('.badge-draft');
+            if (freshPR.isDraft && !existingDraftBadge) {
+                const draftBadge = document.createElement('span');
+                draftBadge.className = 'badge badge-draft';
+                draftBadge.style.marginLeft = '5px';
+                draftBadge.textContent = 'DRAFT';
+                titleCell.appendChild(draftBadge);
+            } else if (!freshPR.isDraft && existingDraftBadge) {
+                existingDraftBadge.remove();
+            }
+
+            // Update reviewers
+            const reviewerCells = row.querySelectorAll('.pr-meta');
+            if (reviewerCells.length >= 2) {
+                const reviewerCell = reviewerCells[1];
+                if (freshPR.reviewers && freshPR.reviewers.length > 0) {
+                    reviewerCell.innerHTML = freshPR.reviewers.map(r => ADOContent.escapeHtml(r.displayName)).join(', ');
+                } else {
+                    reviewerCell.innerHTML = '<span style="color: #8a8886;">-</span>';
+                }
+            }
+
+            // Add highlight animation
+            row.classList.remove('updated');
+            void row.offsetWidth; // Trigger reflow
+            row.classList.add('updated');
+        }
+
+        function applyFiltersWithoutReset() {
+            // Same as applyFilters but doesn't reset page or clear grayed out set
+            const prIdFilter = document.getElementById('prIdFilter').value.trim();
+            const titleFilter = document.getElementById('titleFilter').value.trim();
+            const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
+            const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
+            const selectedStatuses = getSelectedStatuses();
+
+            filteredPRs = allPRs.filter(pr => {
+                return prMatchesFilters(pr);
+            });
+
+            displayPRs();
+            updateSelectedFilters();
+            updateURL();
+        }
+
+        function updateAuthorsAndReviewers() {
+            allAuthors = new Set();
+            allReviewers = new Set();
+
+            allPRs.forEach(pr => {
+                if (pr.createdBy) {
+                    allAuthors.add(pr.createdBy.displayName);
+                }
+                if (pr.reviewers) {
+                    pr.reviewers.forEach(reviewer => {
+                        allReviewers.add(reviewer.displayName);
+                    });
+                }
+            });
+        }
+
+        function showNotification() {
+            const banner = document.getElementById('notificationBanner');
+            const text = document.getElementById('notificationText');
+
+            let message = '';
+            const parts = [];
+
+            if (newPRsDetected.length > 0) {
+                parts.push(`${newPRsDetected.length} new PR${newPRsDetected.length !== 1 ? 's' : ''} available`);
+            }
+
+            if (newFilterMatchesDetected.length > 0) {
+                parts.push(`${newFilterMatchesDetected.length} PR${newFilterMatchesDetected.length !== 1 ? 's' : ''} now match your filters`);
+            }
+
+            message = parts.join(' • ');
+
+            text.textContent = message;
+            banner.classList.add('show');
+        }
+
+        function dismissNotification() {
+            const banner = document.getElementById('notificationBanner');
+            banner.classList.remove('show');
+        }
+
+        function applyLiveUpdates() {
+            // Clear grayed out PRs
+            grayedOutPRKeys.clear();
+
+            // Add new PRs to allPRs
+            newPRsDetected.forEach(pr => {
+                allPRs.push(pr);
+
+                // Update authors/reviewers
+                if (pr.createdBy) {
+                    allAuthors.add(pr.createdBy.displayName);
+                }
+                if (pr.reviewers) {
+                    pr.reviewers.forEach(reviewer => {
+                        allReviewers.add(reviewer.displayName);
+                    });
+                }
+            });
+
+            // Clear detection arrays
+            newPRsDetected = [];
+            newFilterMatchesDetected = [];
+
+            // Dismiss notification
+            dismissNotification();
+
+            // Re-apply filters and display
+            applyFilters();
         }
     </script>
 </body>
