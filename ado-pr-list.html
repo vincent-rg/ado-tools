@@ -574,6 +574,9 @@
 
         .info-bar label {
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .pagination-bar {
@@ -1707,7 +1710,7 @@
             const infoBarHtml = `
                 <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <label style="font-size: 14px;">Show: <select onchange="changePerPage(this.value)" style="margin-left: 5px; padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select> per page</label>
+                    <label style="font-size: 14px;"><span>Show:</span><select onchange="changePerPage(this.value)" style="padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select><span>per page</span></label>
                 </div>
             `;
 
