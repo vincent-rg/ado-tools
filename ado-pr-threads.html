@@ -461,6 +461,18 @@
                         <option value="">All authors</option>
                     </select>
                 </div>
+
+                <div class="filter-group" style="flex: 1;">
+                    <label for="commentAuthorFilter">Comments by User</label>
+                    <select id="commentAuthorFilter" onchange="applyThreadFilters()">
+                        <option value="">All users</option>
+                    </select>
+                </div>
+
+                <div class="filter-group" style="flex: 1;">
+                    <label for="searchFilter">Search in Comments</label>
+                    <input type="text" id="searchFilter" placeholder="Search text..." oninput="applyThreadFilters()" style="padding: 8px; border: 1px solid #d1d1d1; border-radius: 4px; width: 100%; background: white;">
+                </div>
             </div>
             <div style="margin-top: 15px; color: #605e5c; font-size: 13px;">
                 Showing <span id="filteredCount">0</span> of <span id="totalCount">0</span> threads
@@ -585,6 +597,8 @@
                 status: statusParam ? (statusParam === 'none' ? [] : statusParam.split(',')) : null,
                 showDeleted: params.get('showDeleted') !== null ? params.get('showDeleted') === 'true' : null,
                 author: params.get('author') || null,
+                commentAuthor: params.get('commentAuthor') || null,
+                search: params.get('search') || null,
                 view: params.get('view') || null
             };
         }
@@ -614,6 +628,18 @@
             const author = document.getElementById('threadAuthorFilter').value;
             if (author) {
                 params.set('author', author);
+            }
+
+            // Comment author filter
+            const commentAuthor = document.getElementById('commentAuthorFilter').value;
+            if (commentAuthor) {
+                params.set('commentAuthor', commentAuthor);
+            }
+
+            // Search filter
+            const search = document.getElementById('searchFilter').value.trim();
+            if (search) {
+                params.set('search', search);
             }
 
             // View mode
@@ -661,6 +687,20 @@
                     if (option) {
                         authorSelect.value = urlParams.author;
                     }
+                }
+
+                // Restore comment author filter
+                if (urlParams.commentAuthor) {
+                    const commentAuthorSelect = document.getElementById('commentAuthorFilter');
+                    const option = Array.from(commentAuthorSelect.options).find(opt => opt.value === urlParams.commentAuthor);
+                    if (option) {
+                        commentAuthorSelect.value = urlParams.commentAuthor;
+                    }
+                }
+
+                // Restore search filter
+                if (urlParams.search) {
+                    document.getElementById('searchFilter').value = urlParams.search;
                 }
 
                 // Restore view mode
@@ -731,30 +771,49 @@
         }
 
         function populateAuthorFilter() {
-            const authorFilter = document.getElementById('threadAuthorFilter');
-            const authors = new Set();
+            const threadAuthorFilter = document.getElementById('threadAuthorFilter');
+            const commentAuthorFilter = document.getElementById('commentAuthorFilter');
+            const threadAuthors = new Set();
+            const allCommentAuthors = new Set();
 
             allThreads.forEach(thread => {
                 if (thread.comments && thread.comments.length > 0) {
+                    // Collect first comment authors for thread author filter
                     const firstComment = thread.comments[0];
                     if (firstComment.author && firstComment.author.displayName) {
-                        authors.add(firstComment.author.displayName);
+                        threadAuthors.add(firstComment.author.displayName);
                     }
+
+                    // Collect all comment authors for comment author filter
+                    thread.comments.forEach(comment => {
+                        if (comment.author && comment.author.displayName) {
+                            allCommentAuthors.add(comment.author.displayName);
+                        }
+                    });
                 }
             });
 
-            let html = '<option value="">All authors</option>';
-            Array.from(authors).sort().forEach(author => {
-                html += `<option value="${ADOContent.escapeHtml(author)}">${ADOContent.escapeHtml(author)}</option>`;
+            // Populate thread author filter
+            let threadAuthorHtml = '<option value="">All authors</option>';
+            Array.from(threadAuthors).sort().forEach(author => {
+                threadAuthorHtml += `<option value="${ADOContent.escapeHtml(author)}">${ADOContent.escapeHtml(author)}</option>`;
             });
+            threadAuthorFilter.innerHTML = threadAuthorHtml;
 
-            authorFilter.innerHTML = html;
+            // Populate comment author filter
+            let commentAuthorHtml = '<option value="">All users</option>';
+            Array.from(allCommentAuthors).sort().forEach(author => {
+                commentAuthorHtml += `<option value="${ADOContent.escapeHtml(author)}">${ADOContent.escapeHtml(author)}</option>`;
+            });
+            commentAuthorFilter.innerHTML = commentAuthorHtml;
         }
 
         function applyThreadFilters() {
             const showDeleted = document.getElementById('showDeleted').checked;
             const selectedStatuses = getSelectedThreadStatuses();
             const selectedAuthor = document.getElementById('threadAuthorFilter').value;
+            const selectedCommentAuthor = document.getElementById('commentAuthorFilter').value;
+            const searchText = document.getElementById('searchFilter').value.trim();
 
             const filtered = allThreads.filter(thread => {
                 // Deleted filter
@@ -789,6 +848,33 @@
                     }
                     const firstComment = thread.comments[0];
                     if (!firstComment.author || firstComment.author.displayName !== selectedAuthor) {
+                        return false;
+                    }
+                }
+
+                // Comment author filter (any comment from selected user)
+                if (selectedCommentAuthor) {
+                    if (!thread.comments || thread.comments.length === 0) {
+                        return false;
+                    }
+                    const hasCommentFromUser = thread.comments.some(comment =>
+                        comment.author && comment.author.displayName === selectedCommentAuthor
+                    );
+                    if (!hasCommentFromUser) {
+                        return false;
+                    }
+                }
+
+                // Search filter (search in all comment content)
+                if (searchText) {
+                    if (!thread.comments || thread.comments.length === 0) {
+                        return false;
+                    }
+                    const searchLower = searchText.toLowerCase();
+                    const hasMatchingContent = thread.comments.some(comment =>
+                        comment.content && comment.content.toLowerCase().includes(searchLower)
+                    );
+                    if (!hasMatchingContent) {
                         return false;
                     }
                 }
