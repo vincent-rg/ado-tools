@@ -917,7 +917,7 @@
         let isRestoringFromURL = false;
         let currentSort = 'id';
         let currentOrder = 'desc';
-        let prCommentCounts = {}; // Cache for active comment counts by PR ID
+        let prCommentCounts = {}; // Cache for active comment counts: { prKey: { count: N, lastFetch: timestamp, lastAccess: timestamp } }
         let isFetchingComments = false;
         let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
         let updateTimeInterval = null; // Interval for updating "time ago" display
@@ -933,6 +933,14 @@
         let newPRsDetected = [];
         let newFilterMatchesDetected = [];
         let grayedOutPRKeys = new Set(); // Track PRs that no longer match filters
+
+        // Comment fetch priority queue settings
+        let commentFetchQueue = [];
+        let isFetchingPriorityQueue = false;
+        const MAX_CONCURRENT_COMMENT_FETCHES = 5;
+        const BATCH_DELAY_MS = 200;
+        const MAX_CALLS_PER_CYCLE = 120;
+        const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
@@ -1939,8 +1947,13 @@
                 const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
                 let commentDisplay = '<span style="color: #8a8886;">-</span>';
                 if (prCommentCounts[prKey] !== undefined) {
-                    const count = prCommentCounts[prKey];
+                    const count = prCommentCounts[prKey].count !== undefined ? prCommentCounts[prKey].count : prCommentCounts[prKey];
                     commentDisplay = count > 0 ? `<span style="color: #d13438; font-weight: 600;">${count}</span>` : '<span style="color: #8a8886;">0</span>';
+
+                    // Update access time for LRU
+                    if (prCommentCounts[prKey].lastAccess !== undefined) {
+                        prCommentCounts[prKey].lastAccess = Date.now();
+                    }
                 }
 
                 // Check if row should be grayed out
@@ -2062,8 +2075,8 @@
             resultsDiv.innerHTML = tableHtml;
             paginationBar.innerHTML = paginationHtml;
 
-            // Start fetching comment counts after rendering
-            fetchCommentCounts();
+            // Start fetching comment counts after rendering using priority queue
+            processPriorityQueue();
         }
 
         function changePage(page) {
@@ -2090,24 +2103,149 @@
 
             const config = ADOConfig.get();
 
-            // Phase 1: Fetch for visible PRs on current page first
+            // Phase 1: Fetch for visible PRs on current page first (high priority)
             const sortedPRs = getSortedPRs();
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = Math.min(startIndex + itemsPerPage, sortedPRs.length);
             const visiblePRs = sortedPRs.slice(startIndex, endIndex);
-            await fetchCommentCountsBatch(config, visiblePRs, 5);
+            await fetchCommentCountsBatch(config, visiblePRs, MAX_CONCURRENT_COMMENT_FETCHES);
 
-            // Phase 2: Fetch for remaining PRs in background
+            // Phase 2: Fetch for remaining PRs in background (low priority)
             const remainingPRs = allPRs.filter(pr => {
                 const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
                 return prCommentCounts[prKey] === undefined;
             });
 
             if (remainingPRs.length > 0) {
-                await fetchCommentCountsBatch(config, remainingPRs, 5);
+                await fetchCommentCountsBatch(config, remainingPRs, MAX_CONCURRENT_COMMENT_FETCHES);
             }
 
             isFetchingComments = false;
+        }
+
+        /**
+         * Build priority queue for comment count fetching
+         * Priority levels:
+         * 1. Visible PRs (current page)
+         * 2. Adjacent PRs (previous/next page)
+         * 3. Stale PRs (not fetched in > 5 minutes)
+         */
+        function buildCommentFetchQueue() {
+            const queue = [];
+            const now = Date.now();
+            const sortedPRs = getSortedPRs();
+
+            if (sortedPRs.length === 0) return queue;
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, sortedPRs.length);
+
+            // Priority 1: Visible PRs (current page)
+            const visiblePRs = sortedPRs.slice(startIndex, endIndex);
+            visiblePRs.forEach(pr => {
+                queue.push({ pr, priority: 1, reason: 'visible' });
+            });
+
+            // Priority 2: Adjacent pages (prev + next page)
+            const prevPageStart = Math.max(0, startIndex - itemsPerPage);
+            const prevPageEnd = startIndex;
+            const nextPageStart = endIndex;
+            const nextPageEnd = Math.min(endIndex + itemsPerPage, sortedPRs.length);
+
+            if (prevPageStart < prevPageEnd) {
+                const prevPagePRs = sortedPRs.slice(prevPageStart, prevPageEnd);
+                prevPagePRs.forEach(pr => {
+                    queue.push({ pr, priority: 2, reason: 'adjacent' });
+                });
+            }
+
+            if (nextPageStart < nextPageEnd) {
+                const nextPagePRs = sortedPRs.slice(nextPageStart, nextPageEnd);
+                nextPagePRs.forEach(pr => {
+                    queue.push({ pr, priority: 2, reason: 'adjacent' });
+                });
+            }
+
+            // Priority 3: Stale PRs (not refreshed in > 5 minutes)
+            const stalePRs = allPRs
+                .map(pr => {
+                    const prKey = getPRKey(pr);
+                    const cached = prCommentCounts[prKey];
+                    if (!cached) return null;
+
+                    const age = now - (cached.lastFetch || 0);
+                    if (age > STALE_THRESHOLD_MS) {
+                        return { pr, age, priority: 3, reason: 'stale' };
+                    }
+                    return null;
+                })
+                .filter(item => item !== null)
+                .sort((a, b) => b.age - a.age) // Oldest first
+                .slice(0, 20); // Limit to 20 stale items
+
+            queue.push(...stalePRs);
+
+            return queue;
+        }
+
+        /**
+         * Process comment fetch queue with rate limiting and budget control
+         */
+        async function processPriorityQueue(forceRefresh = false) {
+            if (isFetchingPriorityQueue) return;
+            isFetchingPriorityQueue = true;
+
+            try {
+                const config = ADOConfig.get();
+                const queue = buildCommentFetchQueue();
+
+                if (queue.length === 0) {
+                    isFetchingPriorityQueue = false;
+                    return;
+                }
+
+                console.log(`Processing comment fetch queue: ${queue.length} items (${queue.filter(q => q.priority === 1).length} visible, ${queue.filter(q => q.priority === 2).length} adjacent, ${queue.filter(q => q.priority === 3).length} stale)`);
+
+                let fetchedCount = 0;
+                let currentBatch = [];
+
+                for (let i = 0; i < queue.length && fetchedCount < MAX_CALLS_PER_CYCLE; i++) {
+                    const item = queue[i];
+
+                    // Check if user is actively interacting - pause if so
+                    if (isUserActivelyInteracting() && item.priority > 1) {
+                        console.log('User is interacting, pausing non-visible fetches');
+                        break;
+                    }
+
+                    currentBatch.push(item.pr);
+                    fetchedCount++;
+
+                    // Process batch when it reaches max concurrent size or end of priority level
+                    const isEndOfPriority = i === queue.length - 1 || queue[i + 1].priority !== item.priority;
+                    const isBatchFull = currentBatch.length >= MAX_CONCURRENT_COMMENT_FETCHES;
+
+                    if (isBatchFull || isEndOfPriority) {
+                        // Fetch batch concurrently
+                        const promises = currentBatch.map(pr => fetchPRCommentCount(config, pr, forceRefresh));
+                        await Promise.all(promises);
+
+                        // Delay between batches (except for last batch)
+                        if (i < queue.length - 1 && fetchedCount < MAX_CALLS_PER_CYCLE) {
+                            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                        }
+
+                        currentBatch = [];
+                    }
+                }
+
+                console.log(`Fetched comment counts for ${fetchedCount} PRs`);
+
+            } catch (error) {
+                console.error('Error processing priority queue:', error);
+            } finally {
+                isFetchingPriorityQueue = false;
+            }
         }
 
         async function fetchCommentCountsBatch(config, prs, batchSize) {
@@ -2118,11 +2256,16 @@
             }
         }
 
-        async function fetchPRCommentCount(config, pr) {
+        async function fetchPRCommentCount(config, pr, forceRefresh = false) {
             const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+            const now = Date.now();
 
-            // Skip if already fetched
-            if (prCommentCounts[prKey] !== undefined) {
+            // Skip if already fetched recently (unless force refresh)
+            if (!forceRefresh && prCommentCounts[prKey] !== undefined) {
+                // Update access time for LRU
+                if (prCommentCounts[prKey].lastAccess !== undefined) {
+                    prCommentCounts[prKey].lastAccess = now;
+                }
                 return;
             }
 
@@ -2133,11 +2276,19 @@
                     (thread.status === 'active' || thread.status === 'Active' || thread.status === 1)
                 ).length;
 
-                prCommentCounts[prKey] = activeCount;
+                prCommentCounts[prKey] = {
+                    count: activeCount,
+                    lastFetch: now,
+                    lastAccess: now
+                };
                 updatePRCommentDisplay(prKey, activeCount);
             } catch (error) {
                 // On error, mark as fetched with 0 to avoid retrying
-                prCommentCounts[prKey] = 0;
+                prCommentCounts[prKey] = {
+                    count: 0,
+                    lastFetch: now,
+                    lastAccess: now
+                };
                 updatePRCommentDisplay(prKey, 0);
             }
         }
@@ -2448,6 +2599,9 @@
                 });
 
                 updatePRSourceDisplay();
+
+                // Refresh comment counts using priority queue (force refresh for visible PRs)
+                await processPriorityQueue(true);
 
             } catch (error) {
                 console.error('Background poll error:', error);
