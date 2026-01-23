@@ -797,6 +797,49 @@
             border-color: #0078d4;
             z-index: 10;
         }
+
+        /* Reviewer status wrapper */
+        .reviewer-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Status indicators using border colors */
+        .reviewer-avatar-wrapper.status-approved .reviewer-avatar,
+        .reviewer-avatar-wrapper.status-approved .reviewer-avatar-fallback {
+            border: 3px solid #107c10;
+            box-shadow: 0 0 4px rgba(16, 124, 16, 0.3);
+        }
+
+        .reviewer-avatar-wrapper.status-approved-suggestions .reviewer-avatar,
+        .reviewer-avatar-wrapper.status-approved-suggestions .reviewer-avatar-fallback {
+            border: 3px solid #498205;
+            box-shadow: 0 0 4px rgba(73, 130, 5, 0.3);
+        }
+
+        .reviewer-avatar-wrapper.status-waiting .reviewer-avatar,
+        .reviewer-avatar-wrapper.status-waiting .reviewer-avatar-fallback {
+            border: 3px solid #ff8c00;
+            box-shadow: 0 0 4px rgba(255, 140, 0, 0.3);
+        }
+
+        .reviewer-avatar-wrapper.status-rejected .reviewer-avatar,
+        .reviewer-avatar-wrapper.status-rejected .reviewer-avatar-fallback {
+            border: 3px solid #d13438;
+            box-shadow: 0 0 4px rgba(209, 52, 56, 0.3);
+        }
+
+        .reviewer-avatar-wrapper.status-no-vote .reviewer-avatar,
+        .reviewer-avatar-wrapper.status-no-vote .reviewer-avatar-fallback {
+            border: 2px solid #d1d1d1;
+        }
+
+        /* Hover effects for status wrappers */
+        .reviewer-avatar-wrapper:hover .reviewer-avatar,
+        .reviewer-avatar-wrapper:hover .reviewer-avatar-fallback {
+            transform: scale(1.2);
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -1926,19 +1969,51 @@
 
             return '<div class="reviewer-avatars">' + reviewers.map(r => {
                 const initials = r.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                const title = ADOContent.escapeHtml(r.displayName);
+                const displayName = ADOContent.escapeHtml(r.displayName);
 
+                // Get vote status
+                const vote = r.vote || 0;
+                let statusClass = '';
+                let statusText = '';
+
+                switch (vote) {
+                    case 10:
+                        statusClass = 'status-approved';
+                        statusText = 'Approved';
+                        break;
+                    case 5:
+                        statusClass = 'status-approved-suggestions';
+                        statusText = 'Approved with suggestions';
+                        break;
+                    case -5:
+                        statusClass = 'status-waiting';
+                        statusText = 'Waiting for author';
+                        break;
+                    case -10:
+                        statusClass = 'status-rejected';
+                        statusText = 'Rejected';
+                        break;
+                    default:
+                        statusClass = 'status-no-vote';
+                        statusText = 'No vote';
+                }
+
+                const title = `${displayName} - ${statusText}`;
+
+                let avatarHtml;
                 if (r.id) {
                     const cachedUrl = avatarCache[r.id];
                     if (cachedUrl) {
-                        return `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                        avatarHtml = `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
                     } else {
                         // Show initials while loading, image hidden until loaded
-                        return `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                        avatarHtml = `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                     }
                 } else {
-                    return `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                    avatarHtml = `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                 }
+
+                return `<div class="reviewer-avatar-wrapper ${statusClass}">${avatarHtml}</div>`;
             }).join('') + '</div>';
         }
 
