@@ -245,7 +245,6 @@
         }
 
         .pr-table {
-            width: 100%;
             border-collapse: separate;
             border-spacing: 0;
             background: white;
@@ -2184,8 +2183,23 @@
                 return width ? `width: ${width}px; min-width: ${width}px; max-width: ${width}px;` : '';
             };
 
+            // Calculate total table width from fixed columns
+            const calculateTableWidth = () => {
+                let total = 0;
+                let hasFlexColumn = false;
+                for (const [columnId, width] of Object.entries(columnWidths)) {
+                    if (width === null) {
+                        hasFlexColumn = true;
+                        total += 300; // Default width for flexible columns
+                    } else {
+                        total += width;
+                    }
+                }
+                return hasFlexColumn ? `min-width: ${total}px; width: 100%;` : `width: ${total}px;`;
+            };
+
             let tableHtml = `
-                <table class="pr-table">
+                <table class="pr-table" style="${calculateTableWidth()}">
                     <thead>
                         <tr>
                             <th class="sortable" data-column="id" onclick="sortPRs('id')" style="${getColumnStyle('id')}">ID${getSortIndicator('id')}<div class="column-resize-handle" data-column="id"></div></th>
@@ -2721,6 +2735,9 @@
                                 cell.style.maxWidth = newWidth + 'px';
                             }
                         });
+
+                        // Update table width to prevent other columns from expanding
+                        updateTableWidth(table);
                     };
 
                     const onMouseUp = () => {
@@ -2737,6 +2754,27 @@
                     document.addEventListener('mouseup', onMouseUp);
                 });
             });
+        }
+
+        function updateTableWidth(table) {
+            let total = 0;
+            let hasFlexColumn = false;
+            for (const [columnId, width] of Object.entries(columnWidths)) {
+                if (width === null) {
+                    hasFlexColumn = true;
+                    total += 300; // Default width for flexible columns
+                } else {
+                    total += width;
+                }
+            }
+
+            if (hasFlexColumn) {
+                table.style.minWidth = total + 'px';
+                table.style.width = '100%';
+            } else {
+                table.style.width = total + 'px';
+                table.style.minWidth = '';
+            }
         }
 
         function saveColumnWidths() {
