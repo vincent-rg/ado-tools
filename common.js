@@ -287,6 +287,36 @@ const ADOAPI = {
         }
 
         return { value: allPRs };
+    },
+
+    /**
+     * Get status checks for a PR (pipelines, CI builds, custom checks)
+     */
+    async getPRStatuses(config, project, repository, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/statuses?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch PR statuses: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get policy evaluations for a PR (quality gates, build policies, required reviewers, etc.)
+     */
+    async getPolicyEvaluations(config, project, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/${encodeURIComponent(project)}/${prId}&api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch policy evaluations: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
     }
 };
 
