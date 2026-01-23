@@ -972,9 +972,11 @@
         // Live update system
         let backgroundPollInterval = null;
         let lastUserInteraction = Date.now();
+        let lastBackgroundPoll = 0; // Timestamp of last background poll
         let isBackgroundPolling = false;
         let POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
         let USER_INTERACTION_PAUSE = 10 * 1000; // 10 seconds
+        let VISIBILITY_POLL_COOLDOWN = 20 * 1000; // 20 seconds cooldown for visibility-triggered polls
         let newPRsDetected = [];
         let newFilterMatchesDetected = [];
         let grayedOutPRKeys = new Set(); // Track PRs that no longer match filters
@@ -2474,36 +2476,17 @@
             });
         })();
 
-        // Auto-refresh on tab visibility (if data is older than 5 minutes)
-        // Now handled by background polling, but keep for very stale data
+        // Trigger background poll when tab becomes visible (with cooldown to prevent spam)
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && loadedRepoKeys.size > 0) {
-                const selectedRepos = getSelectedRepos();
+            if (!document.hidden && loadedRepoKeys.size > 0 && backgroundPollInterval) {
+                const timeSinceLastPoll = Date.now() - lastBackgroundPoll;
 
-                // Find oldest timestamp from selected repos
-                let oldestTimestamp = null;
-                selectedRepos.forEach(repo => {
-                    const repoKey = `${repo.projectName}/${repo.id}`;
-                    const timestamp = loadedRepoKeys.get(repoKey);
-                    if (timestamp) {
-                        if (!oldestTimestamp || timestamp < oldestTimestamp) {
-                            oldestTimestamp = timestamp;
-                        }
-                    }
-                });
-
-                if (oldestTimestamp) {
-                    const minutesSinceLoad = (Date.now() - oldestTimestamp) / 1000 / 60;
-                    if (minutesSinceLoad > 10) {
-                        // Only refresh if data is very stale (>10 minutes)
-                        // Background polling handles fresher data
-                        console.log('Tab became visible and data is very stale, auto-refreshing...');
-                        refreshPRs();
-                    } else if (backgroundPollInterval) {
-                        // Trigger an immediate background poll when tab becomes visible
-                        console.log('Tab became visible, triggering background poll...');
-                        performBackgroundPoll();
-                    }
+                // Only trigger poll if at least 20 seconds have passed since last poll
+                if (timeSinceLastPoll >= VISIBILITY_POLL_COOLDOWN) {
+                    console.log('Tab became visible, triggering background poll...');
+                    performBackgroundPoll();
+                } else {
+                    console.log(`Tab became visible, but last poll was ${Math.round(timeSinceLastPoll / 1000)}s ago (cooldown: ${VISIBILITY_POLL_COOLDOWN / 1000}s)`);
                 }
             }
         });
@@ -2663,6 +2646,9 @@
 
                 // Refresh comment counts using priority queue (force refresh for visible PRs)
                 await processPriorityQueue(true);
+
+                // Track when this poll completed
+                lastBackgroundPoll = Date.now();
 
             } catch (error) {
                 console.error('Background poll error:', error);
