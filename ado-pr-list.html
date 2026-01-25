@@ -797,6 +797,61 @@
             border-color: #0078d4;
             z-index: 10;
         }
+
+        /* Reviewer status wrapper */
+        .reviewer-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Status badge in bottom-right corner */
+        .reviewer-status-badge {
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .reviewer-status-badge.status-approved {
+            background: #107c10;
+        }
+
+        .reviewer-status-badge.status-approved-suggestions {
+            background: #498205;
+        }
+
+        .reviewer-status-badge.status-waiting {
+            background: #ff8c00;
+        }
+
+        .reviewer-status-badge.status-rejected {
+            background: #d13438;
+        }
+
+        .reviewer-status-badge.status-no-vote {
+            background: #8a8886;
+        }
+
+        /* Hover effects for status wrappers */
+        .reviewer-avatar-wrapper:hover .reviewer-avatar,
+        .reviewer-avatar-wrapper:hover .reviewer-avatar-fallback {
+            transform: scale(1.2);
+            z-index: 10;
+        }
+
+        .reviewer-avatar-wrapper:hover .reviewer-status-badge {
+            transform: scale(1.2);
+            z-index: 11;
+        }
     </style>
 </head>
 <body>
@@ -1926,19 +1981,61 @@
 
             return '<div class="reviewer-avatars">' + reviewers.map(r => {
                 const initials = r.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                const title = ADOContent.escapeHtml(r.displayName);
+                const displayName = ADOContent.escapeHtml(r.displayName);
 
+                // Get vote status
+                const vote = r.vote || 0;
+                let statusClass = '';
+                let statusText = '';
+
+                switch (vote) {
+                    case 10:
+                        statusClass = 'status-approved';
+                        statusText = 'Approved';
+                        break;
+                    case 5:
+                        statusClass = 'status-approved-suggestions';
+                        statusText = 'Approved with suggestions';
+                        break;
+                    case -5:
+                        statusClass = 'status-waiting';
+                        statusText = 'Waiting for author';
+                        break;
+                    case -10:
+                        statusClass = 'status-rejected';
+                        statusText = 'Rejected';
+                        break;
+                    default:
+                        statusClass = 'status-no-vote';
+                        statusText = 'No vote';
+                }
+
+                const title = `${displayName} - ${statusText}`;
+
+                let avatarHtml;
                 if (r.id) {
                     const cachedUrl = avatarCache[r.id];
                     if (cachedUrl) {
-                        return `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                        avatarHtml = `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
                     } else {
                         // Show initials while loading, image hidden until loaded
-                        return `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                        avatarHtml = `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                     }
                 } else {
-                    return `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                    avatarHtml = `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                 }
+
+                // Badge icons for different statuses (no badge for no-vote)
+                let badgeHtml = '';
+                if (vote === 10 || vote === 5) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">✓</span>`;
+                } else if (vote === -10) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">✗</span>`;
+                } else if (vote === -5) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">!</span>`;
+                }
+
+                return `<div class="reviewer-avatar-wrapper">${avatarHtml}${badgeHtml}</div>`;
             }).join('') + '</div>';
         }
 
