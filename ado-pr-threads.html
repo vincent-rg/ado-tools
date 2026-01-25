@@ -22,6 +22,22 @@
             padding: 20px;
             overflow-y: auto;
             flex-shrink: 0;
+            position: relative;
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover {
+            background: rgba(0, 120, 212, 0.2);
         }
 
         .main-content {
@@ -472,6 +488,7 @@
         <div class="page-layout">
             <!-- Left Sidebar with Filters -->
             <div class="sidebar" id="threadFilters" style="display: none;">
+                <div class="resize-handle" id="resizeHandle"></div>
                 <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
 
                 <div class="filter-section">
@@ -1857,6 +1874,44 @@
                 }
             }, 0);
         }
+
+        // Sidebar resize functionality
+        (function initSidebarResize() {
+            const resizeHandle = document.getElementById('resizeHandle');
+            const sidebar = document.querySelector('.sidebar');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const diff = e.clientX - startX;
+                const newWidth = startWidth + diff;
+
+                // Apply min/max constraints
+                if (newWidth >= 200 && newWidth <= 600) {
+                    sidebar.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
     </script>
 </body>
 </html>
