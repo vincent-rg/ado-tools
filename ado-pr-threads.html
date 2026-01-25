@@ -544,8 +544,6 @@
 
             <!-- Main Content -->
             <div class="main-content">
-                <div id="prInfo" class="pr-info" style="display: none;"></div>
-
                 <div id="bulkActions" class="bulk-actions">
                     <strong>Bulk Thread Selection Mode Active</strong>
                     <p style="margin: 10px 0 0 0; font-size: 14px; color: #605e5c;">Select threads using checkboxes, then change their status below. Filters are disabled in bulk mode.</p>
@@ -638,10 +636,8 @@
                 document.getElementById('pat').value = savedConfig.pat || '';
             }
 
-            // Show PR info or error
+            // Auto-load or show config
             if (currentPRId) {
-                showPRInfo();
-
                 // Auto-load if config is valid
                 if (savedConfig && ADOConfig.isValid(savedConfig) && savedConfig.repository) {
                     setTimeout(() => loadPRThreads(), 100);
@@ -657,23 +653,8 @@
             }
         });
 
-        function showPRInfo() {
-            const prInfoDiv = document.getElementById('prInfo');
-            const config = ADOConfig.get();
-
-            prInfoDiv.innerHTML = `
-                <div class="info">
-                    <strong>Loading Pull Request #${currentPRId}</strong><br>
-                    ${config && config.project && config.repository ?
-                        `Project: ${ADOContent.escapeHtml(config.project)} / Repository: ${ADOContent.escapeHtml(config.repository)}` :
-                        'Using saved configuration'}
-                </div>
-            `;
-        }
-
         function showNoPRError() {
-            const prInfoDiv = document.getElementById('prInfo');
-            prInfoDiv.innerHTML = `
+            document.getElementById('results').innerHTML = `
                 <div class="warning">
                     <strong>⚠️ No Pull Request specified</strong><br>
                     Please navigate from the <a href="ado-pr-list.html" style="color: #0078d4; font-weight: 600;">PR List page</a>
@@ -850,9 +831,8 @@
                 // Collect and resolve identities
                 await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
 
-                // Show filters and PR info
+                // Show filters
                 document.getElementById('threadFilters').style.display = 'block';
-                document.getElementById('prInfo').style.display = 'block';
 
                 // Populate author filter
                 populateAuthorFilter();
