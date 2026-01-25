@@ -2028,6 +2028,8 @@
 
         // Cache for avatar blob URLs
         const avatarCache = {};
+        // Track in-flight requests to avoid duplicate fetches
+        const pendingAvatarRequests = new Map();
 
         // Fetch avatar via local proxy server
         async function fetchAvatarViaProxy(reviewerId) {
@@ -2035,32 +2037,49 @@
                 return avatarCache[reviewerId];
             }
 
+            // If a request for this ID is already in flight, wait for it
+            if (pendingAvatarRequests.has(reviewerId)) {
+                return pendingAvatarRequests.get(reviewerId);
+            }
+
             const config = ADOConfig.get();
             if (!config?.pat || !config?.organization) {
                 return null;
             }
 
-            try {
-                const params = new URLSearchParams({
-                    id: reviewerId,
-                    org: config.organization,
-                    serverUrl: config.serverUrl || 'https://dev.azure.com'
-                });
+            // Create the fetch promise and track it
+            const fetchPromise = (async () => {
+                try {
+                    const params = new URLSearchParams({
+                        id: reviewerId,
+                        org: config.organization,
+                        serverUrl: config.serverUrl || 'https://dev.azure.com'
+                    });
 
-                const response = await fetch(`/avatar?${params}`, {
-                    headers: { 'X-ADO-PAT': config.pat }
-                });
+                    const response = await fetch(`/avatar?${params}`, {
+                        headers: { 'X-ADO-PAT': config.pat }
+                    });
 
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const blobUrl = URL.createObjectURL(blob);
-                    avatarCache[reviewerId] = blobUrl;
-                    return blobUrl;
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        avatarCache[reviewerId] = blobUrl;
+                        return blobUrl;
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch avatar:', e);
                 }
-            } catch (e) {
-                console.warn('Failed to fetch avatar:', e);
-            }
-            return null;
+                return null;
+            })();
+
+            pendingAvatarRequests.set(reviewerId, fetchPromise);
+
+            // Clean up after request completes
+            fetchPromise.finally(() => {
+                pendingAvatarRequests.delete(reviewerId);
+            });
+
+            return fetchPromise;
         }
 
         // Load pending avatars after render
