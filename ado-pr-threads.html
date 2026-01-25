@@ -469,6 +469,149 @@
             background: #e1dfdd;
             text-decoration: underline;
         }
+
+        /* Reviewer/Author avatars section */
+        .avatars-section {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+
+        .avatars-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #323130;
+        }
+
+        .avatars-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #e1dfdd;
+            object-fit: cover;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .avatar:hover {
+            transform: scale(1.15);
+            border-color: #0078d4;
+            z-index: 10;
+        }
+
+        .avatar-fallback {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #e1dfdd;
+            background: #0078d4;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .avatar-fallback:hover {
+            transform: scale(1.15);
+            border-color: #0078d4;
+            z-index: 10;
+        }
+
+        .avatar-placeholder {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #e1dfdd;
+            background: #d2d0ce;
+        }
+
+        .avatar-pending {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .avatar-pending.loaded {
+            opacity: 1;
+        }
+
+        .vote-badge {
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            border: 2px solid white;
+            z-index: 5;
+        }
+
+        .vote-badge.vote-approved {
+            background: #107c10;
+        }
+
+        .vote-badge.vote-approved-suggestions {
+            background: #498205;
+        }
+
+        .vote-badge.vote-wait {
+            background: #d83b01;
+        }
+
+        .vote-badge.vote-rejected {
+            background: #a4262c;
+        }
+
+        .vote-badge.vote-no-vote {
+            background: #8a8886;
+        }
+
+        .thread-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            background: #d83b01;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            border: 2px solid white;
+            z-index: 5;
+        }
+
+        .avatar-wrapper:hover .vote-badge,
+        .avatar-wrapper:hover .thread-badge {
+            transform: scale(1.15);
+            z-index: 11;
+        }
     </style>
 </head>
 <body>
@@ -620,6 +763,209 @@
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
+
+        // Avatar cache and pending requests
+        const avatarCache = {};
+        const pendingAvatarRequests = new Map();
+
+        async function fetchAvatarViaProxy(userId) {
+            if (avatarCache[userId]) {
+                return avatarCache[userId];
+            }
+
+            if (pendingAvatarRequests.has(userId)) {
+                return pendingAvatarRequests.get(userId);
+            }
+
+            const fetchPromise = (async () => {
+                try {
+                    const config = ADOConfig.get();
+                    const params = new URLSearchParams({
+                        id: userId,
+                        org: config.organization,
+                        serverUrl: config.serverUrl || 'https://dev.azure.com'
+                    });
+
+                    const response = await fetch(`/avatar?${params}`, {
+                        headers: { 'X-ADO-PAT': config.pat }
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        avatarCache[userId] = blobUrl;
+                        return blobUrl;
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch avatar:', e);
+                }
+                return null;
+            })();
+
+            pendingAvatarRequests.set(userId, fetchPromise);
+            fetchPromise.finally(() => pendingAvatarRequests.delete(userId));
+
+            return fetchPromise;
+        }
+
+        function loadPendingAvatars() {
+            document.querySelectorAll('.avatar-pending:not(.loaded)').forEach(async img => {
+                const userId = img.dataset.userId;
+                if (!userId) return;
+
+                const blobUrl = await fetchAvatarViaProxy(userId);
+                if (blobUrl) {
+                    img.src = blobUrl;
+                    img.onload = () => {
+                        img.classList.add('loaded');
+                        if (img.previousElementSibling?.classList.contains('avatar-placeholder')) {
+                            setTimeout(() => {
+                                img.previousElementSibling.style.visibility = 'hidden';
+                            }, 300);
+                        }
+                    };
+                }
+            });
+        }
+
+        function getActiveThreadCounts(threads) {
+            const counts = {};
+            threads.forEach(thread => {
+                if (thread.isDeleted) return;
+                const status = thread.status;
+                if (status === 'active' || status === 'Active' || status === 1) {
+                    const firstComment = thread.comments && thread.comments[0];
+                    const commentType = firstComment?.commentType;
+                    // Only count threads with real comments (text type)
+                    const isRealComment = commentType === 1 || commentType === 'text';
+                    const authorId = firstComment?.author?.id;
+                    if (authorId && isRealComment) {
+                        counts[authorId] = (counts[authorId] || 0) + 1;
+                    }
+                }
+            });
+            return counts;
+        }
+
+        function renderAvatarWithBadges(user, vote, threadCount) {
+            const initials = user.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const displayName = ADOContent.escapeHtml(user.displayName);
+
+            // Vote info
+            let voteClass = '';
+            let voteText = '';
+            let voteIcon = '';
+            if (vote !== undefined) {
+                switch (vote) {
+                    case 10:
+                        voteClass = 'vote-approved';
+                        voteText = 'Approved';
+                        voteIcon = '✓';
+                        break;
+                    case 5:
+                        voteClass = 'vote-approved-suggestions';
+                        voteText = 'Approved with suggestions';
+                        voteIcon = '✓';
+                        break;
+                    case -5:
+                        voteClass = 'vote-wait';
+                        voteText = 'Waiting for author';
+                        voteIcon = '!';
+                        break;
+                    case -10:
+                        voteClass = 'vote-rejected';
+                        voteText = 'Rejected';
+                        voteIcon = '✗';
+                        break;
+                    default:
+                        voteClass = 'vote-no-vote';
+                        voteText = 'No vote';
+                }
+            }
+
+            const title = vote !== undefined ? `${displayName} - ${voteText}` : displayName;
+
+            let avatarHtml;
+            if (user.id) {
+                const cachedUrl = avatarCache[user.id];
+                if (cachedUrl) {
+                    avatarHtml = `<img src="${cachedUrl}" alt="${title}" title="${title}" class="avatar">`;
+                } else {
+                    avatarHtml = `<div class="avatar-placeholder" title="${title}"></div><img data-user-id="${user.id}" alt="${title}" title="${title}" class="avatar avatar-pending">`;
+                }
+            } else {
+                avatarHtml = `<div class="avatar-fallback" title="${title}">${initials}</div>`;
+            }
+
+            // Vote badge (bottom-left)
+            let voteBadgeHtml = '';
+            if (voteIcon) {
+                voteBadgeHtml = `<span class="vote-badge ${voteClass}">${voteIcon}</span>`;
+            }
+
+            // Thread count badge (top-right)
+            let threadBadgeHtml = '';
+            if (threadCount && threadCount > 0) {
+                threadBadgeHtml = `<span class="thread-badge" title="${threadCount} active thread${threadCount > 1 ? 's' : ''}">${threadCount}</span>`;
+            }
+
+            return `<div class="avatar-wrapper" data-user-id="${user.id || ''}">${avatarHtml}${voteBadgeHtml}${threadBadgeHtml}</div>`;
+        }
+
+        function renderReviewersSection(reviewers, threadCounts) {
+            if (!reviewers || reviewers.length === 0) {
+                return '';
+            }
+
+            const avatarsHtml = reviewers.map(r => {
+                const count = threadCounts[r.id] || 0;
+                return renderAvatarWithBadges(r, r.vote, count);
+            }).join('');
+
+            return `
+                <div class="avatars-section">
+                    <h4>Reviewers</h4>
+                    <div class="avatars-container">${avatarsHtml}</div>
+                </div>
+            `;
+        }
+
+        function renderOtherAuthorsSection(threads, reviewers, threadCounts) {
+            // Get all unique thread authors who are not reviewers
+            // Only include authors with at least one "real" comment (not system/codeChange)
+            const reviewerIds = new Set((reviewers || []).map(r => r.id));
+            const otherAuthors = new Map();
+
+            threads.forEach(thread => {
+                if (thread.isDeleted) return;
+                const firstComment = thread.comments && thread.comments[0];
+                const author = firstComment?.author;
+                const commentType = firstComment?.commentType;
+
+                // Skip system (3/'system') and codeChange (2/'codeChange') comments
+                const isRealComment = commentType === 1 || commentType === 'text';
+
+                if (author && author.id && isRealComment && !reviewerIds.has(author.id) && !otherAuthors.has(author.id)) {
+                    otherAuthors.set(author.id, author);
+                }
+            });
+
+            if (otherAuthors.size === 0) {
+                return '';
+            }
+
+            const avatarsHtml = Array.from(otherAuthors.values()).map(author => {
+                const count = threadCounts[author.id] || 0;
+                return renderAvatarWithBadges(author, undefined, count);
+            }).join('');
+
+            return `
+                <div class="avatars-section" style="margin-top: 10px;">
+                    <h4>Other Thread Authors</h4>
+                    <div class="avatars-container">${avatarsHtml}</div>
+                </div>
+            `;
+        }
 
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
@@ -1522,6 +1868,9 @@
                 return acc;
             }, {});
 
+            // Get active thread counts per author (using all threads, not just filtered)
+            const threadCounts = getActiveThreadCounts(allThreads);
+
             const prUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}`;
             const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">DRAFT</span>' : '';
 
@@ -1557,6 +1906,8 @@
                             </div>
                         </div>
                     </details>
+                    ${renderReviewersSection(prData.reviewers, threadCounts)}
+                    ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts)}
                 </div>
 
                 <div class="stats">
@@ -1815,6 +2166,9 @@
             }
 
             resultsDiv.innerHTML = html;
+
+            // Load avatars
+            loadPendingAvatars();
 
             // Asynchronously load code suggestions
             setTimeout(async () => {

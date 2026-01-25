@@ -1,0 +1,5 @@
+pr list
+- show other thread's authors' avatars and their active thread the same way as reviewers
+- allow column show/hide (except id)
+- add update count column
+- add "exists for" (like that) column (show the number of days/weeks since the pr has been created)
