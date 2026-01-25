@@ -291,15 +291,6 @@
             margin-bottom: 4px;
         }
 
-        .pr-description {
-            font-size: 13px;
-            color: #605e5c;
-            max-width: 500px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
         .pr-meta {
             font-size: 13px;
             color: #605e5c;
@@ -2101,7 +2092,6 @@
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <div class="pr-title">${ADOContent.escapeHtml(pr.title)}${filterIndicator}</div>
-                                ${pr.description ? `<div class="pr-description">${ADOContent.escapeHtml(pr.description)}</div>` : ''}
                             </a>
                         </td>
                         <td class="pr-meta">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
