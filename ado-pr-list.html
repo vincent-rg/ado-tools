@@ -3142,7 +3142,10 @@
 
             // Store new PRs for notification
             if (changes.newPRs.length > 0) {
-                newPRsDetected = changes.newPRs;
+                // Append new PRs instead of replacing to preserve PRs from previous polls
+                const existingKeys = new Set(newPRsDetected.map(pr => getPRKey(pr)));
+                const trulyNewPRs = changes.newPRs.filter(pr => !existingKeys.has(getPRKey(pr)));
+                newPRsDetected = [...newPRsDetected, ...trulyNewPRs];
             }
 
             // Store new filter matches for notification
