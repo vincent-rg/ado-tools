@@ -1534,6 +1534,12 @@
                     <p><strong>Author:</strong> ${ADOContent.escapeHtml(prData.createdBy.displayName)}</p>
                     <p><strong>Status:</strong> ${prData.status}${draftBadge}</p>
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
+                    ${prData.description ? `
+                    <details style="margin-top: 15px;" open>
+                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
+                        <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 4px; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
+                    </details>
+                    ` : ''}
                     <details style="margin-top: 15px;">
                         <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📡 API Endpoints Used</summary>
                         <div style="margin-top: 10px; font-size: 13px; font-family: monospace; background: #f8f8f8; padding: 10px; border-radius: 4px;">
