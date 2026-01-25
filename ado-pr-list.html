@@ -245,13 +245,13 @@
         }
 
         .pr-table {
-            width: 100%;
             border-collapse: separate;
             border-spacing: 0;
             background: white;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             box-sizing: border-box;
+            table-layout: fixed;
         }
 
         .pr-table thead {
@@ -498,6 +498,33 @@
 
         .resize-handle:hover {
             background: rgba(0, 120, 212, 0.2);
+        }
+
+        /* Column resize handles */
+        .column-resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            z-index: 1;
+            user-select: none;
+        }
+
+        .column-resize-handle:hover {
+            background: rgba(0, 120, 212, 0.3);
+        }
+
+        .pr-table th {
+            position: relative;
+        }
+
+        .pr-table th.resizing,
+        body.column-resizing {
+            cursor: col-resize !important;
+            user-select: none !important;
         }
 
         .main-content {
@@ -1035,6 +1062,19 @@
         const MAX_CALLS_PER_CYCLE = 120;
         const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
+        // Column resize state
+        const DEFAULT_COLUMN_WIDTHS = {
+            id: 80,
+            title: null, // flexible
+            author: 150,
+            repository: 200,
+            reviewers: 120,
+            status: 100,
+            comments: 90,
+            created: 150
+        };
+        let columnWidths = { ...DEFAULT_COLUMN_WIDTHS };
+
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
 
@@ -1043,6 +1083,9 @@
                 document.getElementById('loadButton').disabled = true;
                 return;
             }
+
+            // Load saved column widths
+            loadColumnWidths();
 
             await loadProjects();
             await restoreFiltersFromURL();
@@ -2135,18 +2178,38 @@
             `;
 
             // Build table
+            const getColumnStyle = (columnId) => {
+                const width = columnWidths[columnId];
+                return width ? `width: ${width}px; min-width: ${width}px; max-width: ${width}px;` : '';
+            };
+
+            // Calculate total table width from fixed columns
+            const calculateTableWidth = () => {
+                let total = 0;
+                let hasFlexColumn = false;
+                for (const [columnId, width] of Object.entries(columnWidths)) {
+                    if (width === null) {
+                        hasFlexColumn = true;
+                        total += 300; // Default width for flexible columns
+                    } else {
+                        total += width;
+                    }
+                }
+                return hasFlexColumn ? `min-width: ${total}px; width: 100%;` : `width: ${total}px;`;
+            };
+
             let tableHtml = `
-                <table class="pr-table">
+                <table class="pr-table" style="${calculateTableWidth()}">
                     <thead>
                         <tr>
-                            <th class="sortable" onclick="sortPRs('id')" style="width: 80px;">ID${getSortIndicator('id')}</th>
-                            <th class="sortable" onclick="sortPRs('title')">Title${getSortIndicator('title')}</th>
-                            <th class="sortable" onclick="sortPRs('author')" style="width: 150px;">Author${getSortIndicator('author')}</th>
-                            <th class="sortable" onclick="sortPRs('repository')" style="width: 200px;">Repository${getSortIndicator('repository')}</th>
-                            <th style="width: 120px;">Reviewers</th>
-                            <th class="sortable" onclick="sortPRs('status')" style="width: 100px;">Status${getSortIndicator('status')}</th>
-                            <th style="width: 90px;">Comments</th>
-                            <th class="sortable" onclick="sortPRs('created')" style="width: 150px;">Created${getSortIndicator('created')}</th>
+                            <th class="sortable" data-column="id" onclick="sortPRs('id')" style="${getColumnStyle('id')}">ID${getSortIndicator('id')}<div class="column-resize-handle" data-column="id"></div></th>
+                            <th class="sortable" data-column="title" onclick="sortPRs('title')" style="${getColumnStyle('title')}">Title${getSortIndicator('title')}<div class="column-resize-handle" data-column="title"></div></th>
+                            <th class="sortable" data-column="author" onclick="sortPRs('author')" style="${getColumnStyle('author')}">Author${getSortIndicator('author')}<div class="column-resize-handle" data-column="author"></div></th>
+                            <th class="sortable" data-column="repository" onclick="sortPRs('repository')" style="${getColumnStyle('repository')}">Repository${getSortIndicator('repository')}<div class="column-resize-handle" data-column="repository"></div></th>
+                            <th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>
+                            <th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>
+                            <th data-column="comments" style="${getColumnStyle('comments')}">Comments<div class="column-resize-handle" data-column="comments"></div></th>
+                            <th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2177,31 +2240,31 @@
 
                 tableHtml += `
                     <tr data-pr-key="${prKey}" class="${grayedOutClass}">
-                        <td>
+                        <td style="${getColumnStyle('id')}">
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <strong>#${pr.pullRequestId}</strong>
                             </a>
                         </td>
-                        <td>
+                        <td style="${getColumnStyle('title')}">
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <div class="pr-title">${ADOContent.escapeHtml(pr.title)}${filterIndicator}</div>
                             </a>
                         </td>
-                        <td class="pr-meta">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
-                        <td class="pr-meta">
+                        <td class="pr-meta" style="${getColumnStyle('author')}">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
+                        <td class="pr-meta" style="${getColumnStyle('repository')}">
                             ${ADOContent.escapeHtml(pr._project)}<br>
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
                         </td>
-                        <td class="pr-meta">
+                        <td class="pr-meta" style="${getColumnStyle('reviewers')}">
                             ${getReviewerAvatarsHtml(pr.reviewers)}
                         </td>
-                        <td><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
-                        <td class="pr-meta pr-comments" style="text-align: center;">${commentDisplay}</td>
-                        <td class="pr-meta">${ADOUI.formatDate(pr.creationDate)}</td>
+                        <td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
+                        <td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>
+                        <td class="pr-meta" style="${getColumnStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>
                     </tr>
                 `;
             });
@@ -2288,6 +2351,9 @@
 
             // Load reviewer avatars via proxy
             loadPendingAvatars();
+
+            // Initialize column resize handles
+            initColumnResize();
 
             // Start fetching comment counts after rendering using priority queue
             processPriorityQueue();
@@ -2626,6 +2692,112 @@
                 }
             });
         })();
+
+        // Column resize functionality
+        function initColumnResize() {
+            const resizeHandles = document.querySelectorAll('.column-resize-handle');
+
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Prevent sorting when clicking resize handle
+
+                    const columnId = handle.getAttribute('data-column');
+                    const th = handle.closest('th');
+                    const startX = e.clientX;
+                    const startWidth = th.offsetWidth;
+
+                    // Add resizing class
+                    document.body.classList.add('column-resizing');
+                    th.classList.add('resizing');
+
+                    const onMouseMove = (e) => {
+                        const delta = e.clientX - startX;
+                        const newWidth = Math.max(50, startWidth + delta); // Minimum 50px
+
+                        // Update the column width in state
+                        columnWidths[columnId] = newWidth;
+
+                        // Apply the new width immediately
+                        th.style.width = newWidth + 'px';
+                        th.style.minWidth = newWidth + 'px';
+                        th.style.maxWidth = newWidth + 'px';
+
+                        // Also update all td cells in this column
+                        const table = th.closest('table');
+                        const columnIndex = Array.from(th.parentElement.children).indexOf(th);
+                        const rows = table.querySelectorAll('tbody tr');
+                        rows.forEach(row => {
+                            const cell = row.children[columnIndex];
+                            if (cell) {
+                                cell.style.width = newWidth + 'px';
+                                cell.style.minWidth = newWidth + 'px';
+                                cell.style.maxWidth = newWidth + 'px';
+                            }
+                        });
+
+                        // Update table width to prevent other columns from expanding
+                        updateTableWidth(table);
+                    };
+
+                    const onMouseUp = () => {
+                        document.body.classList.remove('column-resizing');
+                        th.classList.remove('resizing');
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+
+                        // Save column widths to localStorage
+                        saveColumnWidths();
+                    };
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                });
+            });
+        }
+
+        function updateTableWidth(table) {
+            let total = 0;
+            let hasFlexColumn = false;
+            for (const [columnId, width] of Object.entries(columnWidths)) {
+                if (width === null) {
+                    hasFlexColumn = true;
+                    total += 300; // Default width for flexible columns
+                } else {
+                    total += width;
+                }
+            }
+
+            if (hasFlexColumn) {
+                table.style.minWidth = total + 'px';
+                table.style.width = '100%';
+            } else {
+                table.style.width = total + 'px';
+                table.style.minWidth = '';
+            }
+        }
+
+        function saveColumnWidths() {
+            try {
+                localStorage.setItem('prListColumnWidths', JSON.stringify(columnWidths));
+            } catch (e) {
+                console.warn('Failed to save column widths to localStorage:', e);
+            }
+        }
+
+        function loadColumnWidths() {
+            try {
+                const saved = localStorage.getItem('prListColumnWidths');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Merge with defaults (in case new columns were added)
+                    columnWidths = { ...DEFAULT_COLUMN_WIDTHS, ...parsed };
+                }
+            } catch (e) {
+                console.warn('Failed to load column widths from localStorage:', e);
+                columnWidths = { ...DEFAULT_COLUMN_WIDTHS };
+            }
+        }
 
         // Trigger background poll when tab becomes visible (with cooldown to prevent spam)
         document.addEventListener('visibilitychange', () => {
