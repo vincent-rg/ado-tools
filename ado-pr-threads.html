@@ -6,40 +6,54 @@
     <title>Azure DevOps PR Threads Viewer</title>
     <link rel="stylesheet" href="common.css">
     <style>
-        .pr-info {
-            background: #f3f2f1;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 30px;
-        }
-
-        .thread-filters {
-            background: #f3f2f1;
-            padding: 20px;
-            border-radius: 6px;
-            margin-bottom: 30px;
-        }
-
-        .filter-row {
+        /* Sidebar layout */
+        .page-layout {
             display: flex;
             gap: 20px;
-            flex-wrap: wrap;
-            margin-top: 15px;
+            height: calc(100vh - 120px);
         }
 
-        .filter-group {
-            flex: 1;
+        .sidebar {
+            width: 280px;
             min-width: 200px;
+            max-width: 400px;
+            background: #f3f2f1;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
         }
 
-        .filter-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .results-container {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        /* Filter section styling */
+        .filter-section {
+            margin-bottom: 20px;
+        }
+
+        .filter-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .filter-section h4 {
+            margin-bottom: 10px;
+            margin-top: 0;
             color: #323130;
+            font-size: 14px;
         }
 
-        .filter-group select {
+        .filter-section select {
             width: 100%;
             padding: 8px;
             border: 1px solid #d1d1d1;
@@ -47,22 +61,38 @@
             background: white;
         }
 
-        .checkbox-filters {
+        .filter-section input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .filter-section input[type="text"]:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+
+        /* Status chips for vertical layout */
+        .status-chips-vertical {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+            flex-direction: column;
+            gap: 6px;
         }
 
         .status-chip {
-            padding: 6px 14px;
+            padding: 6px 12px;
             border: 1px solid #d1d1d1;
-            border-radius: 16px;
+            border-radius: 4px;
             background: white;
             color: #323130;
             font-size: 13px;
             cursor: pointer;
             transition: all 0.2s;
             user-select: none;
+            text-align: left;
         }
 
         .status-chip:hover {
@@ -74,6 +104,56 @@
             background: #0078d4;
             color: white;
             border-color: #0078d4;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 8px;
+        }
+
+        .checkbox-label:hover {
+            background: #e1f3ff;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .thread-count {
+            font-size: 13px;
+            color: #605e5c;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #d1d1d1;
+        }
+
+        /* PR info bar */
+        .pr-info {
+            background: #f3f2f1;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
         .thread-container {
@@ -398,47 +478,14 @@
             </div>
         </div>
 
-        <div id="prInfo" style="margin-bottom: 20px;"></div>
+        <div class="page-layout">
+            <!-- Left Sidebar with Filters -->
+            <div class="sidebar" id="threadFilters" style="display: none;">
+                <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
 
-        <div id="bulkActions" class="bulk-actions">
-            <strong>Bulk Thread Selection Mode Active</strong>
-            <p style="margin: 10px 0 0 0; font-size: 14px; color: #605e5c;">Select threads using checkboxes, then change their status below. Filters are disabled in bulk mode.</p>
-            <div class="bulk-actions-buttons">
-                <button onclick="selectAllThreads()" class="btn-secondary">Select All</button>
-                <button onclick="deselectAllThreads()" class="btn-secondary">Deselect All</button>
-                <span style="margin-left: 10px; color: #323130;">Selected: <strong id="selectedCount">0</strong> threads</span>
-                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
-                    <label for="bulkStatusSelect" style="margin: 0;">Change selected to:</label>
-                    <select id="bulkStatusSelect">
-                        <option value="">Select status...</option>
-                        <option value="active">Active</option>
-                        <option value="fixed">Resolved</option>
-                        <option value="closed">Closed</option>
-                        <option value="wontFix">Won't Fix</option>
-                        <option value="pending">Pending</option>
-                    </select>
-                    <button onclick="applyBulkStatusChange()" class="btn-primary">Apply Changes</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="threadFilters" class="thread-filters" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">Thread Filters</h3>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary" style="padding: 8px 16px;">
-                        Enable Bulk Selection
-                    </button>
-                    <span style="font-size: 14px; color: #605e5c;">View:</span>
-                    <button id="viewToggle" onclick="toggleView()" class="btn-secondary" style="padding: 8px 16px;">
-                        Switch to Compact
-                    </button>
-                </div>
-            </div>
-            <div class="filter-row">
-                <div class="filter-group" style="flex: 2;">
-                    <label>Thread Status</label>
-                    <div class="checkbox-filters">
+                <div class="filter-section">
+                    <h4>Thread Status</h4>
+                    <div class="status-chips-vertical">
                         <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this)">Active</button>
                         <button class="status-chip selected" data-status="fixed" onclick="toggleStatusChip(this)">Resolved</button>
                         <button class="status-chip selected" data-status="closed" onclick="toggleStatusChip(this)">Closed</button>
@@ -447,74 +494,111 @@
                         <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this)">Unknown</button>
                         <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this)">No status</button>
                     </div>
-                    <div style="margin-top: 12px;">
-                        <label>
-                            <input type="checkbox" id="showDeleted" onchange="applyThreadFilters()">
-                            Show deleted threads
-                        </label>
-                    </div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showDeleted" onchange="applyThreadFilters()">
+                        Show deleted threads
+                    </label>
                 </div>
 
-                <div class="filter-group" style="flex: 1;">
-                    <label for="threadAuthorFilter">Thread Author (First Comment)</label>
+                <div class="filter-section">
+                    <h4>Thread Author</h4>
                     <select id="threadAuthorFilter" onchange="applyThreadFilters()">
                         <option value="">All authors</option>
                     </select>
                 </div>
 
-                <div class="filter-group" style="flex: 1;">
-                    <label for="commentAuthorFilter">Comments by User</label>
+                <div class="filter-section">
+                    <h4>Comments by User</h4>
                     <select id="commentAuthorFilter" onchange="applyThreadFilters()">
                         <option value="">All users</option>
                     </select>
                 </div>
 
-                <div class="filter-group" style="flex: 1;">
-                    <label for="searchFilter">Search in Comments</label>
-                    <input type="text" id="searchFilter" placeholder="Search text..." oninput="applyThreadFilters()" style="padding: 8px; border: 1px solid #d1d1d1; border-radius: 4px; width: 100%; background: white;">
+                <div class="filter-section">
+                    <h4>Search in Comments</h4>
+                    <input type="text" id="searchFilter" placeholder="Search text..." oninput="applyThreadFilters()">
+                </div>
+
+                <div class="thread-count">
+                    Showing <span id="filteredCount">0</span> of <span id="totalCount">0</span> threads
                 </div>
             </div>
-            <div style="margin-top: 15px; color: #605e5c; font-size: 13px;">
-                Showing <span id="filteredCount">0</span> of <span id="totalCount">0</span> threads
-            </div>
-        </div>
 
-        <div class="config-section" id="configSection" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">Configuration</h3>
-            </div>
+            <!-- Main Content -->
+            <div class="main-content">
+                <div id="prInfo" class="pr-info" style="display: none;"></div>
 
-            <details id="advancedConfig">
-                <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">🔧 Advanced Configuration</summary>
-                <div style="margin-top: 15px;">
-                    <div class="form-group">
-                        <label for="serverUrl">Azure DevOps Server URL</label>
-                        <input type="text" id="serverUrl" placeholder="https://your-ado-server.com" />
-                    </div>
-                    <div class="form-group">
-                        <label for="organization">Organization/Collection</label>
-                        <input type="text" id="organization" placeholder="DefaultCollection" />
-                    </div>
-                    <div class="form-group">
-                        <label for="project">Project Name</label>
-                        <input type="text" id="project" placeholder="MyProject" />
-                    </div>
-                    <div class="form-group">
-                        <label for="repository">Repository Name</label>
-                        <input type="text" id="repository" placeholder="MyRepo" />
-                    </div>
-                    <div class="form-group">
-                        <label for="pat">Personal Access Token (PAT)</label>
-                        <input type="password" id="pat" placeholder="Your PAT with Code (Read) permission" />
+                <div id="bulkActions" class="bulk-actions">
+                    <strong>Bulk Thread Selection Mode Active</strong>
+                    <p style="margin: 10px 0 0 0; font-size: 14px; color: #605e5c;">Select threads using checkboxes, then change their status below. Filters are disabled in bulk mode.</p>
+                    <div class="bulk-actions-buttons">
+                        <button onclick="selectAllThreads()" class="btn-secondary">Select All</button>
+                        <button onclick="deselectAllThreads()" class="btn-secondary">Deselect All</button>
+                        <span style="margin-left: 10px; color: #323130;">Selected: <strong id="selectedCount">0</strong> threads</span>
+                        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                            <label for="bulkStatusSelect" style="margin: 0;">Change selected to:</label>
+                            <select id="bulkStatusSelect">
+                                <option value="">Select status...</option>
+                                <option value="active">Active</option>
+                                <option value="fixed">Resolved</option>
+                                <option value="closed">Closed</option>
+                                <option value="wontFix">Won't Fix</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                            <button onclick="applyBulkStatusChange()" class="btn-primary">Apply Changes</button>
+                        </div>
                     </div>
                 </div>
-            </details>
 
-            <button id="loadButton" onclick="loadPRThreads()">Load PR Threads</button>
-            <div id="configStatus" style="margin-top: 10px; font-size: 12px; color: #605e5c;"></div>
+                <div class="toolbar" id="toolbar" style="display: none;">
+                    <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary">
+                        Enable Bulk Selection
+                    </button>
+                    <button id="viewToggle" onclick="toggleView()" class="btn-secondary">
+                        Switch to Compact
+                    </button>
+                </div>
+
+                <div class="config-section" id="configSection" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0;">Configuration</h3>
+                    </div>
+
+                    <details id="advancedConfig">
+                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">🔧 Advanced Configuration</summary>
+                        <div style="margin-top: 15px;">
+                            <div class="form-group">
+                                <label for="serverUrl">Azure DevOps Server URL</label>
+                                <input type="text" id="serverUrl" placeholder="https://your-ado-server.com" />
+                            </div>
+                            <div class="form-group">
+                                <label for="organization">Organization/Collection</label>
+                                <input type="text" id="organization" placeholder="DefaultCollection" />
+                            </div>
+                            <div class="form-group">
+                                <label for="project">Project Name</label>
+                                <input type="text" id="project" placeholder="MyProject" />
+                            </div>
+                            <div class="form-group">
+                                <label for="repository">Repository Name</label>
+                                <input type="text" id="repository" placeholder="MyRepo" />
+                            </div>
+                            <div class="form-group">
+                                <label for="pat">Personal Access Token (PAT)</label>
+                                <input type="password" id="pat" placeholder="Your PAT with Code (Read) permission" />
+                            </div>
+                        </div>
+                    </details>
+
+                    <button id="loadButton" onclick="loadPRThreads()">Load PR Threads</button>
+                    <div id="configStatus" style="margin-top: 10px; font-size: 12px; color: #605e5c;"></div>
+                </div>
+
+                <div class="results-container">
+                    <div id="results"></div>
+                </div>
+            </div>
         </div>
-
-        <div id="results"></div>
     </div>
 
     <script src="common.js"></script>
@@ -661,13 +745,13 @@
                 // If status param is missing, keep HTML defaults
                 if (urlParams.status !== null) {
                     // First deselect all status chips
-                    document.querySelectorAll('.thread-filters .status-chip').forEach(chip => {
+                    document.querySelectorAll('.sidebar .status-chip').forEach(chip => {
                         chip.classList.remove('selected');
                     });
 
                     // Then select only the ones in the URL (if any)
                     urlParams.status.forEach(status => {
-                        const chip = document.querySelector(`.thread-filters .status-chip[data-status="${status}"]`);
+                        const chip = document.querySelector(`.sidebar .status-chip[data-status="${status}"]`);
                         if (chip) {
                             chip.classList.add('selected');
                         }
@@ -756,8 +840,10 @@
                 // Collect and resolve identities
                 await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
 
-                // Show filters
+                // Show filters, toolbar, and PR info
                 document.getElementById('threadFilters').style.display = 'block';
+                document.getElementById('toolbar').style.display = 'flex';
+                document.getElementById('prInfo').style.display = 'block';
 
                 // Populate author filter
                 populateAuthorFilter();
@@ -899,7 +985,7 @@
         }
 
         function getSelectedThreadStatuses() {
-            const selectedChips = document.querySelectorAll('.thread-filters .status-chip.selected');
+            const selectedChips = document.querySelectorAll('.sidebar .status-chip.selected');
             return Array.from(selectedChips).map(chip => {
                 // Return original camelCase value (e.g., 'wontFix', 'noStatus', 'active')
                 // This preserves the exact data-status attribute value for URL persistence
@@ -922,7 +1008,7 @@
 
             const button = document.getElementById('bulkModeToggle');
             const bulkActions = document.getElementById('bulkActions');
-            const filters = document.querySelectorAll('.thread-filters .filter-row');
+            const filters = document.querySelectorAll('.sidebar .filter-section');
 
             if (isBulkMode) {
                 button.textContent = 'Disable Bulk Selection';
