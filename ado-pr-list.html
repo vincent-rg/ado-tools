@@ -931,6 +931,25 @@
             background: #8a8886;
         }
 
+        /* Thread count badge in top-left corner */
+        .reviewer-thread-badge {
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            border-radius: 8px;
+            border: 2px solid white;
+            background: #d13438;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* Hover effects for status wrappers */
         .reviewer-avatar-wrapper:hover .reviewer-avatar,
         .reviewer-avatar-wrapper:hover .reviewer-avatar-fallback {
@@ -938,7 +957,8 @@
             z-index: 10;
         }
 
-        .reviewer-avatar-wrapper:hover .reviewer-status-badge {
+        .reviewer-avatar-wrapper:hover .reviewer-status-badge,
+        .reviewer-avatar-wrapper:hover .reviewer-thread-badge {
             transform: scale(1.2);
             z-index: 11;
         }
@@ -2171,7 +2191,7 @@
                 if (r.id) {
                     const cachedUrl = avatarCache[r.id];
                     if (cachedUrl) {
-                        avatarHtml = `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                        avatarHtml = `<img src="${cachedUrl}" data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar">`;
                     } else {
                         // Show gray placeholder while loading, image fades in on top
                         avatarHtml = `<div class="reviewer-avatar-placeholder" title="${title}"></div><img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending">`;
@@ -2190,7 +2210,8 @@
                     badgeHtml = `<span class="reviewer-status-badge ${statusClass}">!</span>`;
                 }
 
-                return `<div class="reviewer-avatar-wrapper">${avatarHtml}${badgeHtml}</div>`;
+                const wrapperId = r.id ? ` data-reviewer-id="${r.id}"` : '';
+                return `<div class="reviewer-avatar-wrapper"${wrapperId}>${avatarHtml}${badgeHtml}</div>`;
             }).join('') + '</div>';
         }
 
@@ -2668,21 +2689,35 @@
 
             try {
                 const threads = await ADOAPI.getThreads(config, pr._project, pr._repo.id, pr.pullRequestId);
-                const activeCount = (threads.value || []).filter(thread =>
+                const activeThreads = (threads.value || []).filter(thread =>
                     !thread.isDeleted &&
                     (thread.status === 'active' || thread.status === 'Active' || thread.status === 1)
-                ).length;
+                );
+                const activeCount = activeThreads.length;
+
+                // Count active threads per author (by first comment author ID)
+                const authorCounts = {};
+                activeThreads.forEach(thread => {
+                    const firstComment = thread.comments && thread.comments[0];
+                    const authorId = firstComment?.author?.id;
+                    if (authorId) {
+                        authorCounts[authorId] = (authorCounts[authorId] || 0) + 1;
+                    }
+                });
 
                 prCommentCounts[prKey] = {
                     count: activeCount,
+                    authorCounts: authorCounts,
                     lastFetch: now,
                     lastAccess: now
                 };
                 updatePRCommentDisplay(prKey, activeCount);
+                updateReviewerThreadBadges(prKey, authorCounts);
             } catch (error) {
                 // On error, mark as fetched with 0 to avoid retrying
                 prCommentCounts[prKey] = {
                     count: 0,
+                    authorCounts: {},
                     lastFetch: now,
                     lastAccess: now
                 };
@@ -2702,6 +2737,33 @@
             } else {
                 commentCell.innerHTML = '<span style="color: #8a8886;">0</span>';
             }
+        }
+
+        function updateReviewerThreadBadges(prKey, authorCounts) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            // Find all reviewer avatar wrappers in this row
+            const avatarWrappers = row.querySelectorAll('.reviewer-avatar-wrapper[data-reviewer-id]');
+            avatarWrappers.forEach(wrapper => {
+                const reviewerId = wrapper.dataset.reviewerId;
+
+                // Remove existing thread badge if any
+                const existingBadge = wrapper.querySelector('.reviewer-thread-badge');
+                if (existingBadge) {
+                    existingBadge.remove();
+                }
+
+                // Add badge if this reviewer has active threads
+                const threadCount = authorCounts[reviewerId];
+                if (threadCount && threadCount > 0) {
+                    const badge = document.createElement('span');
+                    badge.className = 'reviewer-thread-badge';
+                    badge.textContent = threadCount;
+                    badge.title = `${threadCount} active thread${threadCount > 1 ? 's' : ''}`;
+                    wrapper.appendChild(badge);
+                }
+            });
         }
 
         /**
