@@ -147,15 +147,6 @@
             margin-bottom: 20px;
         }
 
-        /* Toolbar */
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
         .thread-container {
             margin-bottom: 30px;
         }
@@ -519,6 +510,16 @@
                     <input type="text" id="searchFilter" placeholder="Search text..." oninput="applyThreadFilters()">
                 </div>
 
+                <div class="filter-section">
+                    <h4>View Options</h4>
+                    <button id="viewToggle" onclick="toggleView()" class="btn-secondary" style="width: 100%; margin-bottom: 8px;">
+                        Switch to Compact
+                    </button>
+                    <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary" style="width: 100%;">
+                        Enable Bulk Selection
+                    </button>
+                </div>
+
                 <div class="thread-count">
                     Showing <span id="filteredCount">0</span> of <span id="totalCount">0</span> threads
                 </div>
@@ -550,14 +551,6 @@
                     </div>
                 </div>
 
-                <div class="toolbar" id="toolbar" style="display: none;">
-                    <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary">
-                        Enable Bulk Selection
-                    </button>
-                    <button id="viewToggle" onclick="toggleView()" class="btn-secondary">
-                        Switch to Compact
-                    </button>
-                </div>
 
                 <div class="config-section" id="configSection" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -840,9 +833,8 @@
                 // Collect and resolve identities
                 await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
 
-                // Show filters, toolbar, and PR info
+                // Show filters and PR info
                 document.getElementById('threadFilters').style.display = 'block';
-                document.getElementById('toolbar').style.display = 'flex';
                 document.getElementById('prInfo').style.display = 'block';
 
                 // Populate author filter
