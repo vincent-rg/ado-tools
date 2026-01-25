@@ -1131,7 +1131,7 @@
         const DEFAULT_COLUMN_WIDTHS = {
             id: 80,
             title: null, // flexible
-            author: 150,
+            author: 60,
             repository: 200,
             reviewers: 120,
             status: 100,
@@ -2086,6 +2086,30 @@
             });
         }
 
+        function getAuthorAvatarHtml(author) {
+            if (!author) {
+                return '<span style="color: #8a8886;">-</span>';
+            }
+
+            const initials = author.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const displayName = ADOContent.escapeHtml(author.displayName);
+
+            let avatarHtml;
+            if (author.id) {
+                const cachedUrl = avatarCache[author.id];
+                if (cachedUrl) {
+                    avatarHtml = `<img src="${cachedUrl}" alt="${displayName}" title="${displayName}" class="reviewer-avatar">`;
+                } else {
+                    // Show gray placeholder while loading, image fades in on top
+                    avatarHtml = `<div class="reviewer-avatar-placeholder" title="${displayName}"></div><img data-reviewer-id="${author.id}" alt="${displayName}" title="${displayName}" class="reviewer-avatar reviewer-avatar-pending">`;
+                }
+            } else {
+                avatarHtml = `<div class="reviewer-avatar-fallback" title="${displayName}">${initials}</div>`;
+            }
+
+            return `<div class="reviewer-avatar-wrapper">${avatarHtml}</div>`;
+        }
+
         function getReviewerAvatarsHtml(reviewers) {
             if (!reviewers || reviewers.length === 0) {
                 return '<span style="color: #8a8886;">-</span>';
@@ -2324,7 +2348,7 @@
                                 <div class="pr-status-indicators">${generateStatusIndicatorsHtml(prKey)}</div>
                             </a>
                         </td>
-                        <td class="pr-meta" style="${getColumnStyle('author')}">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
+                        <td class="pr-meta" style="${getColumnStyle('author')}">${getAuthorAvatarHtml(pr.createdBy)}</td>
                         <td class="pr-meta" style="${getColumnStyle('repository')}">
                             ${ADOContent.escapeHtml(pr._project)}<br>
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
