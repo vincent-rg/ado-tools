@@ -854,6 +854,34 @@
             transition: transform 0.2s;
         }
 
+        .reviewer-avatar-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
+            border: 1px solid #d1d1d1;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .reviewer-avatar-placeholder:hover {
+            transform: scale(1.2);
+            border-color: #0078d4;
+            z-index: 10;
+        }
+
+        .reviewer-avatar-pending {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .reviewer-avatar-pending.loaded {
+            opacity: 1;
+        }
+
         .reviewer-avatar-fallback:hover {
             transform: scale(1.2);
             border-color: #0078d4;
@@ -2037,19 +2065,23 @@
 
         // Load pending avatars after render
         function loadPendingAvatars() {
-            document.querySelectorAll('.reviewer-avatar-pending').forEach(async img => {
+            document.querySelectorAll('.reviewer-avatar-pending:not(.loaded)').forEach(async img => {
                 const reviewerId = img.dataset.reviewerId;
                 if (!reviewerId) return;
 
                 const blobUrl = await fetchAvatarViaProxy(reviewerId);
                 if (blobUrl) {
                     img.src = blobUrl;
-                    img.style.display = 'inline-block';
-                    img.classList.remove('reviewer-avatar-pending');
-                    // Hide fallback
-                    if (img.nextElementSibling) {
-                        img.nextElementSibling.style.display = 'none';
-                    }
+                    // Wait for image to actually load before showing
+                    img.onload = () => {
+                        img.classList.add('loaded');
+                        // Hide placeholder after fade completes (use visibility to keep space)
+                        if (img.previousElementSibling?.classList.contains('reviewer-avatar-placeholder')) {
+                            setTimeout(() => {
+                                img.previousElementSibling.style.visibility = 'hidden';
+                            }, 300);
+                        }
+                    };
                 }
             });
         }
@@ -2098,8 +2130,8 @@
                     if (cachedUrl) {
                         avatarHtml = `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
                     } else {
-                        // Show initials while loading, image hidden until loaded
-                        avatarHtml = `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                        // Show gray placeholder while loading, image fades in on top
+                        avatarHtml = `<div class="reviewer-avatar-placeholder" title="${title}"></div><img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending">`;
                     }
                 } else {
                     avatarHtml = `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
