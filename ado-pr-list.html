@@ -2959,6 +2959,62 @@
                     e.stopPropagation();
                 });
 
+                // Double-click to expand column to fill free space
+                handle.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+
+                    const columnId = handle.getAttribute('data-column');
+                    const th = handle.closest('th');
+                    const table = th.closest('table');
+                    const container = table.closest('.main-content');
+
+                    if (!container) return;
+
+                    // Calculate total width of all columns
+                    let totalColumnsWidth = 0;
+                    for (const width of Object.values(columnWidths)) {
+                        totalColumnsWidth += width || 0;
+                    }
+
+                    // Get available container width
+                    const containerWidth = container.clientWidth;
+
+                    // Calculate free space
+                    const freeSpace = containerWidth - totalColumnsWidth;
+
+                    // Only expand if there's free space
+                    if (freeSpace <= 0) return;
+
+                    // Calculate new width for this column
+                    const currentWidth = columnWidths[columnId] || th.offsetWidth;
+                    const newWidth = currentWidth + freeSpace;
+
+                    // Update the column width in state
+                    columnWidths[columnId] = newWidth;
+
+                    // Apply the new width
+                    th.style.width = newWidth + 'px';
+                    th.style.minWidth = newWidth + 'px';
+                    th.style.maxWidth = newWidth + 'px';
+
+                    // Update all td cells in this column
+                    const columnIndex = Array.from(th.parentElement.children).indexOf(th);
+                    const rows = table.querySelectorAll('tbody tr');
+                    rows.forEach(row => {
+                        const cell = row.children[columnIndex];
+                        if (cell) {
+                            cell.style.width = newWidth + 'px';
+                            cell.style.minWidth = newWidth + 'px';
+                            cell.style.maxWidth = newWidth + 'px';
+                        }
+                    });
+
+                    // Update table width and save
+                    updateTableWidth(table);
+                    saveColumnWidths();
+                });
+
                 handle.addEventListener('mousedown', (e) => {
                     e.preventDefault();
                     e.stopPropagation(); // Prevent sorting when clicking resize handle
