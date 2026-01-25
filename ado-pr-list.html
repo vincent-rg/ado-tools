@@ -804,34 +804,41 @@
             display: inline-block;
         }
 
-        /* Status indicators using border colors */
-        .reviewer-avatar-wrapper.status-approved .reviewer-avatar,
-        .reviewer-avatar-wrapper.status-approved .reviewer-avatar-fallback {
-            border: 3px solid #107c10;
-            box-shadow: 0 0 4px rgba(16, 124, 16, 0.3);
+        /* Status badge in bottom-right corner */
+        .reviewer-status-badge {
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
         }
 
-        .reviewer-avatar-wrapper.status-approved-suggestions .reviewer-avatar,
-        .reviewer-avatar-wrapper.status-approved-suggestions .reviewer-avatar-fallback {
-            border: 3px solid #498205;
-            box-shadow: 0 0 4px rgba(73, 130, 5, 0.3);
+        .reviewer-status-badge.status-approved {
+            background: #107c10;
         }
 
-        .reviewer-avatar-wrapper.status-waiting .reviewer-avatar,
-        .reviewer-avatar-wrapper.status-waiting .reviewer-avatar-fallback {
-            border: 3px solid #ff8c00;
-            box-shadow: 0 0 4px rgba(255, 140, 0, 0.3);
+        .reviewer-status-badge.status-approved-suggestions {
+            background: #498205;
         }
 
-        .reviewer-avatar-wrapper.status-rejected .reviewer-avatar,
-        .reviewer-avatar-wrapper.status-rejected .reviewer-avatar-fallback {
-            border: 3px solid #d13438;
-            box-shadow: 0 0 4px rgba(209, 52, 56, 0.3);
+        .reviewer-status-badge.status-waiting {
+            background: #ff8c00;
         }
 
-        .reviewer-avatar-wrapper.status-no-vote .reviewer-avatar,
-        .reviewer-avatar-wrapper.status-no-vote .reviewer-avatar-fallback {
-            border: 2px solid #d1d1d1;
+        .reviewer-status-badge.status-rejected {
+            background: #d13438;
+        }
+
+        .reviewer-status-badge.status-no-vote {
+            background: #8a8886;
         }
 
         /* Hover effects for status wrappers */
@@ -839,6 +846,11 @@
         .reviewer-avatar-wrapper:hover .reviewer-avatar-fallback {
             transform: scale(1.2);
             z-index: 10;
+        }
+
+        .reviewer-avatar-wrapper:hover .reviewer-status-badge {
+            transform: scale(1.2);
+            z-index: 11;
         }
     </style>
 </head>
@@ -2013,7 +2025,17 @@
                     avatarHtml = `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                 }
 
-                return `<div class="reviewer-avatar-wrapper ${statusClass}">${avatarHtml}</div>`;
+                // Badge icons for different statuses (no badge for no-vote)
+                let badgeHtml = '';
+                if (vote === 10 || vote === 5) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">✓</span>`;
+                } else if (vote === -10) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">✗</span>`;
+                } else if (vote === -5) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">!</span>`;
+                }
+
+                return `<div class="reviewer-avatar-wrapper">${avatarHtml}${badgeHtml}</div>`;
             }).join('') + '</div>';
         }
 
