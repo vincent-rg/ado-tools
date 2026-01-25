@@ -1877,13 +1877,18 @@
                 return '<span style="color: #8a8886;">-</span>';
             }
 
+            const config = ADOConfig.get();
+            const serverUrl = config?.serverUrl || 'https://dev.azure.com';
+
             return '<div class="reviewer-avatars">' + reviewers.map(r => {
                 const initials = r.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 const title = ADOContent.escapeHtml(r.displayName);
 
-                // Azure DevOps API provides imageUrl in the user object
-                if (r.imageUrl) {
-                    return `<img src="${r.imageUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                // Construct the identity image URL using the reviewer's ID
+                // Azure DevOps provides identity images at: {serverUrl}/_api/_common/identityImage?id={id}
+                if (r.id) {
+                    const imageUrl = `${serverUrl}/_api/_common/identityImage?id=${r.id}`;
+                    return `<img src="${imageUrl}" alt="${title}" title="${title}" class="reviewer-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="display: inline-block;"><div class="reviewer-avatar-fallback" title="${title}" style="display: none;">${initials}</div>`;
                 } else {
                     return `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                 }
