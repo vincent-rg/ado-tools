@@ -291,6 +291,41 @@
             margin-bottom: 4px;
         }
 
+        .pr-status-indicators {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-indicator-success {
+            background-color: #e7f4e7;
+            color: #107c10;
+        }
+
+        .status-indicator-error {
+            background-color: #fde7e9;
+            color: #d13438;
+        }
+
+        .status-indicator-warning {
+            background-color: #fff4ce;
+            color: #8a6d3b;
+        }
+
+        .status-indicator-pending {
+            background-color: #e1f3ff;
+            color: #0078d4;
+        }
+
         .pr-meta {
             font-size: 13px;
             color: #605e5c;
@@ -1036,6 +1071,8 @@
         let currentSort = 'id';
         let currentOrder = 'desc';
         let prCommentCounts = {}; // Cache for active comment counts: { prKey: { count: N, lastFetch: timestamp, lastAccess: timestamp } }
+        let prStatuses = {}; // Cache for PR status checks: { prKey: { statuses: [], lastFetch: timestamp } }
+        let prPolicyEvaluations = {}; // Cache for PR policy evaluations: { prKey: { evaluations: [], lastFetch: timestamp } }
         let isFetchingComments = false;
         let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
         let updateTimeInterval = null; // Interval for updating "time ago" display
@@ -2252,6 +2289,7 @@
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <div class="pr-title">${ADOContent.escapeHtml(pr.title)}${filterIndicator}</div>
+                                <div class="pr-status-indicators">${generateStatusIndicatorsHtml(prKey)}</div>
                             </a>
                         </td>
                         <td class="pr-meta" style="${getColumnStyle('author')}">${ADOContent.escapeHtml(pr.createdBy.displayName)}</td>
@@ -2506,8 +2544,12 @@
                     const isBatchFull = currentBatch.length >= MAX_CONCURRENT_COMMENT_FETCHES;
 
                     if (isBatchFull || isEndOfPriority) {
-                        // Fetch batch concurrently
-                        const promises = currentBatch.map(pr => fetchPRCommentCount(config, pr, forceRefresh));
+                        // Fetch batch concurrently (comments, statuses, and policy evaluations)
+                        const promises = currentBatch.flatMap(pr => [
+                            fetchPRCommentCount(config, pr, forceRefresh),
+                            fetchPRStatuses(config, pr, forceRefresh),
+                            fetchPRPolicyEvaluations(config, pr, forceRefresh)
+                        ]);
                         await Promise.all(promises);
 
                         // Delay between batches (except for last batch)
@@ -2585,6 +2627,188 @@
             } else {
                 commentCell.innerHTML = '<span style="color: #8a8886;">0</span>';
             }
+        }
+
+        /**
+         * Fetch status checks (pipelines, CI builds, custom checks) for a PR
+         */
+        async function fetchPRStatuses(config, pr, forceRefresh = false) {
+            const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+            const now = Date.now();
+
+            // Skip if already fetched recently (unless force refresh)
+            if (!forceRefresh && prStatuses[prKey] !== undefined) {
+                return;
+            }
+
+            try {
+                const result = await ADOAPI.getPRStatuses(config, pr._project, pr._repo.id, pr.pullRequestId);
+                const statuses = result.value || [];
+
+                prStatuses[prKey] = {
+                    statuses: statuses,
+                    lastFetch: now
+                };
+                updatePRStatusDisplay(prKey);
+            } catch (error) {
+                // On error, mark as fetched with empty array to avoid retrying
+                prStatuses[prKey] = {
+                    statuses: [],
+                    lastFetch: now
+                };
+                updatePRStatusDisplay(prKey);
+            }
+        }
+
+        /**
+         * Fetch policy evaluations (quality gates, build policies, required reviewers) for a PR
+         */
+        async function fetchPRPolicyEvaluations(config, pr, forceRefresh = false) {
+            const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+            const now = Date.now();
+
+            // Skip if already fetched recently (unless force refresh)
+            if (!forceRefresh && prPolicyEvaluations[prKey] !== undefined) {
+                return;
+            }
+
+            try {
+                const result = await ADOAPI.getPolicyEvaluations(config, pr._project, pr.pullRequestId);
+                const evaluations = result.value || [];
+
+                prPolicyEvaluations[prKey] = {
+                    evaluations: evaluations,
+                    lastFetch: now
+                };
+                updatePRStatusDisplay(prKey);
+            } catch (error) {
+                // On error, mark as fetched with empty array to avoid retrying
+                prPolicyEvaluations[prKey] = {
+                    evaluations: [],
+                    lastFetch: now
+                };
+                updatePRStatusDisplay(prKey);
+            }
+        }
+
+        /**
+         * Update the status indicators display for a PR
+         */
+        function updatePRStatusDisplay(prKey) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            const statusIndicators = row.querySelector('.pr-status-indicators');
+            if (!statusIndicators) return;
+
+            const html = generateStatusIndicatorsHtml(prKey);
+            statusIndicators.innerHTML = html;
+        }
+
+        /**
+         * Generate HTML for status indicators (merge conflicts, checks, policies)
+         */
+        function generateStatusIndicatorsHtml(prKey) {
+            const indicators = [];
+
+            // Find the PR to get mergeStatus
+            const pr = allPRs.find(p => `${p._project}/${p._repo.id}/${p.pullRequestId}` === prKey);
+
+            // Merge conflict indicator
+            if (pr && pr.mergeStatus && pr.mergeStatus !== 'succeeded' && pr.mergeStatus !== 'notSet') {
+                let mergeIcon = '⚠️';
+                let mergeText = '';
+                let mergeClass = 'status-indicator-warning';
+
+                switch (pr.mergeStatus) {
+                    case 'conflicts':
+                        mergeIcon = '⚠️';
+                        mergeText = 'Merge conflicts';
+                        mergeClass = 'status-indicator-error';
+                        break;
+                    case 'rejectedByPolicy':
+                        mergeIcon = '🚫';
+                        mergeText = 'Rejected by policy';
+                        mergeClass = 'status-indicator-error';
+                        break;
+                    case 'queued':
+                        mergeIcon = '⏳';
+                        mergeText = 'Merge queued';
+                        mergeClass = 'status-indicator-pending';
+                        break;
+                    case 'failure':
+                        mergeIcon = '❌';
+                        mergeText = 'Merge failed';
+                        mergeClass = 'status-indicator-error';
+                        break;
+                }
+
+                if (mergeText) {
+                    indicators.push(`<span class="status-indicator ${mergeClass}" title="${mergeText}">${mergeIcon} ${mergeText}</span>`);
+                }
+            }
+
+            // Status checks indicator
+            if (prStatuses[prKey]) {
+                const statuses = prStatuses[prKey].statuses;
+                const succeeded = statuses.filter(s => s.state === 'succeeded').length;
+                const failed = statuses.filter(s => s.state === 'failed' || s.state === 'error').length;
+                const pending = statuses.filter(s => s.state === 'pending').length;
+
+                if (statuses.length > 0) {
+                    let statusText = '';
+                    let statusClass = 'status-indicator-success';
+                    let statusIcon = '✓';
+
+                    if (failed > 0) {
+                        statusText = `${failed} check${failed > 1 ? 's' : ''} failed`;
+                        statusClass = 'status-indicator-error';
+                        statusIcon = '✗';
+                    } else if (pending > 0) {
+                        statusText = `${pending} check${pending > 1 ? 's' : ''} pending`;
+                        statusClass = 'status-indicator-pending';
+                        statusIcon = '●';
+                    } else if (succeeded > 0) {
+                        statusText = `${succeeded} check${succeeded > 1 ? 's' : ''} passed`;
+                        statusClass = 'status-indicator-success';
+                        statusIcon = '✓';
+                    }
+
+                    indicators.push(`<span class="status-indicator ${statusClass}" title="${statusText}">${statusIcon} ${statusText}</span>`);
+                }
+            }
+
+            // Policy evaluations indicator
+            if (prPolicyEvaluations[prKey]) {
+                const evaluations = prPolicyEvaluations[prKey].evaluations;
+                const approved = evaluations.filter(e => e.status === 'approved').length;
+                const rejected = evaluations.filter(e => e.status === 'rejected').length;
+                const running = evaluations.filter(e => e.status === 'running' || e.status === 'queued').length;
+
+                if (evaluations.length > 0) {
+                    let policyText = '';
+                    let policyClass = 'status-indicator-success';
+                    let policyIcon = '✓';
+
+                    if (rejected > 0) {
+                        policyText = `${rejected} polic${rejected > 1 ? 'ies' : 'y'} rejected`;
+                        policyClass = 'status-indicator-error';
+                        policyIcon = '✗';
+                    } else if (running > 0) {
+                        policyText = `${running} polic${running > 1 ? 'ies' : 'y'} running`;
+                        policyClass = 'status-indicator-pending';
+                        policyIcon = '●';
+                    } else if (approved > 0) {
+                        policyText = `${approved} polic${approved > 1 ? 'ies' : 'y'} approved`;
+                        policyClass = 'status-indicator-success';
+                        policyIcon = '✓';
+                    }
+
+                    indicators.push(`<span class="status-indicator ${policyClass}" title="${policyText}">${policyIcon} ${policyText}</span>`);
+                }
+            }
+
+            return indicators.join(' ');
         }
 
         function openPRLink(project, repository, prId) {
