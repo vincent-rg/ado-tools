@@ -1918,17 +1918,11 @@
                 const blobUrl = await fetchAvatarViaProxy(reviewerId);
                 if (blobUrl) {
                     img.src = blobUrl;
-                    img.style.opacity = '1';
+                    img.style.display = 'inline-block';
                     img.classList.remove('reviewer-avatar-pending');
                     // Hide fallback
                     if (img.nextElementSibling) {
                         img.nextElementSibling.style.display = 'none';
-                    }
-                } else {
-                    // Show fallback
-                    img.style.display = 'none';
-                    if (img.nextElementSibling) {
-                        img.nextElementSibling.style.display = 'flex';
                     }
                 }
             });
@@ -1946,10 +1940,10 @@
                 if (r.id) {
                     const cachedUrl = avatarCache[r.id];
                     if (cachedUrl) {
-                        return `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar"><div class="reviewer-avatar-fallback" title="${title}" style="display: none;">${initials}</div>`;
+                        return `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
                     } else {
-                        // Show initials while loading, will be replaced async
-                        return `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="opacity: 0;"><div class="reviewer-avatar-fallback" title="${title}" style="display: flex;">${initials}</div>`;
+                        // Show initials while loading, image hidden until loaded
+                        return `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                     }
                 } else {
                     return `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
