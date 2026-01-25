@@ -1872,6 +1872,62 @@
             displayPRs();
         }
 
+        // Cache for avatar blob URLs
+        const avatarCache = {};
+
+        // Fetch avatar via local proxy server
+        async function fetchAvatarViaProxy(reviewerId) {
+            if (avatarCache[reviewerId]) {
+                return avatarCache[reviewerId];
+            }
+
+            const config = ADOConfig.get();
+            if (!config?.pat || !config?.organization) {
+                return null;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    id: reviewerId,
+                    org: config.organization,
+                    serverUrl: config.serverUrl || 'https://dev.azure.com'
+                });
+
+                const response = await fetch(`/avatar?${params}`, {
+                    headers: { 'X-ADO-PAT': config.pat }
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    avatarCache[reviewerId] = blobUrl;
+                    return blobUrl;
+                }
+            } catch (e) {
+                console.warn('Failed to fetch avatar:', e);
+            }
+            return null;
+        }
+
+        // Load pending avatars after render
+        function loadPendingAvatars() {
+            document.querySelectorAll('.reviewer-avatar-pending').forEach(async img => {
+                const reviewerId = img.dataset.reviewerId;
+                if (!reviewerId) return;
+
+                const blobUrl = await fetchAvatarViaProxy(reviewerId);
+                if (blobUrl) {
+                    img.src = blobUrl;
+                    img.style.display = 'inline-block';
+                    img.classList.remove('reviewer-avatar-pending');
+                    // Hide fallback
+                    if (img.nextElementSibling) {
+                        img.nextElementSibling.style.display = 'none';
+                    }
+                }
+            });
+        }
+
         function getReviewerAvatarsHtml(reviewers) {
             if (!reviewers || reviewers.length === 0) {
                 return '<span style="color: #8a8886;">-</span>';
@@ -1881,9 +1937,14 @@
                 const initials = r.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 const title = ADOContent.escapeHtml(r.displayName);
 
-                // Azure DevOps API provides imageUrl in the user object
-                if (r.imageUrl) {
-                    return `<img src="${r.imageUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                if (r.id) {
+                    const cachedUrl = avatarCache[r.id];
+                    if (cachedUrl) {
+                        return `<img src="${cachedUrl}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                    } else {
+                        // Show initials while loading, image hidden until loaded
+                        return `<img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending" style="display: none;"><div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                    }
                 } else {
                     return `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
                 }
@@ -2137,6 +2198,9 @@
             infoBar.innerHTML = infoBarHtml;
             resultsDiv.innerHTML = tableHtml;
             paginationBar.innerHTML = paginationHtml;
+
+            // Load reviewer avatars via proxy
+            loadPendingAvatars();
 
             // Start fetching comment counts after rendering using priority queue
             processPriorityQueue();
@@ -2876,6 +2940,7 @@
             if (reviewerCells.length >= 2) {
                 const reviewerCell = reviewerCells[1];
                 reviewerCell.innerHTML = getReviewerAvatarsHtml(freshPR.reviewers);
+                loadPendingAvatars();
             }
 
             // Add highlight animation
