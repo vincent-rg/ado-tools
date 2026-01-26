@@ -524,3 +524,136 @@ summary:hover {
 .modal-close:hover {
     color: #323130;
 }
+
+/* Avatar System */
+.avatar-wrapper {
+    --avatar-size: 32px;
+    position: relative;
+    display: inline-block;
+}
+
+.avatar {
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border-radius: 50%;
+    border: 1px solid #d1d1d1;
+    object-fit: cover;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.avatar:hover {
+    transform: scale(1.15);
+    border-color: #0078d4;
+    z-index: 10;
+}
+
+.avatar-fallback {
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border-radius: 50%;
+    border: 1px solid #d1d1d1;
+    background: #0078d4;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.avatar-fallback:hover {
+    transform: scale(1.15);
+    border-color: #0078d4;
+    z-index: 10;
+}
+
+.avatar-placeholder {
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border-radius: 50%;
+    border: 1px solid #d1d1d1;
+    background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.avatar-placeholder:hover {
+    transform: scale(1.15);
+    border-color: #0078d4;
+    z-index: 10;
+}
+
+.avatar-pending {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.avatar-pending.loaded {
+    opacity: 1;
+}
+
+.avatars-container {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Avatar badges */
+.avatar-badge {
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+    border: 2px solid white;
+    z-index: 5;
+}
+
+.avatar-badge-top {
+    bottom: auto;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    padding: 0 4px;
+}
+
+.avatar-badge.badge-success {
+    background: #107c10;
+}
+
+.avatar-badge.badge-success-light {
+    background: #498205;
+}
+
+.avatar-badge.badge-warning {
+    background: #d83b01;
+}
+
+.avatar-badge.badge-danger {
+    background: #a4262c;
+}
+
+.avatar-badge.badge-neutral {
+    background: #8a8886;
+}
+
+.avatar-wrapper:hover .avatar-badge {
+    transform: scale(1.15);
+    z-index: 11;
+}

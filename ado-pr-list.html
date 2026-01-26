@@ -815,86 +815,7 @@
             }
         }
 
-        /* Reviewer avatars */
-        .reviewer-avatars {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-        }
-
-        .reviewer-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 1px solid #d1d1d1;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .reviewer-avatar:hover {
-            transform: scale(1.2);
-            border-color: #0078d4;
-            z-index: 10;
-        }
-
-        .reviewer-avatar-fallback {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: #0078d4;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            border: 1px solid #d1d1d1;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .reviewer-avatar-placeholder {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
-            border: 1px solid #d1d1d1;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .reviewer-avatar-placeholder:hover {
-            transform: scale(1.2);
-            border-color: #0078d4;
-            z-index: 10;
-        }
-
-        .reviewer-avatar-pending {
-            position: absolute;
-            top: 0;
-            left: 0;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-        }
-
-        .reviewer-avatar-pending.loaded {
-            opacity: 1;
-        }
-
-        .reviewer-avatar-fallback:hover {
-            transform: scale(1.2);
-            border-color: #0078d4;
-            z-index: 10;
-        }
-
-        /* Reviewer status wrapper */
-        .reviewer-avatar-wrapper {
-            position: relative;
-            display: inline-block;
-        }
-
-        /* Status badge in bottom-right corner */
+        /* Reviewer status badge */
         .reviewer-status-badge {
             position: absolute;
             bottom: -5px;
@@ -909,6 +830,7 @@
             font-size: 11px;
             font-weight: bold;
             color: white;
+            z-index: 5;
         }
 
         .reviewer-status-badge.status-approved {
@@ -931,7 +853,7 @@
             background: #8a8886;
         }
 
-        /* Thread count badge in top-right corner */
+        /* Thread count badge */
         .reviewer-thread-badge {
             position: absolute;
             top: -5px;
@@ -948,18 +870,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            z-index: 5;
         }
 
-        /* Hover effects for status wrappers */
-        .reviewer-avatar-wrapper:hover .reviewer-avatar,
-        .reviewer-avatar-wrapper:hover .reviewer-avatar-fallback {
-            transform: scale(1.2);
-            z-index: 10;
-        }
-
-        .reviewer-avatar-wrapper:hover .reviewer-status-badge,
-        .reviewer-avatar-wrapper:hover .reviewer-thread-badge {
-            transform: scale(1.2);
+        /* Hover effects for badges */
+        .avatar-wrapper:hover .reviewer-status-badge,
+        .avatar-wrapper:hover .reviewer-thread-badge {
+            transform: scale(1.15);
             z-index: 11;
         }
     </style>
@@ -2046,85 +1963,6 @@
             displayPRs();
         }
 
-        // Cache for avatar blob URLs
-        const avatarCache = {};
-        // Track in-flight requests to avoid duplicate fetches
-        const pendingAvatarRequests = new Map();
-
-        // Fetch avatar via local proxy server
-        async function fetchAvatarViaProxy(reviewerId) {
-            if (avatarCache[reviewerId]) {
-                return avatarCache[reviewerId];
-            }
-
-            // If a request for this ID is already in flight, wait for it
-            if (pendingAvatarRequests.has(reviewerId)) {
-                return pendingAvatarRequests.get(reviewerId);
-            }
-
-            const config = ADOConfig.get();
-            if (!config?.pat || !config?.organization) {
-                return null;
-            }
-
-            // Create the fetch promise and track it
-            const fetchPromise = (async () => {
-                try {
-                    const params = new URLSearchParams({
-                        id: reviewerId,
-                        org: config.organization,
-                        serverUrl: config.serverUrl || 'https://dev.azure.com'
-                    });
-
-                    const response = await fetch(`/avatar?${params}`, {
-                        headers: { 'X-ADO-PAT': config.pat }
-                    });
-
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        const blobUrl = URL.createObjectURL(blob);
-                        avatarCache[reviewerId] = blobUrl;
-                        return blobUrl;
-                    }
-                } catch (e) {
-                    console.warn('Failed to fetch avatar:', e);
-                }
-                return null;
-            })();
-
-            pendingAvatarRequests.set(reviewerId, fetchPromise);
-
-            // Clean up after request completes
-            fetchPromise.finally(() => {
-                pendingAvatarRequests.delete(reviewerId);
-            });
-
-            return fetchPromise;
-        }
-
-        // Load pending avatars after render
-        function loadPendingAvatars() {
-            document.querySelectorAll('.reviewer-avatar-pending:not(.loaded)').forEach(async img => {
-                const reviewerId = img.dataset.reviewerId;
-                if (!reviewerId) return;
-
-                const blobUrl = await fetchAvatarViaProxy(reviewerId);
-                if (blobUrl) {
-                    img.src = blobUrl;
-                    // Wait for image to actually load before showing
-                    img.onload = () => {
-                        img.classList.add('loaded');
-                        // Hide placeholder after fade completes (use visibility to keep space)
-                        if (img.previousElementSibling?.classList.contains('reviewer-avatar-placeholder')) {
-                            setTimeout(() => {
-                                img.previousElementSibling.style.visibility = 'hidden';
-                            }, 300);
-                        }
-                    };
-                }
-            });
-        }
-
         function getAuthorAvatarHtml(author) {
             if (!author) {
                 return '<span style="color: #8a8886;">-</span>';
@@ -2135,18 +1973,18 @@
 
             let avatarHtml;
             if (author.id) {
-                const cachedUrl = avatarCache[author.id];
+                const cachedUrl = AvatarLoader.getCached(author.id);
                 if (cachedUrl) {
-                    avatarHtml = `<img src="${cachedUrl}" alt="${displayName}" title="${displayName}" class="reviewer-avatar">`;
+                    avatarHtml = `<img src="${cachedUrl}" alt="${displayName}" title="${displayName}" class="avatar">`;
                 } else {
                     // Show gray placeholder while loading, image fades in on top
-                    avatarHtml = `<div class="reviewer-avatar-placeholder" title="${displayName}"></div><img data-reviewer-id="${author.id}" alt="${displayName}" title="${displayName}" class="reviewer-avatar reviewer-avatar-pending">`;
+                    avatarHtml = `<div class="avatar-placeholder" title="${displayName}"></div><img data-user-id="${author.id}" alt="${displayName}" title="${displayName}" class="avatar avatar-pending">`;
                 }
             } else {
-                avatarHtml = `<div class="reviewer-avatar-fallback" title="${displayName}">${initials}</div>`;
+                avatarHtml = `<div class="avatar-fallback" title="${displayName}">${initials}</div>`;
             }
 
-            return `<div class="reviewer-avatar-wrapper">${avatarHtml}</div>`;
+            return `<div class="avatar-wrapper">${avatarHtml}</div>`;
         }
 
         function getReviewerAvatarsHtml(reviewers) {
@@ -2154,7 +1992,7 @@
                 return '<span style="color: #8a8886;">-</span>';
             }
 
-            return '<div class="reviewer-avatars">' + reviewers.map(r => {
+            return '<div class="avatars-container">' + reviewers.map(r => {
                 const initials = r.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 const displayName = ADOContent.escapeHtml(r.displayName);
 
@@ -2189,15 +2027,15 @@
 
                 let avatarHtml;
                 if (r.id) {
-                    const cachedUrl = avatarCache[r.id];
+                    const cachedUrl = AvatarLoader.getCached(r.id);
                     if (cachedUrl) {
-                        avatarHtml = `<img src="${cachedUrl}" data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar">`;
+                        avatarHtml = `<img src="${cachedUrl}" data-user-id="${r.id}" alt="${title}" title="${title}" class="avatar">`;
                     } else {
                         // Show gray placeholder while loading, image fades in on top
-                        avatarHtml = `<div class="reviewer-avatar-placeholder" title="${title}"></div><img data-reviewer-id="${r.id}" alt="${title}" title="${title}" class="reviewer-avatar reviewer-avatar-pending">`;
+                        avatarHtml = `<div class="avatar-placeholder" title="${title}"></div><img data-user-id="${r.id}" alt="${title}" title="${title}" class="avatar avatar-pending">`;
                     }
                 } else {
-                    avatarHtml = `<div class="reviewer-avatar-fallback" title="${title}">${initials}</div>`;
+                    avatarHtml = `<div class="avatar-fallback" title="${title}">${initials}</div>`;
                 }
 
                 // Badge icons for different statuses (no badge for no-vote)
@@ -2210,8 +2048,8 @@
                     badgeHtml = `<span class="reviewer-status-badge ${statusClass}">!</span>`;
                 }
 
-                const wrapperId = r.id ? ` data-reviewer-id="${r.id}"` : '';
-                return `<div class="reviewer-avatar-wrapper"${wrapperId}>${avatarHtml}${badgeHtml}</div>`;
+                const wrapperId = r.id ? ` data-user-id="${r.id}"` : '';
+                return `<div class="avatar-wrapper"${wrapperId}>${avatarHtml}${badgeHtml}</div>`;
             }).join('') + '</div>';
         }
 
@@ -2484,7 +2322,7 @@
             paginationBar.innerHTML = paginationHtml;
 
             // Load reviewer avatars via proxy
-            loadPendingAvatars();
+            AvatarLoader.loadPending();
 
             // Initialize column resize handles
             initColumnResize();
@@ -2744,9 +2582,9 @@
             if (!row) return;
 
             // Find all reviewer avatar wrappers in this row
-            const avatarWrappers = row.querySelectorAll('.reviewer-avatar-wrapper[data-reviewer-id]');
+            const avatarWrappers = row.querySelectorAll('.avatar-wrapper[data-user-id]');
             avatarWrappers.forEach(wrapper => {
-                const reviewerId = wrapper.dataset.reviewerId;
+                const reviewerId = wrapper.dataset.userId;
 
                 // Remove existing thread badge if any
                 const existingBadge = wrapper.querySelector('.reviewer-thread-badge');
@@ -3624,7 +3462,7 @@
             if (reviewerCells.length >= 2) {
                 const reviewerCell = reviewerCells[1];
                 reviewerCell.innerHTML = getReviewerAvatarsHtml(freshPR.reviewers);
-                loadPendingAvatars();
+                AvatarLoader.loadPending();
             }
 
             // Add highlight animation

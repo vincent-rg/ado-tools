@@ -639,6 +639,89 @@ const ADOURL = {
     }
 };
 
+/**
+ * Avatar Loading
+ * Handles fetching and caching user avatars via proxy
+ */
+const AvatarLoader = (() => {
+    const cache = {};
+    const pendingRequests = new Map();
+
+    async function fetch(userId) {
+        if (cache[userId]) {
+            return cache[userId];
+        }
+
+        if (pendingRequests.has(userId)) {
+            return pendingRequests.get(userId);
+        }
+
+        const fetchPromise = (async () => {
+            try {
+                const config = ADOConfig.get();
+                if (!config?.pat || !config?.organization) {
+                    return null;
+                }
+
+                const params = new URLSearchParams({
+                    id: userId,
+                    org: config.organization,
+                    serverUrl: config.serverUrl || 'https://dev.azure.com'
+                });
+
+                const response = await window.fetch(`/avatar?${params}`, {
+                    headers: { 'X-ADO-PAT': config.pat }
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    cache[userId] = blobUrl;
+                    return blobUrl;
+                }
+            } catch (e) {
+                console.warn('Failed to fetch avatar:', e);
+            }
+            return null;
+        })();
+
+        pendingRequests.set(userId, fetchPromise);
+        fetchPromise.finally(() => pendingRequests.delete(userId));
+
+        return fetchPromise;
+    }
+
+    function loadPending() {
+        document.querySelectorAll('.avatar-pending:not(.loaded)').forEach(async img => {
+            const userId = img.dataset.userId;
+            if (!userId) return;
+
+            const blobUrl = await fetch(userId);
+            if (blobUrl) {
+                img.src = blobUrl;
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    if (img.previousElementSibling?.classList.contains('avatar-placeholder')) {
+                        setTimeout(() => {
+                            img.previousElementSibling.style.visibility = 'hidden';
+                        }, 300);
+                    }
+                };
+            }
+        });
+    }
+
+    function getCached(userId) {
+        return cache[userId] || null;
+    }
+
+    return {
+        fetch,
+        loadPending,
+        getCached
+    };
+})();
+
 // Make utilities globally available
 window.ADOConfig = ADOConfig;
 window.ADOAPI = ADOAPI;
@@ -646,3 +729,4 @@ window.ADOIdentity = ADOIdentity;
 window.ADOContent = ADOContent;
 window.ADOUI = ADOUI;
 window.ADOURL = ADOURL;
+window.AvatarLoader = AvatarLoader;
