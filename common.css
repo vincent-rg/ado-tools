@@ -657,3 +657,40 @@ summary:hover {
     transform: scale(1.15);
     z-index: 11;
 }
+
+/* Status Indicators */
+.status-indicators {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-indicator-success {
+    background-color: #dff6dd;
+    color: #107c10;
+}
+
+.status-indicator-error {
+    background-color: #fde7e9;
+    color: #d13438;
+}
+
+.status-indicator-warning {
+    background-color: #fff4ce;
+    color: #8a6d3b;
+}
+
+.status-indicator-pending {
+    background-color: #e1f3ff;
+    color: #0078d4;
+}

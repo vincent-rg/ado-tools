@@ -562,6 +562,121 @@
             transform: scale(1.15);
             z-index: 11;
         }
+
+        /* Checks section */
+        .checks-section {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+
+        .checks-section h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: #323130;
+        }
+
+        .checks-loading {
+            color: #605e5c;
+            font-size: 13px;
+        }
+
+        .check-group {
+            margin-bottom: 12px;
+        }
+
+        .check-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .check-group-header {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 6px;
+            padding: 4px 8px;
+            border-radius: 3px;
+            background: #e1dfdd;
+            color: #323130;
+        }
+
+        .check-group-header.status-indicator-error {
+            background: #fde7e9;
+            color: #d13438;
+        }
+
+        .check-group-header.status-indicator-pending {
+            background: #e1f3ff;
+            color: #0078d4;
+        }
+
+        .check-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 4px 0;
+            font-size: 12px;
+            color: #323130;
+            border-bottom: 1px solid #edebe9;
+        }
+
+        .check-item:last-child {
+            border-bottom: none;
+        }
+
+        .check-item code {
+            font-size: 11px;
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            word-break: break-all;
+        }
+
+        .check-item a {
+            color: #0078d4;
+            text-decoration: none;
+        }
+
+        .check-item a:hover {
+            text-decoration: underline;
+        }
+
+        .check-icon {
+            flex-shrink: 0;
+            width: 14px;
+            text-align: center;
+        }
+
+        .check-item.status-indicator-success .check-icon {
+            color: #107c10;
+        }
+
+        .check-item.status-indicator-error .check-icon {
+            color: #d13438;
+        }
+
+        .check-item.status-indicator-pending .check-icon {
+            color: #0078d4;
+        }
+
+        .check-item-note {
+            font-size: 12px;
+            color: #605e5c;
+            font-style: italic;
+            padding: 4px 0;
+        }
+
+        .check-extra {
+            color: #8a6d3b;
+            font-size: 11px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -853,6 +968,227 @@
             `;
         }
 
+        // Checks (statuses, policies, conflicts) caching
+        let prChecksData = null;
+
+        async function fetchPRChecks(config, prData) {
+            const checks = {
+                statuses: [],
+                policies: [],
+                conflicts: [],
+                mergeStatus: prData.mergeStatus
+            };
+
+            try {
+                // Fetch statuses, policies, and conflicts in parallel
+                // Get project ID from PR data for policy evaluations (requires GUID, not name)
+                const projectId = prData.repository?.project?.id || config.project;
+
+                const fetchPromises = [
+                    ADOAPI.getPRStatuses(config, config.project, config.repository, prData.pullRequestId).catch(() => ({ value: [] })),
+                    ADOAPI.getPolicyEvaluations(config, config.project, projectId, prData.pullRequestId).catch(() => ({ value: [] }))
+                ];
+
+                // Only fetch conflicts if there are merge conflicts
+                if (prData.mergeStatus === 'conflicts') {
+                    fetchPromises.push(
+                        ADOAPI.getPRConflicts(config, config.project, config.repository, prData.pullRequestId).catch(() => ({ value: [] }))
+                    );
+                }
+
+                const results = await Promise.all(fetchPromises);
+
+                checks.statuses = results[0].value || [];
+                checks.policies = results[1].value || [];
+                if (results[2]) {
+                    checks.conflicts = results[2].value || [];
+                }
+            } catch (e) {
+                console.warn('Failed to fetch PR checks:', e);
+            }
+
+            prChecksData = checks;
+            updateChecksDisplay();
+        }
+
+        function updateChecksDisplay() {
+            const container = document.getElementById('checksSection');
+            if (!container) return;
+
+            container.innerHTML = renderChecksSection();
+        }
+
+        function getStatusIcon(state) {
+            switch (state) {
+                case 'succeeded': return '✓';
+                case 'failed':
+                case 'error': return '✗';
+                case 'pending':
+                case 'running':
+                case 'queued': return '●';
+                default: return '○';
+            }
+        }
+
+        function getStatusClass(state) {
+            switch (state) {
+                case 'succeeded':
+                case 'approved': return 'status-indicator-success';
+                case 'failed':
+                case 'error':
+                case 'rejected': return 'status-indicator-error';
+                case 'pending':
+                case 'running':
+                case 'queued': return 'status-indicator-pending';
+                default: return 'status-indicator-warning';
+            }
+        }
+
+        function renderChecksSection() {
+            if (!prChecksData) {
+                return `
+                    <div class="checks-section">
+                        <h4>Checks</h4>
+                        <div class="checks-loading">Loading...</div>
+                    </div>
+                `;
+            }
+
+            const sections = [];
+            const { statuses, policies, conflicts, mergeStatus } = prChecksData;
+
+            // Merge conflicts section
+            if (mergeStatus === 'conflicts') {
+                let conflictHtml = '<div class="check-group"><div class="check-group-header status-indicator-error">⚠️ Merge Conflicts</div>';
+                if (conflicts.length > 0) {
+                    conflictHtml += '<ul class="check-list">';
+                    conflicts.forEach(c => {
+                        const path = c.conflictPath || c.filePath || c.sourceFilePath || c.targetFilePath || c.path || 'Unknown file';
+                        conflictHtml += `<li class="check-item"><code>${ADOContent.escapeHtml(path)}</code></li>`;
+                    });
+                    conflictHtml += '</ul>';
+                } else {
+                    conflictHtml += '<div class="check-item-note">Unable to load conflict details</div>';
+                }
+                conflictHtml += '</div>';
+                sections.push(conflictHtml);
+            } else if (mergeStatus && mergeStatus !== 'succeeded' && mergeStatus !== 'notSet') {
+                // Other merge issues
+                let mergeText = '';
+                switch (mergeStatus) {
+                    case 'rejectedByPolicy': mergeText = '🚫 Rejected by policy'; break;
+                    case 'queued': mergeText = '⏳ Merge queued'; break;
+                    case 'failure': mergeText = '❌ Merge failed'; break;
+                }
+                if (mergeText) {
+                    sections.push(`<div class="check-group"><div class="check-group-header ${getStatusClass(mergeStatus)}">${mergeText}</div></div>`);
+                }
+            }
+
+            // Pipeline/Status checks section
+            if (statuses.length > 0) {
+                // Group by latest status per context (pipeline may have multiple runs)
+                const latestStatuses = new Map();
+                statuses.forEach(s => {
+                    const key = s.context?.name || s.description || 'Unknown';
+                    const existing = latestStatuses.get(key);
+                    if (!existing || new Date(s.creationDate) > new Date(existing.creationDate)) {
+                        latestStatuses.set(key, s);
+                    }
+                });
+
+                const statusList = Array.from(latestStatuses.values());
+                const failed = statusList.filter(s => s.state === 'failed' || s.state === 'error');
+                const pending = statusList.filter(s => s.state === 'pending');
+                const succeeded = statusList.filter(s => s.state === 'succeeded');
+
+                let checksHtml = '<div class="check-group"><div class="check-group-header">Pipeline Checks</div><ul class="check-list">';
+
+                // Show failed first, then pending, then succeeded
+                [...failed, ...pending, ...succeeded].forEach(s => {
+                    const name = s.context?.name || s.description || 'Unknown check';
+                    const icon = getStatusIcon(s.state);
+                    const cls = getStatusClass(s.state);
+                    const desc = s.description ? ` - ${ADOContent.escapeHtml(s.description)}` : '';
+
+                    if (s.targetUrl) {
+                        checksHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> <a href="${ADOContent.escapeHtml(s.targetUrl)}" target="_blank" rel="noopener">${ADOContent.escapeHtml(name)}</a>${desc}</li>`;
+                    } else {
+                        checksHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(name)}${desc}</li>`;
+                    }
+                });
+
+                checksHtml += '</ul></div>';
+                sections.push(checksHtml);
+            }
+
+            // Policy evaluations section
+            if (policies.length > 0) {
+                const rejected = policies.filter(e => e.status === 'rejected');
+                const running = policies.filter(e => e.status === 'running' || e.status === 'queued');
+                const approved = policies.filter(e => e.status === 'approved');
+
+                let policyHtml = '<div class="check-group"><div class="check-group-header">Policies</div><ul class="check-list">';
+
+                // Show rejected first, then running, then approved
+                [...rejected, ...running, ...approved].forEach(p => {
+                    const type = p.configuration?.type?.displayName || 'Policy';
+                    const settings = p.configuration?.settings || {};
+                    const context = p.context || {};
+                    const icon = getStatusIcon(p.status);
+                    const cls = getStatusClass(p.status);
+
+                    let label = type;
+                    let extra = '';
+
+                    // Handle specific policy types
+                    const typeLower = type.toLowerCase();
+
+                    if (typeLower === 'build') {
+                        const buildName = settings.displayName || context.buildDefinitionName || 'Unknown build';
+                        label = `Build: ${buildName}`;
+                        if (context.isExpired) {
+                            extra = ' <span class="check-extra">(expired)</span>';
+                        }
+                    } else if (typeLower === 'status') {
+                        const statusName = settings.statusName || 'Unknown';
+                        const statusGenre = settings.statusGenre ? ` (${settings.statusGenre})` : '';
+                        label = `Status: ${statusName}${statusGenre}`;
+                    } else if (typeLower.includes('minimum') && typeLower.includes('reviewer')) {
+                        const count = settings.minimumApproverCount;
+                        if (count !== undefined) {
+                            label = `${type}: ${count} required`;
+                        }
+                    } else if (typeLower.includes('required reviewer')) {
+                        const name = settings.displayName;
+                        if (name) {
+                            label = `Required reviewer: ${name}`;
+                        }
+                    } else if (typeLower.includes('work item')) {
+                        label = type; // Just show "Work item linking"
+                    } else if (settings.displayName) {
+                        label = `${type}: ${settings.displayName}`;
+                    }
+
+                    policyHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extra}</li>`;
+                });
+
+                policyHtml += '</ul></div>';
+                sections.push(policyHtml);
+            }
+
+            if (sections.length === 0) {
+                return '';
+            }
+
+            return `
+                <div class="checks-section">
+                    <h4>Checks</h4>
+                    ${sections.join('')}
+                </div>
+            `;
+        }
+
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = ADOURL.getParams();
@@ -1041,6 +1377,9 @@
             ADOConfig.save(config);
 
             ADOUI.showLoading('results', 'Loading PR threads...');
+
+            // Reset checks data for new PR
+            prChecksData = null;
 
             try {
                 // Fetch PR details, threads, and iterations in parallel
@@ -1794,6 +2133,7 @@
                     </details>
                     ${renderReviewersSection(prData.reviewers, threadCounts)}
                     ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts)}
+                    <div id="checksSection">${renderChecksSection()}</div>
                 </div>
 
                 <div class="stats">
@@ -2055,6 +2395,9 @@
 
             // Load avatars
             AvatarLoader.loadPending();
+
+            // Fetch PR checks (statuses, policies) asynchronously
+            fetchPRChecks(config, prData);
 
             // Asynchronously load code suggestions
             setTimeout(async () => {

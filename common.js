@@ -306,14 +306,33 @@ const ADOAPI = {
 
     /**
      * Get policy evaluations for a PR (quality gates, build policies, required reviewers, etc.)
+     * @param {object} config - ADO configuration
+     * @param {string} project - Project name (for API path)
+     * @param {string} projectId - Project GUID (for artifact ID)
+     * @param {number} prId - Pull request ID
      */
-    async getPolicyEvaluations(config, project, prId) {
-        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/${encodeURIComponent(project)}/${prId}&api-version=6.0`;
+    async getPolicyEvaluations(config, project, projectId, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/policy/evaluations?artifactId=vstfs:///CodeReview/CodeReviewId/${encodeURIComponent(projectId)}/${prId}&api-version=6.0-preview.1`;
         const response = await this.fetchWithAuth(url, config.pat);
 
         if (!response.ok) {
             const data = await response.json().catch(() => ({}));
             throw new Error(data.message || `Failed to fetch policy evaluations: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get merge conflicts for a PR
+     */
+    async getPRConflicts(config, project, repository, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/conflicts?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch PR conflicts: ${response.status} ${response.statusText}`);
         }
 
         return response.json();
