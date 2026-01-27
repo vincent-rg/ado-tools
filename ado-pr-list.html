@@ -1077,6 +1077,7 @@
             author: 60,
             repository: 200,
             reviewers: 120,
+            otherAuthors: 120,
             status: 100,
             comments: 90,
             created: 150
@@ -2184,6 +2185,7 @@
                             <th class="sortable" data-column="author" onclick="sortPRs('author')" style="${getColumnStyle('author')}">Author${getSortIndicator('author')}<div class="column-resize-handle" data-column="author"></div></th>
                             <th class="sortable" data-column="repository" onclick="sortPRs('repository')" style="${getColumnStyle('repository')}">Repository${getSortIndicator('repository')}<div class="column-resize-handle" data-column="repository"></div></th>
                             <th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>
+                            <th data-column="otherAuthors" style="${getColumnStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>
                             <th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>
                             <th data-column="comments" style="${getColumnStyle('comments')}">Comments<div class="column-resize-handle" data-column="comments"></div></th>
                             <th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}<div class="column-resize-handle" data-column="created"></div></th>
@@ -2239,6 +2241,9 @@
                         </td>
                         <td class="pr-meta" style="${getColumnStyle('reviewers')}">
                             ${getReviewerAvatarsHtml(pr.reviewers)}
+                        </td>
+                        <td class="pr-meta pr-other-authors" style="${getColumnStyle('otherAuthors')}">
+                            <span style="color: #8a8886;">-</span>
                         </td>
                         <td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
                         <td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>
@@ -2538,29 +2543,36 @@
                 );
                 const activeCount = activeThreads.length;
 
-                // Count active threads per author (by first comment author ID)
+                // Count active threads per author and collect author objects
                 const authorCounts = {};
+                const authorObjects = {};
                 activeThreads.forEach(thread => {
                     const firstComment = thread.comments && thread.comments[0];
-                    const authorId = firstComment?.author?.id;
-                    if (authorId) {
-                        authorCounts[authorId] = (authorCounts[authorId] || 0) + 1;
+                    const author = firstComment?.author;
+                    if (author?.id) {
+                        authorCounts[author.id] = (authorCounts[author.id] || 0) + 1;
+                        if (!authorObjects[author.id]) {
+                            authorObjects[author.id] = author;
+                        }
                     }
                 });
 
                 prCommentCounts[prKey] = {
                     count: activeCount,
                     authorCounts: authorCounts,
+                    authorObjects: authorObjects,
                     lastFetch: now,
                     lastAccess: now
                 };
                 updatePRCommentDisplay(prKey, activeCount);
                 updateReviewerThreadBadges(prKey, authorCounts);
+                updateOtherAuthorsDisplay(prKey, pr.reviewers, authorObjects, authorCounts);
             } catch (error) {
                 // On error, mark as fetched with 0 to avoid retrying
                 prCommentCounts[prKey] = {
                     count: 0,
                     authorCounts: {},
+                    authorObjects: {},
                     lastFetch: now,
                     lastAccess: now
                 };
@@ -2607,6 +2619,62 @@
                     wrapper.appendChild(badge);
                 }
             });
+        }
+
+        function updateOtherAuthorsDisplay(prKey, reviewers, authorObjects, authorCounts) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            const cell = row.querySelector('.pr-other-authors');
+            if (!cell) return;
+
+            // Get reviewer IDs
+            const reviewerIds = new Set((reviewers || []).map(r => r.id));
+
+            // Filter to authors who are not reviewers
+            const otherAuthors = Object.values(authorObjects).filter(author =>
+                author?.id && !reviewerIds.has(author.id)
+            );
+
+            if (otherAuthors.length === 0) {
+                cell.innerHTML = '<span style="color: #8a8886;">-</span>';
+                return;
+            }
+
+            // Render avatars with thread count badges
+            const avatarsHtml = otherAuthors.map(author => {
+                const displayName = ADOContent.escapeHtml(author.displayName || 'Unknown');
+                const threadCount = authorCounts[author.id] || 0;
+                const title = threadCount > 0
+                    ? `${displayName} - ${threadCount} active thread${threadCount > 1 ? 's' : ''}`
+                    : displayName;
+
+                let avatarHtml;
+                if (author.id) {
+                    const cachedUrl = AvatarLoader.getCached(author.id);
+                    if (cachedUrl) {
+                        avatarHtml = `<img src="${cachedUrl}" data-user-id="${author.id}" alt="${title}" title="${title}" class="avatar">`;
+                    } else {
+                        avatarHtml = `<div class="avatar-placeholder" title="${title}"></div><img data-user-id="${author.id}" alt="${title}" title="${title}" class="avatar avatar-pending">`;
+                    }
+                } else {
+                    const initials = (author.displayName || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    avatarHtml = `<div class="avatar-fallback" title="${title}">${initials}</div>`;
+                }
+
+                // Thread count badge
+                let badgeHtml = '';
+                if (threadCount > 0) {
+                    badgeHtml = `<span class="reviewer-thread-badge">${threadCount}</span>`;
+                }
+
+                return `<div class="avatar-wrapper" data-user-id="${author.id || ''}">${avatarHtml}${badgeHtml}</div>`;
+            }).join('');
+
+            cell.innerHTML = `<div class="avatars-container">${avatarsHtml}</div>`;
+
+            // Load any pending avatars
+            AvatarLoader.loadPending();
         }
 
         /**
