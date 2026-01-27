@@ -560,9 +560,36 @@
         }
 
         .avatar-wrapper:hover .vote-badge,
-        .avatar-wrapper:hover .thread-badge {
+        .avatar-wrapper:hover .thread-badge,
+        .avatar-wrapper:hover .author-badge {
             transform: scale(1.15);
             z-index: 11;
+        }
+
+        /* PR Author badge */
+        .author-badge {
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ffb900;
+            color: #323130;
+            font-size: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid white;
+            z-index: 5;
+        }
+
+        .comment-author-info .author-badge {
+            width: 12px;
+            height: 12px;
+            font-size: 7px;
+            top: -3px;
+            left: -3px;
         }
 
         /* Checks section */
@@ -850,7 +877,7 @@
             return counts;
         }
 
-        function renderAvatarWithBadges(user, vote, threadCount) {
+        function renderAvatarWithBadges(user, vote, threadCount, isPRAuthor = false) {
             const initials = user.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
             const displayName = ADOContent.escapeHtml(user.displayName);
 
@@ -912,17 +939,23 @@
                 threadBadgeHtml = `<span class="thread-badge" title="${threadCount} active thread${threadCount > 1 ? 's' : ''}">${threadCount}</span>`;
             }
 
-            return `<div class="avatar-wrapper" data-user-id="${user.id || ''}">${avatarHtml}${voteBadgeHtml}${threadBadgeHtml}</div>`;
+            // PR Author badge (top-left)
+            let authorBadgeHtml = '';
+            if (isPRAuthor) {
+                authorBadgeHtml = `<span class="author-badge" title="PR Author">★</span>`;
+            }
+
+            return `<div class="avatar-wrapper" data-user-id="${user.id || ''}">${avatarHtml}${voteBadgeHtml}${threadBadgeHtml}${authorBadgeHtml}</div>`;
         }
 
-        function renderReviewersSection(reviewers, threadCounts) {
+        function renderReviewersSection(reviewers, threadCounts, prAuthorId) {
             if (!reviewers || reviewers.length === 0) {
                 return '';
             }
 
             const avatarsHtml = reviewers.map(r => {
                 const count = threadCounts[r.id] || 0;
-                return renderAvatarWithBadges(r, r.vote, count);
+                return renderAvatarWithBadges(r, r.vote, count, r.id === prAuthorId);
             }).join('');
 
             return `
@@ -933,7 +966,7 @@
             `;
         }
 
-        function renderOtherAuthorsSection(threads, reviewers, threadCounts) {
+        function renderOtherAuthorsSection(threads, reviewers, threadCounts, prAuthorId) {
             // Get all unique thread authors who are not reviewers
             // Only include authors with at least one "real" comment (not system/codeChange)
             const reviewerIds = new Set((reviewers || []).map(r => r.id));
@@ -959,7 +992,7 @@
 
             const avatarsHtml = Array.from(otherAuthors.values()).map(author => {
                 const count = threadCounts[author.id] || 0;
-                return renderAvatarWithBadges(author, undefined, count);
+                return renderAvatarWithBadges(author, undefined, count, author.id === prAuthorId);
             }).join('');
 
             return `
@@ -2051,8 +2084,8 @@
                             </div>
                         </div>
                     </details>
-                    ${renderReviewersSection(prData.reviewers, threadCounts)}
-                    ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts)}
+                    ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
+                    ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
                     <div id="checksSection">${renderChecksSection()}</div>
                 </div>
 
@@ -2283,11 +2316,13 @@
                             let commentAvatarHtml = '';
                             if (comment.author?.id) {
                                 const authorTitle = ADOContent.escapeHtml(comment.author.displayName || 'Unknown');
+                                const isCommentByPRAuthor = comment.author.id === prData.createdBy?.id;
+                                const authorBadge = isCommentByPRAuthor ? `<span class="author-badge" title="PR Author">★</span>` : '';
                                 const cachedUrl = AvatarLoader.getCached(comment.author.id);
                                 if (cachedUrl) {
-                                    commentAvatarHtml = `<div class="avatar-wrapper"><img src="${cachedUrl}" alt="${authorTitle}" title="${authorTitle}" class="avatar"></div>`;
+                                    commentAvatarHtml = `<div class="avatar-wrapper"><img src="${cachedUrl}" alt="${authorTitle}" title="${authorTitle}" class="avatar">${authorBadge}</div>`;
                                 } else {
-                                    commentAvatarHtml = `<div class="avatar-wrapper"><div class="avatar-placeholder" title="${authorTitle}"></div><img data-user-id="${comment.author.id}" alt="${authorTitle}" title="${authorTitle}" class="avatar avatar-pending"></div>`;
+                                    commentAvatarHtml = `<div class="avatar-wrapper"><div class="avatar-placeholder" title="${authorTitle}"></div><img data-user-id="${comment.author.id}" alt="${authorTitle}" title="${authorTitle}" class="avatar avatar-pending">${authorBadge}</div>`;
                                 }
                             }
 
