@@ -972,42 +972,15 @@
         let prChecksData = null;
 
         async function fetchPRChecks(config, prData) {
-            const checks = {
-                statuses: [],
-                policies: [],
-                conflicts: [],
-                mergeStatus: prData.mergeStatus
-            };
-
-            try {
-                // Fetch statuses, policies, and conflicts in parallel
-                // Get project ID from PR data for policy evaluations (requires GUID, not name)
-                const projectId = prData.repository?.project?.id || config.project;
-
-                const fetchPromises = [
-                    ADOAPI.getPRStatuses(config, config.project, config.repository, prData.pullRequestId).catch(() => ({ value: [] })),
-                    ADOAPI.getPolicyEvaluations(config, config.project, projectId, prData.pullRequestId).catch(() => ({ value: [] }))
-                ];
-
-                // Only fetch conflicts if there are merge conflicts
-                if (prData.mergeStatus === 'conflicts') {
-                    fetchPromises.push(
-                        ADOAPI.getPRConflicts(config, config.project, config.repository, prData.pullRequestId).catch(() => ({ value: [] }))
-                    );
-                }
-
-                const results = await Promise.all(fetchPromises);
-
-                checks.statuses = results[0].value || [];
-                checks.policies = results[1].value || [];
-                if (results[2]) {
-                    checks.conflicts = results[2].value || [];
-                }
-            } catch (e) {
-                console.warn('Failed to fetch PR checks:', e);
-            }
-
-            prChecksData = checks;
+            const projectId = prData.repository?.project?.id || config.project;
+            prChecksData = await ChecksFormatter.fetchPRChecks(
+                config,
+                config.project,
+                config.repository,
+                prData.pullRequestId,
+                projectId,
+                prData.mergeStatus
+            );
             updateChecksDisplay();
         }
 
@@ -1018,31 +991,9 @@
             container.innerHTML = renderChecksSection();
         }
 
-        function getStatusIcon(state) {
-            switch (state) {
-                case 'succeeded': return '✓';
-                case 'failed':
-                case 'error': return '✗';
-                case 'pending':
-                case 'running':
-                case 'queued': return '●';
-                default: return '○';
-            }
-        }
-
-        function getStatusClass(state) {
-            switch (state) {
-                case 'succeeded':
-                case 'approved': return 'status-indicator-success';
-                case 'failed':
-                case 'error':
-                case 'rejected': return 'status-indicator-error';
-                case 'pending':
-                case 'running':
-                case 'queued': return 'status-indicator-pending';
-                default: return 'status-indicator-warning';
-            }
-        }
+        // Use shared utilities from common.js
+        const getStatusIcon = ChecksFormatter.getIcon.bind(ChecksFormatter);
+        const getStatusClass = ChecksFormatter.getClass.bind(ChecksFormatter);
 
         function renderChecksSection() {
             if (!prChecksData) {
@@ -1132,45 +1083,12 @@
 
                 // Show rejected first, then running, then approved
                 [...rejected, ...running, ...approved].forEach(p => {
-                    const type = p.configuration?.type?.displayName || 'Policy';
-                    const settings = p.configuration?.settings || {};
-                    const context = p.context || {};
                     const icon = getStatusIcon(p.status);
                     const cls = getStatusClass(p.status);
+                    const { label, extra } = ChecksFormatter.formatPolicy(p);
+                    const extraHtml = extra ? ` <span class="check-extra">${extra}</span>` : '';
 
-                    let label = type;
-                    let extra = '';
-
-                    // Handle specific policy types
-                    const typeLower = type.toLowerCase();
-
-                    if (typeLower === 'build') {
-                        const buildName = settings.displayName || context.buildDefinitionName || 'Unknown build';
-                        label = `Build: ${buildName}`;
-                        if (context.isExpired) {
-                            extra = ' <span class="check-extra">(expired)</span>';
-                        }
-                    } else if (typeLower === 'status') {
-                        const statusName = settings.statusName || 'Unknown';
-                        const statusGenre = settings.statusGenre ? ` (${settings.statusGenre})` : '';
-                        label = `Status: ${statusName}${statusGenre}`;
-                    } else if (typeLower.includes('minimum') && typeLower.includes('reviewer')) {
-                        const count = settings.minimumApproverCount;
-                        if (count !== undefined) {
-                            label = `${type}: ${count} required`;
-                        }
-                    } else if (typeLower.includes('required reviewer')) {
-                        const name = settings.displayName;
-                        if (name) {
-                            label = `Required reviewer: ${name}`;
-                        }
-                    } else if (typeLower.includes('work item')) {
-                        label = type; // Just show "Work item linking"
-                    } else if (settings.displayName) {
-                        label = `${type}: ${settings.displayName}`;
-                    }
-
-                    policyHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extra}</li>`;
+                    policyHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extraHtml}</li>`;
                 });
 
                 policyHtml += '</ul></div>';

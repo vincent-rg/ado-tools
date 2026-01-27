@@ -295,19 +295,26 @@
             margin-top: 6px;
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            gap: 4px;
+        }
+
+        .status-indicators-wrapper {
+            display: inline-flex;
+            gap: 4px;
+            cursor: help;
         }
 
         .status-indicator {
             display: inline-block;
-            padding: 2px 8px;
+            padding: 2px 6px;
             border-radius: 3px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 500;
+            white-space: nowrap;
         }
 
         .status-indicator-success {
-            background-color: #e7f4e7;
+            background-color: #dff6dd;
             color: #107c10;
         }
 
@@ -1036,8 +1043,7 @@
         let currentSort = 'id';
         let currentOrder = 'desc';
         let prCommentCounts = {}; // Cache for active comment counts: { prKey: { count: N, lastFetch: timestamp, lastAccess: timestamp } }
-        let prStatuses = {}; // Cache for PR status checks: { prKey: { statuses: [], lastFetch: timestamp } }
-        let prPolicyEvaluations = {}; // Cache for PR policy evaluations: { prKey: { evaluations: [], lastFetch: timestamp } }
+        let prChecks = {}; // Cache for PR checks (statuses, policies, conflicts): { prKey: { data: {...}, lastFetch: timestamp } }
         let isFetchingComments = false;
         let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
         let updateTimeInterval = null; // Interval for updating "time ago" display
@@ -2481,8 +2487,7 @@
                         // Fetch batch concurrently (comments, statuses, and policy evaluations)
                         const promises = currentBatch.flatMap(pr => [
                             fetchPRCommentCount(config, pr, forceRefresh),
-                            fetchPRStatuses(config, pr, forceRefresh),
-                            fetchPRPolicyEvaluations(config, pr, forceRefresh)
+                            fetchPRChecks(config, pr, forceRefresh)
                         ]);
                         await Promise.all(promises);
 
@@ -2605,63 +2610,37 @@
         }
 
         /**
-         * Fetch status checks (pipelines, CI builds, custom checks) for a PR
+         * Fetch all checks (statuses, policies, conflicts) for a PR using shared method
          */
-        async function fetchPRStatuses(config, pr, forceRefresh = false) {
+        async function fetchPRChecks(config, pr, forceRefresh = false) {
             const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
             const now = Date.now();
 
             // Skip if already fetched recently (unless force refresh)
-            if (!forceRefresh && prStatuses[prKey] !== undefined) {
+            if (!forceRefresh && prChecks[prKey] !== undefined) {
                 return;
             }
 
             try {
-                const result = await ADOAPI.getPRStatuses(config, pr._project, pr._repo.id, pr.pullRequestId);
-                const statuses = result.value || [];
+                const projectId = pr.repository?.project?.id || pr._project;
+                const data = await ChecksFormatter.fetchPRChecks(
+                    config,
+                    pr._project,
+                    pr._repo.id,
+                    pr.pullRequestId,
+                    projectId,
+                    pr.mergeStatus
+                );
 
-                prStatuses[prKey] = {
-                    statuses: statuses,
+                prChecks[prKey] = {
+                    data: data,
                     lastFetch: now
                 };
                 updatePRStatusDisplay(prKey);
             } catch (error) {
-                // On error, mark as fetched with empty array to avoid retrying
-                prStatuses[prKey] = {
-                    statuses: [],
-                    lastFetch: now
-                };
-                updatePRStatusDisplay(prKey);
-            }
-        }
-
-        /**
-         * Fetch policy evaluations (quality gates, build policies, required reviewers) for a PR
-         */
-        async function fetchPRPolicyEvaluations(config, pr, forceRefresh = false) {
-            const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
-            const now = Date.now();
-
-            // Skip if already fetched recently (unless force refresh)
-            if (!forceRefresh && prPolicyEvaluations[prKey] !== undefined) {
-                return;
-            }
-
-            try {
-                // Use project ID (GUID) for artifact ID, fallback to project name
-                const projectId = pr._repo?.project?.id || pr._project;
-                const result = await ADOAPI.getPolicyEvaluations(config, pr._project, projectId, pr.pullRequestId);
-                const evaluations = result.value || [];
-
-                prPolicyEvaluations[prKey] = {
-                    evaluations: evaluations,
-                    lastFetch: now
-                };
-                updatePRStatusDisplay(prKey);
-            } catch (error) {
-                // On error, mark as fetched with empty array to avoid retrying
-                prPolicyEvaluations[prKey] = {
-                    evaluations: [],
+                // On error, mark as fetched with empty data to avoid retrying
+                prChecks[prKey] = {
+                    data: { statuses: [], policies: [], conflicts: [], mergeStatus: pr.mergeStatus },
                     lastFetch: now
                 };
                 updatePRStatusDisplay(prKey);
@@ -2691,101 +2670,100 @@
             // Find the PR to get mergeStatus
             const pr = allPRs.find(p => `${p._project}/${p._repo.id}/${p.pullRequestId}` === prKey);
 
+            // Get cached checks data
+            const checksData = prChecks[prKey]?.data || {};
+            const statuses = checksData.statuses || [];
+            const policies = checksData.policies || [];
+            const conflicts = checksData.conflicts || [];
+            const mergeStatus = pr?.mergeStatus;
+
+            // Build detailed tooltip
+            const tooltipData = { statuses, policies, conflicts, mergeStatus };
+            const tooltip = ChecksFormatter.buildTooltip(tooltipData);
+
             // Merge conflict indicator
-            if (pr && pr.mergeStatus && pr.mergeStatus !== 'succeeded' && pr.mergeStatus !== 'notSet') {
+            if (pr && mergeStatus && mergeStatus !== 'succeeded' && mergeStatus !== 'notSet') {
                 let mergeIcon = '⚠️';
                 let mergeText = '';
                 let mergeClass = 'status-indicator-warning';
 
-                switch (pr.mergeStatus) {
+                switch (mergeStatus) {
                     case 'conflicts':
                         mergeIcon = '⚠️';
-                        mergeText = 'Merge conflicts';
+                        mergeText = 'Conflicts';
                         mergeClass = 'status-indicator-error';
                         break;
                     case 'rejectedByPolicy':
                         mergeIcon = '🚫';
-                        mergeText = 'Rejected by policy';
+                        mergeText = 'Rejected';
                         mergeClass = 'status-indicator-error';
                         break;
                     case 'queued':
                         mergeIcon = '⏳';
-                        mergeText = 'Merge queued';
+                        mergeText = 'Queued';
                         mergeClass = 'status-indicator-pending';
                         break;
                     case 'failure':
                         mergeIcon = '❌';
-                        mergeText = 'Merge failed';
+                        mergeText = 'Failed';
                         mergeClass = 'status-indicator-error';
                         break;
                 }
 
                 if (mergeText) {
-                    indicators.push(`<span class="status-indicator ${mergeClass}" title="${mergeText}">${mergeIcon} ${mergeText}</span>`);
+                    indicators.push(`<span class="status-indicator ${mergeClass}">${mergeIcon}</span>`);
                 }
             }
 
-            // Status checks indicator
-            if (prStatuses[prKey]) {
-                const statuses = prStatuses[prKey].statuses;
-                const succeeded = statuses.filter(s => s.state === 'succeeded').length;
-                const failed = statuses.filter(s => s.state === 'failed' || s.state === 'error').length;
-                const pending = statuses.filter(s => s.state === 'pending').length;
+            // Status checks indicator (compact)
+            if (statuses.length > 0) {
+                const counts = ChecksFormatter.countStatuses(statuses);
 
-                if (statuses.length > 0) {
-                    let statusText = '';
-                    let statusClass = 'status-indicator-success';
-                    let statusIcon = '✓';
+                let statusClass = 'status-indicator-success';
+                let statusIcon = '✓';
+                let statusText = `${counts.total}`;
 
-                    if (failed > 0) {
-                        statusText = `${failed} check${failed > 1 ? 's' : ''} failed`;
-                        statusClass = 'status-indicator-error';
-                        statusIcon = '✗';
-                    } else if (pending > 0) {
-                        statusText = `${pending} check${pending > 1 ? 's' : ''} pending`;
-                        statusClass = 'status-indicator-pending';
-                        statusIcon = '●';
-                    } else if (succeeded > 0) {
-                        statusText = `${succeeded} check${succeeded > 1 ? 's' : ''} passed`;
-                        statusClass = 'status-indicator-success';
-                        statusIcon = '✓';
-                    }
-
-                    indicators.push(`<span class="status-indicator ${statusClass}" title="${statusText}">${statusIcon} ${statusText}</span>`);
+                if (counts.failed > 0) {
+                    statusClass = 'status-indicator-error';
+                    statusIcon = '✗';
+                    statusText = `${counts.failed}/${counts.total}`;
+                } else if (counts.pending > 0) {
+                    statusClass = 'status-indicator-pending';
+                    statusIcon = '●';
+                    statusText = `${counts.pending}/${counts.total}`;
                 }
+
+                indicators.push(`<span class="status-indicator ${statusClass}">🔧 ${statusIcon} ${statusText}</span>`);
             }
 
-            // Policy evaluations indicator
-            if (prPolicyEvaluations[prKey]) {
-                const evaluations = prPolicyEvaluations[prKey].evaluations;
-                const approved = evaluations.filter(e => e.status === 'approved').length;
-                const rejected = evaluations.filter(e => e.status === 'rejected').length;
-                const running = evaluations.filter(e => e.status === 'running' || e.status === 'queued').length;
+            // Policy evaluations indicator (compact)
+            if (policies.length > 0) {
+                const counts = ChecksFormatter.countPolicies(policies);
 
-                if (evaluations.length > 0) {
-                    let policyText = '';
-                    let policyClass = 'status-indicator-success';
-                    let policyIcon = '✓';
+                let policyClass = 'status-indicator-success';
+                let policyIcon = '✓';
+                let policyText = `${counts.total}`;
 
-                    if (rejected > 0) {
-                        policyText = `${rejected} polic${rejected > 1 ? 'ies' : 'y'} rejected`;
-                        policyClass = 'status-indicator-error';
-                        policyIcon = '✗';
-                    } else if (running > 0) {
-                        policyText = `${running} polic${running > 1 ? 'ies' : 'y'} running`;
-                        policyClass = 'status-indicator-pending';
-                        policyIcon = '●';
-                    } else if (approved > 0) {
-                        policyText = `${approved} polic${approved > 1 ? 'ies' : 'y'} approved`;
-                        policyClass = 'status-indicator-success';
-                        policyIcon = '✓';
-                    }
-
-                    indicators.push(`<span class="status-indicator ${policyClass}" title="${policyText}">${policyIcon} ${policyText}</span>`);
+                if (counts.rejected > 0) {
+                    policyClass = 'status-indicator-error';
+                    policyIcon = '✗';
+                    policyText = `${counts.rejected}/${counts.total}`;
+                } else if (counts.running > 0) {
+                    policyClass = 'status-indicator-pending';
+                    policyIcon = '●';
+                    policyText = `${counts.running}/${counts.total}`;
                 }
+
+                indicators.push(`<span class="status-indicator ${policyClass}">📋 ${policyIcon} ${policyText}</span>`);
             }
 
-            return indicators.join(' ');
+            // Wrap in container with tooltip
+            if (indicators.length === 0) {
+                return '';
+            }
+
+            const escapedTooltip = ADOContent.escapeHtml(tooltip).replace(/\n/g, '&#10;');
+            return `<span class="status-indicators-wrapper" title="${escapedTooltip}">${indicators.join(' ')}</span>`;
         }
 
         function openPRLink(project, repository, prId) {

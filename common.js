@@ -659,6 +659,263 @@ const ADOURL = {
 };
 
 /**
+ * Checks Formatting
+ * Shared utilities for formatting PR checks (statuses, policies, conflicts)
+ */
+const ChecksFormatter = {
+    /**
+     * Get status icon based on state
+     */
+    getIcon(state) {
+        switch (state) {
+            case 'succeeded':
+            case 'approved': return '✓';
+            case 'failed':
+            case 'error':
+            case 'rejected': return '✗';
+            case 'pending':
+            case 'running':
+            case 'queued': return '●';
+            default: return '○';
+        }
+    },
+
+    /**
+     * Get CSS class based on state
+     */
+    getClass(state) {
+        switch (state) {
+            case 'succeeded':
+            case 'approved': return 'status-indicator-success';
+            case 'failed':
+            case 'error':
+            case 'rejected': return 'status-indicator-error';
+            case 'pending':
+            case 'running':
+            case 'queued': return 'status-indicator-pending';
+            default: return 'status-indicator-warning';
+        }
+    },
+
+    /**
+     * Format a policy evaluation for display
+     * @param {object} policy - Policy evaluation object
+     * @returns {object} { label, extra } - formatted label and optional extra info
+     */
+    formatPolicy(policy) {
+        const type = policy.configuration?.type?.displayName || 'Policy';
+        const settings = policy.configuration?.settings || {};
+        const context = policy.context || {};
+
+        let label = type;
+        let extra = '';
+
+        const typeLower = type.toLowerCase();
+
+        if (typeLower === 'build') {
+            const buildName = settings.displayName || context.buildDefinitionName || 'Unknown build';
+            label = `Build: ${buildName}`;
+            if (context.isExpired) {
+                extra = '(expired)';
+            }
+        } else if (typeLower === 'status') {
+            const statusName = settings.statusName || 'Unknown';
+            const statusGenre = settings.statusGenre ? ` (${settings.statusGenre})` : '';
+            label = `Status: ${statusName}${statusGenre}`;
+        } else if (typeLower.includes('minimum') && typeLower.includes('reviewer')) {
+            const count = settings.minimumApproverCount;
+            if (count !== undefined) {
+                label = `${type}: ${count} required`;
+            }
+        } else if (typeLower.includes('required reviewer')) {
+            const name = settings.displayName;
+            if (name) {
+                label = `Required reviewer: ${name}`;
+            }
+        } else if (typeLower.includes('work item')) {
+            label = type;
+        } else if (settings.displayName) {
+            label = `${type}: ${settings.displayName}`;
+        }
+
+        return { label, extra };
+    },
+
+    /**
+     * Format a status check for display
+     * @param {object} status - Status check object
+     * @returns {object} { name, description, url }
+     */
+    formatStatus(status) {
+        return {
+            name: status.context?.name || status.description || 'Unknown check',
+            description: status.description || '',
+            url: status.targetUrl || null
+        };
+    },
+
+    /**
+     * Build tooltip content for detailed checks info
+     * @param {object} data - { statuses, policies, conflicts, mergeStatus }
+     * @returns {string} - Tooltip text
+     */
+    buildTooltip(data) {
+        const lines = [];
+        const { statuses = [], policies = [], conflicts = [], mergeStatus } = data;
+
+        // Merge status
+        if (mergeStatus === 'conflicts' && conflicts.length > 0) {
+            lines.push('⚠️ Merge Conflicts:');
+            conflicts.slice(0, 5).forEach(c => {
+                const path = c.conflictPath || c.filePath || c.sourceFilePath || 'Unknown';
+                lines.push(`  • ${path}`);
+            });
+            if (conflicts.length > 5) {
+                lines.push(`  ... and ${conflicts.length - 5} more`);
+            }
+        } else if (mergeStatus && mergeStatus !== 'succeeded' && mergeStatus !== 'notSet') {
+            const mergeTexts = {
+                'conflicts': '⚠️ Merge conflicts',
+                'rejectedByPolicy': '🚫 Rejected by policy',
+                'queued': '⏳ Merge queued',
+                'failure': '❌ Merge failed'
+            };
+            if (mergeTexts[mergeStatus]) {
+                lines.push(mergeTexts[mergeStatus]);
+            }
+        }
+
+        // Status checks (pipelines)
+        if (statuses.length > 0) {
+            // Group by latest per context
+            const latestStatuses = new Map();
+            statuses.forEach(s => {
+                const key = s.context?.name || s.description || 'Unknown';
+                const existing = latestStatuses.get(key);
+                if (!existing || new Date(s.creationDate) > new Date(existing.creationDate)) {
+                    latestStatuses.set(key, s);
+                }
+            });
+
+            const statusList = Array.from(latestStatuses.values());
+            const failed = statusList.filter(s => s.state === 'failed' || s.state === 'error');
+            const pending = statusList.filter(s => s.state === 'pending');
+            const succeeded = statusList.filter(s => s.state === 'succeeded');
+
+            if (statusList.length > 0) {
+                lines.push('');
+                lines.push('Pipeline Checks:');
+                [...failed, ...pending, ...succeeded].forEach(s => {
+                    const icon = this.getIcon(s.state);
+                    const info = this.formatStatus(s);
+                    lines.push(`  ${icon} ${info.name}`);
+                });
+            }
+        }
+
+        // Policy evaluations
+        if (policies.length > 0) {
+            const rejected = policies.filter(e => e.status === 'rejected');
+            const running = policies.filter(e => e.status === 'running' || e.status === 'queued');
+            const approved = policies.filter(e => e.status === 'approved');
+
+            lines.push('');
+            lines.push('Policies:');
+            [...rejected, ...running, ...approved].forEach(p => {
+                const icon = this.getIcon(p.status);
+                const { label, extra } = this.formatPolicy(p);
+                lines.push(`  ${icon} ${label}${extra ? ' ' + extra : ''}`);
+            });
+        }
+
+        return lines.join('\n').trim();
+    },
+
+    /**
+     * Count statuses by state
+     */
+    countStatuses(statuses) {
+        // Group by latest per context first
+        const latestStatuses = new Map();
+        statuses.forEach(s => {
+            const key = s.context?.name || s.description || 'Unknown';
+            const existing = latestStatuses.get(key);
+            if (!existing || new Date(s.creationDate) > new Date(existing.creationDate)) {
+                latestStatuses.set(key, s);
+            }
+        });
+
+        const list = Array.from(latestStatuses.values());
+        return {
+            total: list.length,
+            succeeded: list.filter(s => s.state === 'succeeded').length,
+            failed: list.filter(s => s.state === 'failed' || s.state === 'error').length,
+            pending: list.filter(s => s.state === 'pending').length
+        };
+    },
+
+    /**
+     * Count policies by status
+     */
+    countPolicies(policies) {
+        return {
+            total: policies.length,
+            approved: policies.filter(e => e.status === 'approved').length,
+            rejected: policies.filter(e => e.status === 'rejected').length,
+            running: policies.filter(e => e.status === 'running' || e.status === 'queued').length
+        };
+    },
+
+    /**
+     * Fetch all checks data for a PR (statuses, policies, conflicts)
+     * @param {object} config - ADO config
+     * @param {string} project - Project name
+     * @param {string} repository - Repository name
+     * @param {number} prId - Pull request ID
+     * @param {string} projectId - Project GUID (from pr.repository.project.id)
+     * @param {string} mergeStatus - PR merge status (to determine if conflicts should be fetched)
+     * @returns {Promise<object>} { statuses, policies, conflicts, mergeStatus }
+     */
+    async fetchPRChecks(config, project, repository, prId, projectId, mergeStatus) {
+        const checks = {
+            statuses: [],
+            policies: [],
+            conflicts: [],
+            mergeStatus: mergeStatus
+        };
+
+        try {
+            // Use project GUID for policy evaluations, fallback to project name
+            const effectiveProjectId = projectId || project;
+
+            const fetchPromises = [
+                ADOAPI.getPRStatuses(config, project, repository, prId).catch(() => ({ value: [] })),
+                ADOAPI.getPolicyEvaluations(config, project, effectiveProjectId, prId).catch(() => ({ value: [] }))
+            ];
+
+            // Only fetch conflicts if there are merge conflicts
+            if (mergeStatus === 'conflicts') {
+                fetchPromises.push(
+                    ADOAPI.getPRConflicts(config, project, repository, prId).catch(() => ({ value: [] }))
+                );
+            }
+
+            const results = await Promise.all(fetchPromises);
+
+            checks.statuses = results[0].value || [];
+            checks.policies = results[1].value || [];
+            if (results[2]) {
+                checks.conflicts = results[2].value || [];
+            }
+        } catch (e) {
+            console.warn('Failed to fetch PR checks:', e);
+        }
+
+        return checks;
+    }
+};
+
+/**
  * Avatar Loading
  * Handles fetching and caching user avatars via proxy
  */
@@ -748,4 +1005,5 @@ window.ADOIdentity = ADOIdentity;
 window.ADOContent = ADOContent;
 window.ADOUI = ADOUI;
 window.ADOURL = ADOURL;
+window.ChecksFormatter = ChecksFormatter;
 window.AvatarLoader = AvatarLoader;
