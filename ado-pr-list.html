@@ -2439,6 +2439,9 @@
             // Initialize column resize handles
             initColumnResize();
 
+            // Restore dynamic badges from cached data (thread badges on avatars, other authors)
+            restoreDynamicBadges();
+
             // Start fetching comment counts after rendering using priority queue
             processPriorityQueue();
         }
@@ -2804,6 +2807,37 @@
 
             // Load any pending avatars
             AvatarLoader.loadPending();
+        }
+
+        /**
+         * Restore dynamic badges (thread badges on reviewer avatars, other authors)
+         * after the table has been re-rendered (e.g., after column visibility change)
+         */
+        function restoreDynamicBadges() {
+            // Build a map of prKey -> PR for quick lookup
+            const prByKey = {};
+            allPRs.forEach(pr => {
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                prByKey[prKey] = pr;
+            });
+
+            // Find all visible PR rows
+            const rows = document.querySelectorAll('tr[data-pr-key]');
+            rows.forEach(row => {
+                const prKey = row.dataset.prKey;
+                const cachedData = prCommentCounts[prKey];
+                const pr = prByKey[prKey];
+
+                if (cachedData && cachedData.authorCounts) {
+                    // Restore thread badges on reviewer avatars
+                    updateReviewerThreadBadges(prKey, cachedData.authorCounts);
+
+                    // Restore other authors display
+                    if (pr && cachedData.authorObjects) {
+                        updateOtherAuthorsDisplay(prKey, pr.reviewers, cachedData.authorObjects, cachedData.authorCounts);
+                    }
+                }
+            });
         }
 
         /**
