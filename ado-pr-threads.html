@@ -306,15 +306,7 @@
         }
 
         .comment-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             margin-bottom: 8px;
-        }
-
-        .comment-author {
-            font-weight: 600;
-            color: #0078d4;
         }
 
         .comment-author-info {
@@ -2304,18 +2296,16 @@
                                     <div class="comment-header">
                                         <span class="comment-author-info">
                                             ${commentAvatarHtml}
-                                            ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
-                                        </span>
-                                        <div style="display: flex; align-items: center; gap: 4px;">
                                             <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
                                             ${iterationLinks.completeLink ? `
-                                            <div class="code-links">
+                                            <span class="code-links">
                                                 ${iterationLinks.beforeLink ? `<a href="${iterationLinks.beforeLink}" target="_blank" class="comment-link" title="Diff from first update to last update before this comment">←</a>` : ''}
                                                 ${iterationLinks.afterLink ? `<a href="${iterationLinks.afterLink}" target="_blank" class="comment-link" title="Diff from first update after this comment to latest">→</a>` : ''}
                                                 <a href="${iterationLinks.completeLink}" target="_blank" class="comment-link" title="Complete diff from first to latest update">↔</a>
-                                            </div>
+                                            </span>
                                             ` : ''}
-                                        </div>
+                                            ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
+                                        </span>
                                     </div>
                                     ${hasRealContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
 
