@@ -130,6 +130,18 @@ const ADOAPI = {
         return response.json();
     },
 
+    async getIterations(config, project, repoId, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/iterations?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch PR iterations: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
     /**
      * Get PR iterations
      */

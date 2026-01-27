@@ -1099,6 +1099,7 @@
         let currentOrder = 'desc';
         let prCommentCounts = {}; // Cache for active comment counts: { prKey: { count: N, lastFetch: timestamp, lastAccess: timestamp } }
         let prChecks = {}; // Cache for PR checks (statuses, policies, conflicts): { prKey: { data: {...}, lastFetch: timestamp } }
+        let prIterationCounts = {}; // Cache for iteration counts: { prKey: { count: N, lastFetch: timestamp } }
         let isFetchingComments = false;
         let loadedRepoKeys = new Map(); // Track loaded repos with timestamps (repoKey -> timestamp)
         let updateTimeInterval = null; // Interval for updating "time ago" display
@@ -1134,6 +1135,7 @@
             reviewers: 120,
             otherAuthors: 120,
             status: 100,
+            updates: 70,
             comments: 90,
             created: 150
         };
@@ -1148,10 +1150,11 @@
             reviewers: 'Reviewers',
             otherAuthors: 'Other Authors',
             status: 'Status',
+            updates: 'Updates',
             comments: 'Comments',
             created: 'Created'
         };
-        const HIDEABLE_COLUMNS = ['title', 'author', 'repository', 'reviewers', 'otherAuthors', 'status', 'comments', 'created'];
+        const HIDEABLE_COLUMNS = ['title', 'author', 'repository', 'reviewers', 'otherAuthors', 'status', 'updates', 'comments', 'created'];
         let columnVisibility = Object.fromEntries(Object.keys(COLUMN_LABELS).map(k => [k, true]));
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -2276,6 +2279,7 @@
                             ${col('reviewers', `<th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>`)}
                             ${col('otherAuthors', `<th data-column="otherAuthors" style="${getColumnStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>`)}
                             ${col('status', `<th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>`)}
+                            ${col('updates', `<th data-column="updates" style="${getColumnStyle('updates')}">Updates<div class="column-resize-handle" data-column="updates"></div></th>`)}
                             ${col('comments', `<th data-column="comments" style="${getColumnStyle('comments')}">Comments<div class="column-resize-handle" data-column="comments"></div></th>`)}
                             ${col('created', `<th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}<div class="column-resize-handle" data-column="created"></div></th>`)}
                         </tr>
@@ -2299,6 +2303,13 @@
                     if (prCommentCounts[prKey].lastAccess !== undefined) {
                         prCommentCounts[prKey].lastAccess = Date.now();
                     }
+                }
+
+                // Get updates (iterations) count display
+                let updatesDisplay = '<span style="color: #8a8886;">-</span>';
+                if (prIterationCounts[prKey] !== undefined) {
+                    const count = prIterationCounts[prKey].count;
+                    updatesDisplay = count > 1 ? `<span style="color: #0078d4; font-weight: 600;">${count}</span>` : `<span style="color: #8a8886;">${count}</span>`;
                 }
 
                 // Check if row should be grayed out
@@ -2335,6 +2346,7 @@
                             <span style="color: #8a8886;">-</span>
                         </td>`)}
                         ${col('status', `<td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>`)}
+                        ${col('updates', `<td class="pr-meta pr-updates" style="text-align: center; ${getColumnStyle('updates')}">${updatesDisplay}</td>`)}
                         ${col('comments', `<td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>`)}
                         ${col('created', `<td class="pr-meta" style="${getColumnStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>`)}
                     </tr>
@@ -2625,7 +2637,12 @@
             }
 
             try {
-                const threads = await ADOAPI.getThreads(config, pr._project, pr._repo.id, pr.pullRequestId);
+                // Fetch threads and iterations in parallel
+                const [threads, iterations] = await Promise.all([
+                    ADOAPI.getThreads(config, pr._project, pr._repo.id, pr.pullRequestId),
+                    ADOAPI.getIterations(config, pr._project, pr._repo.id, pr.pullRequestId).catch(() => ({ value: [] }))
+                ]);
+
                 const activeThreads = (threads.value || []).filter(thread =>
                     !thread.isDeleted &&
                     (thread.status === 'active' || thread.status === 'Active' || thread.status === 1)
@@ -2653,7 +2670,16 @@
                     lastFetch: now,
                     lastAccess: now
                 };
+
+                // Store iteration count
+                const iterationCount = (iterations.value || []).length;
+                prIterationCounts[prKey] = {
+                    count: iterationCount,
+                    lastFetch: now
+                };
+
                 updatePRCommentDisplay(prKey, activeCount);
+                updatePRUpdatesDisplay(prKey, iterationCount);
                 updateReviewerThreadBadges(prKey, authorCounts);
                 updateOtherAuthorsDisplay(prKey, pr.reviewers, authorObjects, authorCounts);
             } catch (error) {
@@ -2680,6 +2706,20 @@
                 commentCell.innerHTML = `<span style="color: #d13438; font-weight: 600;">${count}</span>`;
             } else {
                 commentCell.innerHTML = '<span style="color: #8a8886;">0</span>';
+            }
+        }
+
+        function updatePRUpdatesDisplay(prKey, count) {
+            const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+            if (!row) return;
+
+            const updatesCell = row.querySelector('.pr-updates');
+            if (!updatesCell) return;
+
+            if (count > 1) {
+                updatesCell.innerHTML = `<span style="color: #0078d4; font-weight: 600;">${count}</span>`;
+            } else {
+                updatesCell.innerHTML = `<span style="color: #8a8886;">${count}</span>`;
             }
         }
 
