@@ -317,6 +317,16 @@
             color: #0078d4;
         }
 
+        .comment-author-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comment-author-info .avatar-wrapper {
+            --avatar-size: 24px;
+        }
+
         .comment-date {
             color: #605e5c;
             font-size: 13px;
@@ -2277,11 +2287,23 @@
                                 }
                             }
 
+                            // Generate avatar HTML for comment author
+                            let commentAvatarHtml = '';
+                            if (comment.author?.id) {
+                                const authorTitle = ADOContent.escapeHtml(comment.author.displayName || 'Unknown');
+                                const cachedUrl = AvatarLoader.getCached(comment.author.id);
+                                if (cachedUrl) {
+                                    commentAvatarHtml = `<div class="avatar-wrapper"><img src="${cachedUrl}" alt="${authorTitle}" title="${authorTitle}" class="avatar"></div>`;
+                                } else {
+                                    commentAvatarHtml = `<div class="avatar-wrapper"><div class="avatar-placeholder" title="${authorTitle}"></div><img data-user-id="${comment.author.id}" alt="${authorTitle}" title="${authorTitle}" class="avatar avatar-pending"></div>`;
+                                }
+                            }
+
                             html += `
                                 <div class="comment ${commentClass}">
                                     <div class="comment-header">
-                                        <span>
-                                            <span class="comment-author">${ADOContent.escapeHtml(comment.author?.displayName || 'Unknown')}</span>
+                                        <span class="comment-author-info">
+                                            ${commentAvatarHtml}
                                             ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
                                         </span>
                                         <div style="display: flex; align-items: center; gap: 4px;">
