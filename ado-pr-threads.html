@@ -161,6 +161,27 @@
             padding: 15px;
             border-radius: 6px;
             margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .pr-info-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pr-info-sidebar {
+            flex: 0 0 auto;
+            min-width: 200px;
+            max-width: 280px;
+        }
+
+        .pr-info-sidebar .avatars-section {
+            margin-top: 0;
+        }
+
+        .pr-info-sidebar .avatars-section + .avatars-section {
+            margin-top: 10px;
         }
 
         .thread-container {
@@ -953,17 +974,41 @@
                 return '';
             }
 
-            const avatarsHtml = reviewers.map(r => {
-                const count = threadCounts[r.id] || 0;
-                return renderAvatarWithBadges(r, r.vote, count, r.id === prAuthorId);
-            }).join('');
+            // Separate required and optional reviewers
+            const requiredReviewers = reviewers.filter(r => r.isRequired);
+            const optionalReviewers = reviewers.filter(r => !r.isRequired);
 
-            return `
-                <div class="avatars-section">
-                    <h4>Reviewers</h4>
-                    <div class="avatars-container">${avatarsHtml}</div>
-                </div>
-            `;
+            let html = '';
+
+            if (requiredReviewers.length > 0) {
+                const requiredAvatarsHtml = requiredReviewers.map(r => {
+                    const count = threadCounts[r.id] || 0;
+                    return renderAvatarWithBadges(r, r.vote, count, r.id === prAuthorId);
+                }).join('');
+
+                html += `
+                    <div class="avatars-section">
+                        <h4>Required Reviewers</h4>
+                        <div class="avatars-container">${requiredAvatarsHtml}</div>
+                    </div>
+                `;
+            }
+
+            if (optionalReviewers.length > 0) {
+                const optionalAvatarsHtml = optionalReviewers.map(r => {
+                    const count = threadCounts[r.id] || 0;
+                    return renderAvatarWithBadges(r, r.vote, count, r.id === prAuthorId);
+                }).join('');
+
+                html += `
+                    <div class="avatars-section">
+                        <h4>Optional Reviewers</h4>
+                        <div class="avatars-container">${optionalAvatarsHtml}</div>
+                    </div>
+                `;
+            }
+
+            return html;
         }
 
         function renderOtherAuthorsSection(threads, reviewers, threadCounts, prAuthorId) {
@@ -996,7 +1041,7 @@
             }).join('');
 
             return `
-                <div class="avatars-section" style="margin-top: 10px;">
+                <div class="avatars-section">
                     <h4>Other Thread Authors</h4>
                     <div class="avatars-container">${avatarsHtml}</div>
                 </div>
@@ -2054,39 +2099,43 @@
 
             let html = `
                 <div class="pr-info">
-                    <h2>
-                        PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}
-                        <a href="${prUrl}" target="_blank" style="font-size: 16px; margin-left: 10px; color: #0078d4; text-decoration: none;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
-                    </h2>
-                    <p><strong>Author:</strong> ${ADOContent.escapeHtml(prData.createdBy.displayName)}</p>
-                    <p><strong>Status:</strong> ${prData.status}${draftBadge}</p>
-                    <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
-                    ${prData.description ? `
-                    <details style="margin-top: 15px;" open>
-                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
-                        <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 4px; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
-                    </details>
-                    ` : ''}
-                    <details style="margin-top: 15px;">
-                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📡 API Endpoints Used</summary>
-                        <div style="margin-top: 10px; font-size: 13px; font-family: monospace; background: #f8f8f8; padding: 10px; border-radius: 4px;">
-                            <div style="margin-bottom: 8px;">
-                                <strong>PR Details:</strong><br>
-                                <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}?api-version=6.0</code>
+                    <div class="pr-info-main">
+                        <h2>
+                            PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}
+                            <a href="${prUrl}" target="_blank" style="font-size: 16px; margin-left: 10px; color: #0078d4; text-decoration: none;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
+                        </h2>
+                        <p><strong>Author:</strong> ${ADOContent.escapeHtml(prData.createdBy.displayName)}</p>
+                        <p><strong>Status:</strong> ${prData.status}${draftBadge}</p>
+                        <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
+                        ${prData.description ? `
+                        <details style="margin-top: 15px;" open>
+                            <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
+                            <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 4px; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
+                        </details>
+                        ` : ''}
+                        <details style="margin-top: 15px;">
+                            <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📡 API Endpoints Used</summary>
+                            <div style="margin-top: 10px; font-size: 13px; font-family: monospace; background: #f8f8f8; padding: 10px; border-radius: 4px;">
+                                <div style="margin-bottom: 8px;">
+                                    <strong>PR Details:</strong><br>
+                                    <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}?api-version=6.0</code>
+                                </div>
+                                <div style="margin-bottom: 8px;">
+                                    <strong>PR Threads:</strong><br>
+                                    <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads?api-version=6.0</code>
+                                </div>
+                                <div>
+                                    <strong>PR Iterations:</strong><br>
+                                    <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/iterations?api-version=6.0</code>
+                                </div>
                             </div>
-                            <div style="margin-bottom: 8px;">
-                                <strong>PR Threads:</strong><br>
-                                <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads?api-version=6.0</code>
-                            </div>
-                            <div>
-                                <strong>PR Iterations:</strong><br>
-                                <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/iterations?api-version=6.0</code>
-                            </div>
-                        </div>
-                    </details>
-                    ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
-                    ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
-                    <div id="checksSection">${renderChecksSection()}</div>
+                        </details>
+                        <div id="checksSection">${renderChecksSection()}</div>
+                    </div>
+                    <div class="pr-info-sidebar">
+                        ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
+                        ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
+                    </div>
                 </div>
 
                 <div class="stats">
