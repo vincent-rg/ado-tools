@@ -637,6 +637,61 @@
             gap: 5px;
         }
 
+        .columns-dropdown {
+            position: relative;
+        }
+
+        .columns-dropdown-btn {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+        }
+
+        .columns-dropdown-btn:hover {
+            background: #f3f2f1;
+            border-color: #8a8886;
+        }
+
+        .columns-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+            background: white;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 100;
+            min-width: 150px;
+        }
+
+        .columns-dropdown-menu.show {
+            display: block;
+        }
+
+        .column-toggle-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+        }
+
+        .column-toggle-item:hover {
+            background: #f3f2f1;
+        }
+
+        .column-toggle-item input[type="checkbox"] {
+            margin: 0;
+        }
+
         .pagination-bar {
             margin-top: 20px;
             display: flex;
@@ -1084,6 +1139,21 @@
         };
         let columnWidths = { ...DEFAULT_COLUMN_WIDTHS };
 
+        // Column visibility (all visible by default, id cannot be hidden)
+        const COLUMN_LABELS = {
+            id: 'ID',
+            title: 'Title',
+            author: 'Author',
+            repository: 'Repository',
+            reviewers: 'Reviewers',
+            otherAuthors: 'Other Authors',
+            status: 'Status',
+            comments: 'Comments',
+            created: 'Created'
+        };
+        const HIDEABLE_COLUMNS = ['title', 'author', 'repository', 'reviewers', 'otherAuthors', 'status', 'comments', 'created'];
+        let columnVisibility = Object.fromEntries(Object.keys(COLUMN_LABELS).map(k => [k, true]));
+
         window.addEventListener('DOMContentLoaded', async () => {
             const config = ADOConfig.get();
 
@@ -1093,8 +1163,9 @@
                 return;
             }
 
-            // Load saved column widths
+            // Load saved column widths and visibility
             loadColumnWidths();
+            loadColumnVisibility();
 
             await loadProjects();
             await restoreFiltersFromURL();
@@ -2147,10 +2218,24 @@
                 return '';
             };
 
+            // Build columns visibility dropdown
+            const columnsDropdownHtml = HIDEABLE_COLUMNS.map(col => `
+                <label class="column-toggle-item">
+                    <input type="checkbox" id="col-vis-${col}" ${columnVisibility[col] ? 'checked' : ''} onchange="toggleColumnVisibility('${col}')">
+                    ${COLUMN_LABELS[col]}
+                </label>
+            `).join('');
+
             // Build info bar
             const infoBarHtml = `
                 <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
                 <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="columns-dropdown">
+                        <button class="columns-dropdown-btn" onclick="toggleColumnsDropdown(event)">Columns ▾</button>
+                        <div id="columnsDropdownMenu" class="columns-dropdown-menu">
+                            ${columnsDropdownHtml}
+                        </div>
+                    </div>
                     <label style="font-size: 14px;"><span>Show:</span><select onchange="changePerPage(this.value)" style="padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 4px; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select><span>per page</span></label>
                 </div>
             `;
@@ -2161,11 +2246,12 @@
                 return width ? `width: ${width}px; min-width: ${width}px; max-width: ${width}px;` : '';
             };
 
-            // Calculate total table width from fixed columns
+            // Calculate total table width from fixed columns (only visible ones)
             const calculateTableWidth = () => {
                 let total = 0;
                 let hasFlexColumn = false;
                 for (const [columnId, width] of Object.entries(columnWidths)) {
+                    if (!columnVisibility[columnId]) continue; // Skip hidden columns
                     if (width === null) {
                         hasFlexColumn = true;
                         total += 300; // Default width for flexible columns
@@ -2176,19 +2262,22 @@
                 return hasFlexColumn ? `min-width: ${total}px; width: 100%;` : `width: ${total}px;`;
             };
 
+            // Helper to conditionally render column
+            const col = (columnId, content) => columnVisibility[columnId] ? content : '';
+
             let tableHtml = `
                 <table class="pr-table" style="${calculateTableWidth()}">
                     <thead>
                         <tr>
                             <th class="sortable" data-column="id" onclick="sortPRs('id')" style="${getColumnStyle('id')}">ID${getSortIndicator('id')}<div class="column-resize-handle" data-column="id"></div></th>
-                            <th class="sortable" data-column="title" onclick="sortPRs('title')" style="${getColumnStyle('title')}">Title${getSortIndicator('title')}<div class="column-resize-handle" data-column="title"></div></th>
-                            <th class="sortable" data-column="author" onclick="sortPRs('author')" style="${getColumnStyle('author')}">Author${getSortIndicator('author')}<div class="column-resize-handle" data-column="author"></div></th>
-                            <th class="sortable" data-column="repository" onclick="sortPRs('repository')" style="${getColumnStyle('repository')}">Repository${getSortIndicator('repository')}<div class="column-resize-handle" data-column="repository"></div></th>
-                            <th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>
-                            <th data-column="otherAuthors" style="${getColumnStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>
-                            <th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>
-                            <th data-column="comments" style="${getColumnStyle('comments')}">Comments<div class="column-resize-handle" data-column="comments"></div></th>
-                            <th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}<div class="column-resize-handle" data-column="created"></div></th>
+                            ${col('title', `<th class="sortable" data-column="title" onclick="sortPRs('title')" style="${getColumnStyle('title')}">Title${getSortIndicator('title')}<div class="column-resize-handle" data-column="title"></div></th>`)}
+                            ${col('author', `<th class="sortable" data-column="author" onclick="sortPRs('author')" style="${getColumnStyle('author')}">Author${getSortIndicator('author')}<div class="column-resize-handle" data-column="author"></div></th>`)}
+                            ${col('repository', `<th class="sortable" data-column="repository" onclick="sortPRs('repository')" style="${getColumnStyle('repository')}">Repository${getSortIndicator('repository')}<div class="column-resize-handle" data-column="repository"></div></th>`)}
+                            ${col('reviewers', `<th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>`)}
+                            ${col('otherAuthors', `<th data-column="otherAuthors" style="${getColumnStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>`)}
+                            ${col('status', `<th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>`)}
+                            ${col('comments', `<th data-column="comments" style="${getColumnStyle('comments')}">Comments<div class="column-resize-handle" data-column="comments"></div></th>`)}
+                            ${col('created', `<th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}<div class="column-resize-handle" data-column="created"></div></th>`)}
                         </tr>
                     </thead>
                     <tbody>
@@ -2226,28 +2315,28 @@
                                 <strong>#${pr.pullRequestId}</strong>
                             </a>
                         </td>
-                        <td style="${getColumnStyle('title')}">
+                        ${col('title', `<td style="${getColumnStyle('title')}">
                             <a href="${prThreadsUrl}"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <div class="pr-title">${ADOContent.escapeHtml(pr.title)}${filterIndicator}</div>
                                 <div class="pr-status-indicators">${generateStatusIndicatorsHtml(prKey)}</div>
                             </a>
-                        </td>
-                        <td class="pr-meta" style="${getColumnStyle('author')}">${getAuthorAvatarHtml(pr.createdBy)}</td>
-                        <td class="pr-meta" style="${getColumnStyle('repository')}">
+                        </td>`)}
+                        ${col('author', `<td class="pr-meta" style="${getColumnStyle('author')}">${getAuthorAvatarHtml(pr.createdBy)}</td>`)}
+                        ${col('repository', `<td class="pr-meta" style="${getColumnStyle('repository')}">
                             ${ADOContent.escapeHtml(pr._project)}<br>
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
-                        </td>
-                        <td class="pr-meta" style="${getColumnStyle('reviewers')}">
+                        </td>`)}
+                        ${col('reviewers', `<td class="pr-meta" style="${getColumnStyle('reviewers')}">
                             ${getReviewerAvatarsHtml(pr.reviewers)}
-                        </td>
-                        <td class="pr-meta pr-other-authors" style="${getColumnStyle('otherAuthors')}">
+                        </td>`)}
+                        ${col('otherAuthors', `<td class="pr-meta pr-other-authors" style="${getColumnStyle('otherAuthors')}">
                             <span style="color: #8a8886;">-</span>
-                        </td>
-                        <td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>
-                        <td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>
-                        <td class="pr-meta" style="${getColumnStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>
+                        </td>`)}
+                        ${col('status', `<td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>`)}
+                        ${col('comments', `<td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>`)}
+                        ${col('created', `<td class="pr-meta" style="${getColumnStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>`)}
                     </tr>
                 `;
             });
@@ -3106,6 +3195,62 @@
                 columnWidths = { ...DEFAULT_COLUMN_WIDTHS };
             }
         }
+
+        function saveColumnVisibility() {
+            try {
+                localStorage.setItem('prListColumnVisibility', JSON.stringify(columnVisibility));
+            } catch (e) {
+                console.warn('Failed to save column visibility to localStorage:', e);
+            }
+        }
+
+        function loadColumnVisibility() {
+            try {
+                const saved = localStorage.getItem('prListColumnVisibility');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Merge with defaults (all visible)
+                    columnVisibility = { ...columnVisibility, ...parsed };
+                    // Ensure id is always visible
+                    columnVisibility.id = true;
+                }
+            } catch (e) {
+                console.warn('Failed to load column visibility from localStorage:', e);
+            }
+        }
+
+        function toggleColumnVisibility(columnId) {
+            if (columnId === 'id') return; // Cannot hide ID column
+            columnVisibility[columnId] = !columnVisibility[columnId];
+            saveColumnVisibility();
+            updateColumnVisibilityUI();
+            displayPRs();
+        }
+
+        function updateColumnVisibilityUI() {
+            HIDEABLE_COLUMNS.forEach(col => {
+                const checkbox = document.getElementById(`col-vis-${col}`);
+                if (checkbox) {
+                    checkbox.checked = columnVisibility[col];
+                }
+            });
+        }
+
+        function toggleColumnsDropdown(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('columnsDropdownMenu');
+            if (menu) {
+                menu.classList.toggle('show');
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (event) => {
+            const menu = document.getElementById('columnsDropdownMenu');
+            if (menu && !event.target.closest('.columns-dropdown')) {
+                menu.classList.remove('show');
+            }
+        });
 
         // Trigger background poll when tab becomes visible (with cooldown to prevent spam)
         document.addEventListener('visibilitychange', () => {
