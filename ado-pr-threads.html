@@ -756,7 +756,7 @@
                 <h1 style="font-size: 1.3em; margin: 0;">💬 PR Threads Viewer</h1>
             </div>
             <div style="display: flex; gap: 10px;">
-                <a href="ado-pr-list.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">📋 PR List</a>
+                <a href="ado-pr-list.html" onclick="const url = sessionStorage.getItem('prListReturnUrl'); if (url) { window.location.href = url; return false; } return true;" style="color: #0078d4; text-decoration: none; font-size: 14px;">📋 PR List</a>
                 <a href="index.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">🏠 Home</a>
                 <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">⚙️ Settings</a>
             </div>

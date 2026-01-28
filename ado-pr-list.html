@@ -3018,6 +3018,9 @@
             config.repository = repository;
             ADOConfig.save(config);
 
+            // Store current URL so we can return to it from PR threads
+            sessionStorage.setItem('prListReturnUrl', window.location.href);
+
             // Return true to allow the link to work normally
             // This way left-click, right-click, and middle-click all work
             return true;
