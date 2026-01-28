@@ -18,7 +18,7 @@
             min-width: 200px;
             max-width: 400px;
             background: #f3f2f1;
-            border-radius: 6px;
+            border-radius: 0;
             padding: 20px;
             overflow-y: auto;
             flex-shrink: 0;
@@ -73,7 +73,7 @@
             width: 100%;
             padding: 8px;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
             background: white;
         }
 
@@ -81,7 +81,7 @@
             width: 100%;
             padding: 8px;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
             font-size: 14px;
             box-sizing: border-box;
         }
@@ -101,7 +101,7 @@
         .status-chip {
             padding: 6px 12px;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
             background: white;
             color: #323130;
             font-size: 13px;
@@ -127,7 +127,7 @@
             align-items: center;
             padding: 8px;
             background: white;
-            border-radius: 4px;
+            border-radius: 0;
             cursor: pointer;
             transition: background 0.2s;
             margin-top: 8px;
@@ -159,7 +159,7 @@
         .pr-info {
             background: #f3f2f1;
             padding: 15px;
-            border-radius: 6px;
+            border-radius: 0;
             margin-bottom: 20px;
             display: flex;
             gap: 20px;
@@ -190,7 +190,7 @@
 
         .thread {
             border: 1px solid #edebe9;
-            border-radius: 6px;
+            border-radius: 0;
             margin-bottom: 20px;
             overflow: hidden;
         }
@@ -231,7 +231,7 @@
         .thread-status-change select {
             padding: 4px 8px;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
             font-size: 12px;
             background: white;
         }
@@ -244,7 +244,7 @@
             background: #fff4ce;
             border-left: 4px solid #ffb900;
             padding: 15px;
-            border-radius: 4px;
+            border-radius: 0;
             margin-bottom: 20px;
             display: none;
         }
@@ -264,7 +264,7 @@
         .bulk-actions-buttons select {
             padding: 8px;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
         }
 
         .thread-header {
@@ -299,7 +299,7 @@
         .comment-type-badge {
             display: inline-block;
             padding: 2px 8px;
-            border-radius: 3px;
+            border-radius: 0;
             font-size: 11px;
             font-weight: 600;
             margin-left: 8px;
@@ -391,7 +391,7 @@
             max-width: 100%;
             height: auto;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
             margin: 5px 5px 5px 0;
             display: inline-block;
             vertical-align: middle;
@@ -408,7 +408,7 @@
         .file-preview {
             background: #f8f8f8;
             border: 1px solid #d1d1d1;
-            border-radius: 4px;
+            border-radius: 0;
             margin-bottom: 10px;
         }
 
@@ -483,7 +483,7 @@
             font-family: monospace;
             background: #f3f2f1;
             padding: 4px 8px;
-            border-radius: 3px;
+            border-radius: 0;
             display: inline-block;
             margin-top: 5px;
         }
@@ -498,7 +498,7 @@
             margin-top: 15px;
             padding: 12px;
             background: #f8f8f8;
-            border-radius: 4px;
+            border-radius: 0;
         }
 
         .avatars-section h4 {
@@ -529,7 +529,7 @@
             right: -3px;
             width: 16px;
             height: 16px;
-            border-radius: 50%;
+            border-radius: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -567,7 +567,7 @@
             right: -5px;
             min-width: 18px;
             height: 18px;
-            border-radius: 9px;
+            border-radius: 0;
             background: #d83b01;
             color: white;
             font-size: 11px;
@@ -594,7 +594,7 @@
             left: -4px;
             width: 14px;
             height: 14px;
-            border-radius: 50%;
+            border-radius: 0;
             background: #ffb900;
             color: #323130;
             font-size: 9px;
@@ -628,7 +628,7 @@
         .branch-info code {
             background: #f3f2f1;
             padding: 2px 6px;
-            border-radius: 3px;
+            border-radius: 0;
             font-family: monospace;
             font-size: 13px;
         }
@@ -638,7 +638,7 @@
             margin-top: 15px;
             padding: 12px;
             background: #f8f8f8;
-            border-radius: 4px;
+            border-radius: 0;
         }
 
         .checks-section h4 {
@@ -665,7 +665,7 @@
             font-size: 13px;
             margin-bottom: 6px;
             padding: 4px 8px;
-            border-radius: 3px;
+            border-radius: 0;
             background: #e1dfdd;
             color: #323130;
         }
@@ -704,7 +704,7 @@
             font-size: 11px;
             background: #fff;
             padding: 2px 6px;
-            border-radius: 3px;
+            border-radius: 0;
             word-break: break-all;
         }
 
@@ -2237,9 +2237,9 @@
                 }
 
                 // Build the diff view (light theme) with full line context
-                let html = '<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 4px; border: 1px solid #d1d1d1; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
+                let html = '<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 0; border: 1px solid #d1d1d1; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
                 html += '<div style="color: #8a6d3b; font-weight: 600; margin-bottom: 8px;">💡 Code change suggestion</div>';
-                html += '<div style="border: 1px solid #d1d1d1; border-radius: 4px; overflow: hidden; background: white;">';
+                html += '<div style="border: 1px solid #d1d1d1; border-radius: 0; overflow: hidden; background: white;">';
 
                 // Original line(s) with changed part highlighted
                 const originalWithHighlight = ADOContent.escapeHtml(prefixText) +
@@ -2265,7 +2265,7 @@
                 return html;
             } catch (error) {
                 console.error('Failed to render code suggestion:', error);
-                return `<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 4px; border: 1px solid #d1d1d1; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
+                return `<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 0; border: 1px solid #d1d1d1; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
                     <div style="color: #8a6d3b; font-weight: 600; margin-bottom: 8px;">💡 Code change suggestion</div>
                     <div style="color: #605e5c; font-size: 11px;">Could not load suggestion details. Click the iteration links above or "View in ADO" to see the code diff.</div>
                 </div>`;
@@ -2449,7 +2449,7 @@
                         ${prData.description ? `
                         <details style="margin-top: 15px;" open>
                             <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
-                            <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 4px; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
+                            <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
                         </details>
                         ` : ''}
                         <div id="checksSection">${renderChecksSection()}</div>
