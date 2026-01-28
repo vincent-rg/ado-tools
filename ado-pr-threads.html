@@ -2102,7 +2102,12 @@
             const threadCounts = getActiveThreadCounts(allThreads);
 
             const prUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}`;
-            const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">DRAFT</span>' : '';
+
+            // Generate status badge for title
+            const statusBadgeClass = `badge-${prData.status}`;
+            const statusLabel = prData.status.charAt(0).toUpperCase() + prData.status.slice(1);
+            const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
+            const statusBadgeHtml = `<span class="badge ${statusBadgeClass}">${statusLabel}</span>${draftBadge}`;
 
             // Generate PR author avatar for title
             let prAuthorAvatarHtml = '';
@@ -2120,10 +2125,9 @@
                 <div class="pr-info">
                     <div class="pr-info-main">
                         <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                            <span>${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
+                            <span>${statusBadgeHtml} ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
                             <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
                         </h2>
-                        <p><strong>Status:</strong> ${prData.status}${draftBadge}</p>
                         <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                         ${prData.description ? `
                         <details style="margin-top: 15px;" open>
