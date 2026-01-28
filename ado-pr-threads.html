@@ -1487,21 +1487,25 @@
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = ADOURL.getParams();
             currentPRId = urlParams.get('prId') || urlParams.get('id');
+            const urlProject = urlParams.get('project');
+            const urlRepo = urlParams.get('repo');
 
             // Load saved configuration from localStorage
             const savedConfig = ADOConfig.get();
             if (savedConfig) {
                 document.getElementById('serverUrl').value = savedConfig.serverUrl || '';
                 document.getElementById('organization').value = savedConfig.organization || '';
-                document.getElementById('project').value = savedConfig.project || '';
-                document.getElementById('repository').value = savedConfig.repository || '';
+                // Use URL params if provided, otherwise fall back to saved config
+                document.getElementById('project').value = urlProject || savedConfig.project || '';
+                document.getElementById('repository').value = urlRepo || savedConfig.repository || '';
                 document.getElementById('pat').value = savedConfig.pat || '';
             }
 
             // Auto-load or show config
             if (currentPRId) {
-                // Auto-load if config is valid
-                if (savedConfig && ADOConfig.isValid(savedConfig) && savedConfig.repository) {
+                // Auto-load if config is valid (repo can come from URL or saved config)
+                const hasRepo = urlRepo || (savedConfig && savedConfig.repository);
+                if (savedConfig && ADOConfig.isValid(savedConfig) && hasRepo) {
                     setTimeout(() => loadPRThreads(), 100);
                 } else {
                     // Show config section if settings are missing
@@ -1667,8 +1671,15 @@
                 return;
             }
 
-            // Save configuration
-            ADOConfig.save(config);
+            // Save configuration (only base settings, not project/repo which may come from URL)
+            const savedConfig = ADOConfig.get() || {};
+            ADOConfig.save({
+                serverUrl: config.serverUrl,
+                organization: config.organization,
+                pat: config.pat,
+                project: savedConfig.project || config.project,
+                repository: savedConfig.repository || config.repository
+            });
 
             ADOUI.showLoading('results', 'Loading PR threads...');
 

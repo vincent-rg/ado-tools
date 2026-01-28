@@ -2302,7 +2302,7 @@
 
             pagePRs.forEach(pr => {
                 const statusClass = ADOUI.getStatusBadgeClass(pr.status);
-                const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}`;
+                const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}&project=${encodeURIComponent(pr._project)}&repo=${encodeURIComponent(pr._repo.name)}`;
                 const draftBadge = pr.isDraft ? '<span class="badge badge-draft" style="margin-left: 5px;">DRAFT</span>' : '';
 
                 // Get comment count display
@@ -3012,12 +3012,6 @@
         }
 
         function openPRLink(project, repository, prId) {
-            // Update config with selected project/repo
-            const config = ADOConfig.get();
-            config.project = project;
-            config.repository = repository;
-            ADOConfig.save(config);
-
             // Store current URL so we can return to it from PR threads
             sessionStorage.setItem('prListReturnUrl', window.location.href);
 
