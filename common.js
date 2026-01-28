@@ -496,24 +496,31 @@ const ADOContent = {
             return createPlaceholder(html);
         });
 
-        // 4. Parse bold
+        // 4. Parse headers (h1-h6) - consume trailing newline to avoid double spacing with pre-wrap
+        result = result.replace(/^(#{1,6})\s+(.+)\n?/gm, (match, hashes, text) => {
+            const level = hashes.length;
+            const html = `<h${level} style="margin: 0.5em 0; font-size: ${1.5 - (level - 1) * 0.15}em;">${text}</h${level}>`;
+            return createPlaceholder(html);
+        });
+
+        // 5. Parse bold
         result = result.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
         // Only match __ for bold when not part of longer underscore sequences (word boundaries)
         result = result.replace(/(?<![a-zA-Z0-9_])__([^_]+)__(?![a-zA-Z0-9_])/g, '<strong>$1</strong>');
 
-        // 5. Parse italic
+        // 6. Parse italic
         result = result.replace(/(?<!\*)\*(?!\*)([^\*]+)\*(?!\*)/g, '<em>$1</em>');
         // Only match _ for italic when not part of identifier names (word boundaries)
         // Must not be preceded or followed by alphanumeric or underscore characters
         result = result.replace(/(?<![a-zA-Z0-9_])_(?!_)([^_]+)_(?!_)(?![a-zA-Z0-9_])/g, '<em>$1</em>');
 
-        // 6. Parse regular links
+        // 7. Parse regular links
         result = result.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, text, url) => {
             const html = `<a href="${ADOContent.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
             return createPlaceholder(html);
         });
 
-        // 7. Restore placeholders
+        // 8. Restore placeholders
         result = restorePlaceholders(result);
 
         return result;
