@@ -868,10 +868,6 @@
                                 <label for="repository">Repository Name</label>
                                 <input type="text" id="repository" placeholder="MyRepo" />
                             </div>
-                            <div class="form-group">
-                                <label for="pat">Personal Access Token (PAT)</label>
-                                <input type="password" id="pat" placeholder="Your PAT with Code (Read) permission" autocomplete="off" data-lpignore="true" data-1p-ignore />
-                            </div>
                         </div>
                     </details>
 
@@ -1498,7 +1494,6 @@
                 // Use URL params if provided, otherwise fall back to saved config
                 document.getElementById('project').value = urlProject || savedConfig.project || '';
                 document.getElementById('repository').value = urlRepo || savedConfig.repository || '';
-                document.getElementById('pat').value = savedConfig.pat || '';
             }
 
             // Auto-load or show config
@@ -1657,7 +1652,17 @@
         }
 
         async function loadPRThreads() {
-            const config = ADOConfig.getFromForm({});
+            const savedConfig = ADOConfig.get() || {};
+            const formConfig = ADOConfig.getFromForm({});
+
+            // Merge form values with saved config (PAT only comes from saved config)
+            const config = {
+                serverUrl: formConfig.serverUrl || savedConfig.serverUrl,
+                organization: formConfig.organization || savedConfig.organization,
+                project: formConfig.project || savedConfig.project,
+                repository: formConfig.repository || savedConfig.repository,
+                pat: savedConfig.pat
+            };
 
             // Validation
             if (!currentPRId) {
@@ -1666,13 +1671,12 @@
             }
 
             if (!ADOConfig.isValid(config) || !config.repository) {
-                ADOUI.showError('results', 'Please fill in all fields. Missing fields can be configured in Settings or in Advanced Configuration below.');
+                ADOUI.showError('results', 'Please fill in all fields. PAT must be configured in <a href="ado-settings.html" style="color: #0078d4;">Settings</a>.');
                 document.getElementById('configSection').style.display = 'block';
                 return;
             }
 
             // Save configuration (only base settings, not project/repo which may come from URL)
-            const savedConfig = ADOConfig.get() || {};
             ADOConfig.save({
                 serverUrl: config.serverUrl,
                 organization: config.organization,
