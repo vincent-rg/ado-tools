@@ -2131,23 +2131,6 @@
                             <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 4px; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
                         </details>
                         ` : ''}
-                        <details style="margin-top: 15px;">
-                            <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📡 API Endpoints Used</summary>
-                            <div style="margin-top: 10px; font-size: 13px; font-family: monospace; background: #f8f8f8; padding: 10px; border-radius: 4px;">
-                                <div style="margin-bottom: 8px;">
-                                    <strong>PR Details:</strong><br>
-                                    <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}?api-version=6.0</code>
-                                </div>
-                                <div style="margin-bottom: 8px;">
-                                    <strong>PR Threads:</strong><br>
-                                    <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads?api-version=6.0</code>
-                                </div>
-                                <div>
-                                    <strong>PR Iterations:</strong><br>
-                                    <code>${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/iterations?api-version=6.0</code>
-                                </div>
-                            </div>
-                        </details>
                         <div id="checksSection">${renderChecksSection()}</div>
                     </div>
                     <div class="pr-info-sidebar">
