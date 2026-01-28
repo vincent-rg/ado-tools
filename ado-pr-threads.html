@@ -880,10 +880,287 @@
         let allIterations = [];
         let currentPRData = null;
         let currentConfig = null;
+        let currentFileChangeStats = null;
         let isCompactView = false;
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
+
+        function calculateFileChangeStats(changeEntries) {
+            const stats = {
+                totalFiles: 0,
+                added: 0,
+                modified: 0,
+                deleted: 0,
+                renamed: 0
+            };
+
+            changeEntries.forEach(entry => {
+                stats.totalFiles++;
+                const changeType = entry.changeType;
+                // changeType can be: add, edit, delete, rename, etc.
+                // It can also be a combination like "edit, rename"
+                if (changeType.includes('add')) {
+                    stats.added++;
+                } else if (changeType.includes('delete')) {
+                    stats.deleted++;
+                } else if (changeType.includes('rename') && !changeType.includes('edit')) {
+                    stats.renamed++;
+                } else if (changeType.includes('edit')) {
+                    stats.modified++;
+                }
+            });
+
+            return stats;
+        }
+
+        function getLineStatsCacheKey(config, prId, iterationCount) {
+            return `line-stats-${config.organization}-${config.project}-${config.repository}-${prId}-${iterationCount}`;
+        }
+
+        function getCachedLineStats(cacheKey) {
+            try {
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    return JSON.parse(cached);
+                }
+            } catch (e) {
+                console.warn('Failed to read line stats cache:', e);
+            }
+            return null;
+        }
+
+        function setCachedLineStats(cacheKey, stats) {
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify(stats));
+            } catch (e) {
+                console.warn('Failed to cache line stats:', e);
+            }
+        }
+
+        function computeLineDiff(oldContent, newContent) {
+            // Simple line diff: count added and removed lines
+            const oldLines = (oldContent || '').split('\n');
+            const newLines = (newContent || '').split('\n');
+
+            // Use a simple LCS-based approach for accuracy
+            const oldSet = new Map();
+            oldLines.forEach((line, i) => {
+                if (!oldSet.has(line)) oldSet.set(line, []);
+                oldSet.get(line).push(i);
+            });
+
+            let matched = 0;
+            const usedOldIndices = new Set();
+            newLines.forEach(line => {
+                if (oldSet.has(line)) {
+                    const indices = oldSet.get(line);
+                    for (const idx of indices) {
+                        if (!usedOldIndices.has(idx)) {
+                            usedOldIndices.add(idx);
+                            matched++;
+                            break;
+                        }
+                    }
+                }
+            });
+
+            const removed = oldLines.length - matched;
+            const added = newLines.length - matched;
+
+            return { added, removed };
+        }
+
+        async function fetchFileContent(config, path, commitId) {
+            try {
+                const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/items?path=${encodeURIComponent(path)}&versionDescriptor.version=${commitId}&versionDescriptor.versionType=commit&api-version=6.0`;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Basic ${btoa(':' + config.pat)}` }
+                });
+                if (!response.ok) return null;
+                return await response.text();
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function fetchLineStatsViaInternalAPI(config, prData, changes) {
+            const baseCommit = prData.lastMergeTargetCommit?.commitId;
+            const targetCommit = prData.lastMergeSourceCommit?.commitId;
+            const repositoryId = prData.repository?.id;
+
+            if (!baseCommit || !targetCommit || !repositoryId) {
+                return null;
+            }
+
+            // Get file paths from changes
+            const filePaths = changes
+                .filter(e => e.item?.path)
+                .map(e => e.item.path);
+
+            if (filePaths.length === 0) {
+                return { added: 0, removed: 0 };
+            }
+
+            // Call internal API
+            const diffData = await ADOAPI.getFileDiffs(config, repositoryId, baseCommit, targetCommit, filePaths);
+            console.log('Internal API response:', diffData);
+
+            // Parse response and sum line counts
+            let added = 0, removed = 0;
+            const fileDiffs = diffData?.dataProviders?.['ms.vss-code-web.file-diff-data-provider']?.fileDiffs || [];
+
+            for (const fileDiff of fileDiffs) {
+                for (const block of (fileDiff.lineDiffBlocks || [])) {
+                    const changeType = block.changeType;
+                    // changeType: 0 = none, 1 = add, 2 = delete, 3 = edit (need to verify)
+                    if (changeType === 1) {
+                        added += block.modifiedLinesCount || 0;
+                    } else if (changeType === 2) {
+                        removed += block.originalLinesCount || 0;
+                    } else if (changeType === 3) {
+                        // For edits, count both sides
+                        added += block.modifiedLinesCount || 0;
+                        removed += block.originalLinesCount || 0;
+                    }
+                }
+            }
+
+            return { added, removed };
+        }
+
+        async function fetchLineStatsViaLocalDiff(config, prData, changes) {
+            const baseCommit = prData.lastMergeTargetCommit?.commitId;
+            const targetCommit = prData.lastMergeSourceCommit?.commitId;
+
+            let totalAdded = 0;
+            let totalRemoved = 0;
+
+            // Process files
+            for (const change of changes) {
+                const path = change.item?.path;
+                if (!path) continue;
+
+                const changeType = change.changeType || '';
+
+                if (changeType.includes('add')) {
+                    const content = await fetchFileContent(config, path, targetCommit);
+                    if (content) {
+                        totalAdded += content.split('\n').length;
+                    }
+                } else if (changeType.includes('delete')) {
+                    const content = await fetchFileContent(config, path, baseCommit);
+                    if (content) {
+                        totalRemoved += content.split('\n').length;
+                    }
+                } else if (changeType.includes('edit')) {
+                    const [oldContent, newContent] = await Promise.all([
+                        fetchFileContent(config, path, baseCommit),
+                        fetchFileContent(config, path, targetCommit)
+                    ]);
+                    const diff = computeLineDiff(oldContent, newContent);
+                    totalAdded += diff.added;
+                    totalRemoved += diff.removed;
+                }
+            }
+
+            return { added: totalAdded, removed: totalRemoved };
+        }
+
+        async function fetchLineStatsAsync(config, prData) {
+            const iterationCount = allIterations.length;
+            const cacheKey = getLineStatsCacheKey(config, prData.pullRequestId, iterationCount);
+
+            // Check cache first
+            const cached = getCachedLineStats(cacheKey);
+            if (cached) {
+                console.log('Line stats from cache:', cached);
+                updateLineStatsDisplay(cached.added, cached.removed);
+                return;
+            }
+
+            // Need to compute - show loading
+            updateLineStatsLoading();
+
+            try {
+                const baseCommit = prData.lastMergeTargetCommit?.commitId;
+                const targetCommit = prData.lastMergeSourceCommit?.commitId;
+
+                if (!baseCommit || !targetCommit) {
+                    hideLineStatsLoading();
+                    return;
+                }
+
+                // Get the file changes from iteration 1
+                const changesData = await ADOAPI.getPRIterationChanges(config, prData.pullRequestId, 1);
+                const changes = changesData.changeEntries || [];
+
+                if (changes.length === 0) {
+                    updateLineStatsDisplay(0, 0);
+                    return;
+                }
+
+                let stats = null;
+
+                // Try internal API first
+                try {
+                    stats = await fetchLineStatsViaInternalAPI(config, prData, changes);
+                    if (stats) {
+                        console.log('Line stats via internal API:', stats);
+                    }
+                } catch (e) {
+                    console.warn('Internal API failed, falling back to local diff:', e);
+                }
+
+                // Fall back to local diff if internal API failed
+                if (!stats) {
+                    console.log('Using local diff computation...');
+                    stats = await fetchLineStatsViaLocalDiff(config, prData, changes);
+                    console.log('Line stats via local diff:', stats);
+                }
+
+                setCachedLineStats(cacheKey, stats);
+                updateLineStatsDisplay(stats.added, stats.removed);
+
+            } catch (e) {
+                console.warn('Failed to compute line stats:', e);
+                hideLineStatsLoading();
+            }
+        }
+
+        function hideLineStatsLoading() {
+            const container = document.getElementById('lineStatsContainer');
+            if (container) {
+                container.innerHTML = '';
+            }
+        }
+
+        function updateLineStatsLoading() {
+            const container = document.getElementById('lineStatsContainer');
+            if (!container) return;
+            container.innerHTML = `
+                <div class="stat">
+                    <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
+                    <div class="stat-label">Lines...</div>
+                </div>
+            `;
+        }
+
+        function updateLineStatsDisplay(added, removed) {
+            const container = document.getElementById('lineStatsContainer');
+            if (!container) return;
+
+            container.innerHTML = `
+                <div class="stat">
+                    <div class="stat-value" style="color: #107c10;">+${added}</div>
+                    <div class="stat-label">Lines</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #a4262c;">-${removed}</div>
+                    <div class="stat-label">Lines</div>
+                </div>
+            `;
+        }
 
         function getActiveThreadCounts(threads) {
             const counts = {};
@@ -1397,6 +1674,18 @@
                 allIterations = iterationsData.value || [];
                 currentPRData = prData;
                 currentConfig = config;
+
+                // Fetch file change stats from the first iteration (shows all changes from base)
+                let fileChangeStats = null;
+                if (allIterations.length > 0) {
+                    try {
+                        const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, 1);
+                        fileChangeStats = calculateFileChangeStats(changesData.changeEntries || []);
+                    } catch (e) {
+                        console.warn('Failed to fetch file change stats:', e);
+                    }
+                }
+                currentFileChangeStats = fileChangeStats;
 
                 // Debug: Log unique status values found in threads
                 const uniqueStatuses = new Set(allThreads.map(t => t.status));
@@ -2165,6 +2454,30 @@
                         <div class="stat-label">Deleted</div>
                     </div>
                     ` : ''}
+                    ${currentFileChangeStats ? `
+                    <div class="stat" style="border-left: 2px solid #d1d1d1; padding-left: 20px; margin-left: 10px;">
+                        <div class="stat-value">${currentFileChangeStats.totalFiles}</div>
+                        <div class="stat-label">Files Changed</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" style="color: #107c10;">+${currentFileChangeStats.added}</div>
+                        <div class="stat-label">Added</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" style="color: #0078d4;">~${currentFileChangeStats.modified}</div>
+                        <div class="stat-label">Modified</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" style="color: #a4262c;">-${currentFileChangeStats.deleted}</div>
+                        <div class="stat-label">Deleted</div>
+                    </div>
+                    <div id="lineStatsContainer" style="display: contents;">
+                        <div class="stat">
+                            <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
+                            <div class="stat-label">Lines...</div>
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
             `;
 
@@ -2416,6 +2729,9 @@
 
             // Fetch PR checks (statuses, policies) asynchronously
             fetchPRChecks(config, prData);
+
+            // Fetch line stats asynchronously
+            fetchLineStatsAsync(config, prData);
 
             // Asynchronously load code suggestions
             setTimeout(async () => {
