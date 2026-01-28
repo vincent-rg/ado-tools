@@ -620,6 +620,19 @@
             margin-right: 8px;
         }
 
+        /* Branch info */
+        .branch-info {
+            margin: 8px 0;
+        }
+
+        .branch-info code {
+            background: #f3f2f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
         /* Checks section */
         .checks-section {
             margin-top: 15px;
@@ -2417,6 +2430,7 @@
                             <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
                         </h2>
                         <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
+                        <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                         ${prData.description ? `
                         <details style="margin-top: 15px;" open>
                             <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
