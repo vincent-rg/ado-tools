@@ -1687,7 +1687,7 @@
 
             // Find repos that were previously loaded but are no longer selected
             const selectedRepoKeys = new Set(selectedRepos.map(r => `${r.projectName}/${r.id}`));
-            loadedRepoKeys.forEach(repoKey => {
+            loadedRepoKeys.forEach((timestamp, repoKey) => {
                 if (!selectedRepoKeys.has(repoKey)) {
                     reposToRemove.push(repoKey);
                 }
