@@ -898,6 +898,8 @@
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
+        let urlProject = null;  // Saved from initial URL
+        let urlRepo = null;     // Saved from initial URL
 
         function calculateFileChangeStats(changeEntries) {
             const stats = {
@@ -1487,8 +1489,8 @@
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = ADOURL.getParams();
             currentPRId = urlParams.get('prId') || urlParams.get('id');
-            const urlProject = urlParams.get('project');
-            const urlRepo = urlParams.get('repo');
+            urlProject = urlParams.get('project');
+            urlRepo = urlParams.get('repo');
 
             // Load saved configuration from localStorage
             const savedConfig = ADOConfig.get();
@@ -1552,6 +1554,10 @@
             if (currentPRId) {
                 params.set('prId', currentPRId);
             }
+
+            // Preserve project and repo from original URL
+            if (urlProject) params.set('project', urlProject);
+            if (urlRepo) params.set('repo', urlRepo);
 
             // Thread status filters
             // Always include status parameter to preserve chip selection state (even if none selected)
@@ -1658,13 +1664,14 @@
         async function loadPRThreads() {
             const savedConfig = ADOConfig.get() || {};
             const formConfig = ADOConfig.getFromForm({});
+            const urlParams = ADOURL.getParams();
 
-            // Merge form values with saved config (PAT only comes from saved config)
+            // Priority: URL params > form values > saved config
             const config = {
                 serverUrl: formConfig.serverUrl || savedConfig.serverUrl,
                 organization: formConfig.organization || savedConfig.organization,
-                project: formConfig.project || savedConfig.project,
-                repository: formConfig.repository || savedConfig.repository,
+                project: urlParams.get('project') || formConfig.project || savedConfig.project,
+                repository: urlParams.get('repo') || formConfig.repository || savedConfig.repository,
                 pat: savedConfig.pat
             };
 
