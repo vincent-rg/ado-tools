@@ -274,8 +274,9 @@ button:disabled {
 }
 
 .badge-draft {
-    background: #e1f3ff;
-    color: #004578;
+    background: white;
+    color: #0078d4;
+    border: 1px solid #0078d4;
 }
 
 /* Links */
