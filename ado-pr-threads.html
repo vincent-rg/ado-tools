@@ -810,6 +810,30 @@
             margin-bottom: 20px;
         }
 
+        /* Description card */
+        .description-card {
+            border: 1px solid #e1dfdd;
+            margin-top: 15px;
+        }
+
+        .description-card-header {
+            background: #f8f8f8;
+            padding: 10px 15px;
+            border-bottom: 1px solid #e1dfdd;
+            font-weight: 600;
+            font-size: 14px;
+            color: #323130;
+        }
+
+        .description-card-content {
+            padding: 15px;
+            background: white;
+        }
+
+        .description-card-content .pr-description {
+            white-space: pre-wrap;
+        }
+
         /* Right sidebar section styling */
         .right-sidebar-section {
             margin-bottom: 20px;
@@ -2552,9 +2576,11 @@
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                     ${prData.description ? `
-                    <div style="margin-top: 15px;">
-                        <div style="font-weight: 600; margin-bottom: 10px;">Description</div>
-                        <div class="pr-description" style="padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
+                    <div class="description-card">
+                        <div class="description-card-header">Description</div>
+                        <div class="description-card-content">
+                            <div class="pr-description">${ADOContent.processContent(prData.description)}</div>
+                        </div>
                     </div>
                     ` : ''}
                 </div>
