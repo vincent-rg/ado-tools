@@ -13,7 +13,7 @@
         /* Sidebar layout */
         .page-layout {
             display: flex;
-            gap: 20px;
+            gap: 0;
             height: calc(100vh - 50px);
         }
 
@@ -21,7 +21,7 @@
             width: 280px;
             min-width: 200px;
             max-width: 400px;
-            background: #f3f2f1;
+            background: #edebe9;
             border-radius: 0;
             padding: 20px;
             overflow-y: auto;
@@ -54,7 +54,7 @@
         .results-container {
             flex: 1;
             overflow-y: auto;
-            padding-right: 10px;
+            background: #f9f8f7;
         }
 
         /* Filter section styling */
@@ -161,7 +161,7 @@
 
         /* PR info bar */
         .pr-info {
-            background: #f3f2f1;
+            background: #f9f8f7;
             padding: 15px;
             border-radius: 0;
             margin-bottom: 20px;
@@ -190,13 +190,16 @@
 
         .thread-container {
             margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f8f7;
         }
 
         .thread {
-            border: 1px solid #edebe9;
+            border: 1px solid #e1dfdd;
             border-radius: 0;
             margin-bottom: 20px;
             overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .thread.compact-view .comment {
@@ -272,7 +275,7 @@
         }
 
         .thread-header {
-            background: #f3f2f1;
+            background: #ffffff;
             padding: 10px 15px;
             font-weight: 600;
             color: #323130;
@@ -284,6 +287,7 @@
         .comment {
             padding: 12px 15px;
             border-bottom: 1px solid #edebe9;
+            background: #ffffff;
         }
 
         .comment:last-child {
@@ -413,7 +417,6 @@
             background: #f8f8f8;
             border: 1px solid #d1d1d1;
             border-radius: 0;
-            margin-bottom: 10px;
         }
 
         .file-preview-header {
@@ -485,7 +488,7 @@
             text-decoration: none;
             font-size: 12px;
             font-family: monospace;
-            background: #f3f2f1;
+            background: #f9f8f7;
             padding: 4px 8px;
             border-radius: 0;
             display: inline-block;
@@ -533,7 +536,7 @@
             right: -3px;
             width: 16px;
             height: 16px;
-            border-radius: 0;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -630,7 +633,7 @@
         }
 
         .branch-info code {
-            background: #f3f2f1;
+            background: #f9f8f7;
             padding: 2px 6px;
             border-radius: 0;
             font-family: monospace;
@@ -751,6 +754,123 @@
             font-size: 11px;
             font-style: italic;
         }
+
+        /* Right sidebar */
+        .right-sidebar {
+            width: 300px;
+            min-width: 200px;
+            max-width: 500px;
+            background: #edebe9;
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        /* Left-edge resize handle for right sidebar */
+        .resize-handle-left {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+        }
+
+        .resize-handle-left:hover {
+            background: rgba(0, 120, 212, 0.2);
+        }
+
+        /* Vertical stats layout for right sidebar */
+        .right-sidebar .stats {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .right-sidebar .stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: white;
+        }
+
+        .right-sidebar .stat-value {
+            font-size: 18px;
+            order: 2;
+        }
+
+        .right-sidebar .stat-label {
+            font-size: 13px;
+            order: 1;
+        }
+
+        /* PR header in middle column */
+        .pr-header {
+            background: #f9f8f7;
+            padding: 20px;
+        }
+
+        /* Description card */
+        .description-card {
+            border: 1px solid #e1dfdd;
+            margin-top: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .description-card-header {
+            padding: 10px 15px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #323130;
+            background: white;
+        }
+
+        .description-card-content {
+            padding: 15px;
+            background: white;
+        }
+
+        .description-card-content .pr-description {
+            white-space: pre-wrap;
+        }
+
+        /* Right sidebar section styling */
+        .right-sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .right-sidebar-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .right-sidebar-section h4 {
+            margin: 0 0 10px 0;
+            color: #323130;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Compact stats (inline) */
+        .compact-stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 14px;
+            padding: 8px 12px;
+            background: white;
+            margin-bottom: 8px;
+        }
+
+        .compact-stats:last-child {
+            margin-bottom: 0;
+        }
+
+        .compact-stats span {
+            cursor: default;
+        }
     </style>
 </head>
 <body>
@@ -768,7 +888,7 @@
 
         <div class="page-layout">
             <!-- Left Sidebar with Filters -->
-            <div class="sidebar" id="threadFilters" style="display: none;">
+            <div class="sidebar left-sidebar" id="threadFilters" style="display: none;">
                 <div class="resize-handle" id="resizeHandle"></div>
                 <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
 
@@ -882,6 +1002,14 @@
                 <div class="results-container">
                     <div id="results"></div>
                 </div>
+            </div>
+
+            <!-- Right Sidebar with Stats, Reviewers, Checks -->
+            <div class="sidebar right-sidebar" id="rightSidebar" style="display: none;">
+                <div class="resize-handle resize-handle-left" id="resizeHandleRight"></div>
+                <div id="rightSidebarStats" class="right-sidebar-section"></div>
+                <div id="rightSidebarReviewers" class="right-sidebar-section"></div>
+                <div id="rightSidebarChecks" class="right-sidebar-section"></div>
             </div>
         </div>
     </div>
@@ -1154,10 +1282,8 @@
             const container = document.getElementById('lineStatsContainer');
             if (!container) return;
             container.innerHTML = `
-                <div class="stat">
-                    <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
-                    <div class="stat-label">Lines...</div>
-                </div>
+                <span>Lines</span>
+                <span style="color: #605e5c;">⏳</span>
             `;
         }
 
@@ -1166,14 +1292,9 @@
             if (!container) return;
 
             container.innerHTML = `
-                <div class="stat">
-                    <div class="stat-value" style="color: #107c10;">+${added}</div>
-                    <div class="stat-label">Lines</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" style="color: #a4262c;">-${removed}</div>
-                    <div class="stat-label">Lines</div>
-                </div>
+                <span>Lines</span>
+                <strong style="color: #107c10;" title="Added">+${added}</strong>
+                <strong style="color: #a4262c;" title="Removed">-${removed}</strong>
             `;
         }
 
@@ -1363,7 +1484,7 @@
         }
 
         function updateChecksDisplay() {
-            const container = document.getElementById('checksSection');
+            const container = document.getElementById('rightSidebarChecks');
             if (!container) return;
 
             container.innerHTML = renderChecksSection();
@@ -2448,78 +2569,66 @@
                 }
             }
 
+            // PR Header HTML (middle column)
             let html = `
-                <div class="pr-info">
-                    <div class="pr-info-main">
-                        <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                            <span>${statusBadgeHtml} ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
-                            <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
-                        </h2>
-                        <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
-                        <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
-                        ${prData.description ? `
-                        <details style="margin-top: 15px;" open>
-                            <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
-                            <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
-                        </details>
-                        ` : ''}
-                        <div id="checksSection">${renderChecksSection()}</div>
-                    </div>
-                    <div class="pr-info-sidebar">
-                        ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
-                        ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
-                    </div>
-                </div>
-
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">${threads.length}</div>
-                        <div class="stat-label">Total Threads</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${statusCounts.active || 0}</div>
-                        <div class="stat-label">Active</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${statusCounts.fixed || 0}</div>
-                        <div class="stat-label">Fixed</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${statusCounts.closed || 0}</div>
-                        <div class="stat-label">Closed</div>
-                    </div>
-                    ${statusCounts.deleted ? `
-                    <div class="stat">
-                        <div class="stat-value" style="color: #a4262c;">${statusCounts.deleted}</div>
-                        <div class="stat-label">Deleted</div>
-                    </div>
-                    ` : ''}
-                    ${currentFileChangeStats ? `
-                    <div class="stat" style="border-left: 2px solid #d1d1d1; padding-left: 20px; margin-left: 10px;">
-                        <div class="stat-value">${currentFileChangeStats.totalFiles}</div>
-                        <div class="stat-label">Files Changed</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value" style="color: #107c10;">+${currentFileChangeStats.added}</div>
-                        <div class="stat-label">Added</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value" style="color: #0078d4;">~${currentFileChangeStats.modified}</div>
-                        <div class="stat-label">Modified</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value" style="color: #a4262c;">-${currentFileChangeStats.deleted}</div>
-                        <div class="stat-label">Deleted</div>
-                    </div>
-                    <div id="lineStatsContainer" style="display: contents;">
-                        <div class="stat">
-                            <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
-                            <div class="stat-label">Lines...</div>
+                <div class="pr-header">
+                    <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                        <span>${statusBadgeHtml} ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
+                        <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
+                    </h2>
+                    <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
+                    <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
+                    ${prData.description ? `
+                    <div class="description-card">
+                        <div class="description-card-header">Description</div>
+                        <div class="description-card-content">
+                            <div class="pr-description">${ADOContent.processContent(prData.description)}</div>
                         </div>
                     </div>
                     ` : ''}
                 </div>
             `;
+
+            // Stats HTML (right sidebar)
+            const statsHtml = `
+                <h4>Threads</h4>
+                <div class="compact-stats">
+                    <span title="Active">💬 <strong>${statusCounts.active || 0}</strong></span>
+                    <span title="Resolved" style="color: #107c10;">✅ <strong>${statusCounts.fixed || 0}</strong></span>
+                    <span title="Closed" style="color: #605e5c;">🔒 <strong>${statusCounts.closed || 0}</strong></span>
+                    ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ <strong>${statusCounts.pending}</strong></span>` : ''}
+                    ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 <strong>${statusCounts.wontFix}</strong></span>` : ''}
+                    ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ <strong>${statusCounts.deleted}</strong></span>` : ''}
+                </div>
+                ${currentFileChangeStats ? `
+                <h4 style="margin-top: 15px;">Change Stats</h4>
+                <div class="compact-stats">
+                    <span>Files</span>
+                    <strong style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</strong>
+                    <strong style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</strong>
+                    <strong style="color: #a4262c;" title="Deleted">-${currentFileChangeStats.deleted}</strong>
+                </div>
+                <div id="lineStatsContainer" class="compact-stats">
+                    <span>Lines</span>
+                    <span style="color: #605e5c;">⏳</span>
+                </div>
+                ` : ''}
+            `;
+
+            // Reviewers HTML (right sidebar)
+            const reviewersHtml = `
+                ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
+                ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
+            `;
+
+            // Checks HTML (right sidebar)
+            const checksHtml = renderChecksSection();
+
+            // Inject right sidebar content
+            document.getElementById('rightSidebarStats').innerHTML = statsHtml;
+            document.getElementById('rightSidebarReviewers').innerHTML = reviewersHtml;
+            document.getElementById('rightSidebarChecks').innerHTML = checksHtml;
+            document.getElementById('rightSidebar').style.display = '';
 
             if (threads.length === 0) {
                 html += '<div class="info">No threads found for this Pull Request.</div>';
@@ -2818,10 +2927,10 @@
             }, 0);
         }
 
-        // Sidebar resize functionality
-        (function initSidebarResize() {
+        // Left sidebar resize functionality
+        (function initLeftSidebarResize() {
             const resizeHandle = document.getElementById('resizeHandle');
-            const sidebar = document.querySelector('.sidebar');
+            const sidebar = document.querySelector('.left-sidebar');
             let isResizing = false;
             let startX = 0;
             let startWidth = 0;
@@ -2843,6 +2952,45 @@
 
                 // Apply min/max constraints
                 if (newWidth >= 200 && newWidth <= 600) {
+                    sidebar.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
+
+        // Right sidebar resize functionality
+        (function initRightSidebarResize() {
+            const resizeHandle = document.getElementById('resizeHandleRight');
+            const sidebar = document.getElementById('rightSidebar');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                // Note: direction is reversed (dragging left increases width)
+                const diff = startX - e.clientX;
+                const newWidth = startWidth + diff;
+
+                // Apply min/max constraints
+                if (newWidth >= 200 && newWidth <= 500) {
                     sidebar.style.width = newWidth + 'px';
                 }
             });
