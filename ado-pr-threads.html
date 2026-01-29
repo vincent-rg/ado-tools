@@ -826,6 +826,25 @@
             font-size: 14px;
             font-weight: 600;
         }
+
+        /* Compact stats (inline) */
+        .compact-stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 14px;
+            padding: 8px 12px;
+            background: white;
+            margin-bottom: 8px;
+        }
+
+        .compact-stats:last-child {
+            margin-bottom: 0;
+        }
+
+        .compact-stats span {
+            cursor: default;
+        }
     </style>
 </head>
 <body>
@@ -1237,10 +1256,8 @@
             const container = document.getElementById('lineStatsContainer');
             if (!container) return;
             container.innerHTML = `
-                <div class="stat">
-                    <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
-                    <div class="stat-label">Lines...</div>
-                </div>
+                <span>Lines</span>
+                <span style="color: #605e5c;">⏳</span>
             `;
         }
 
@@ -1249,14 +1266,9 @@
             if (!container) return;
 
             container.innerHTML = `
-                <div class="stat">
-                    <div class="stat-value" style="color: #107c10;">+${added}</div>
-                    <div class="stat-label">Lines</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" style="color: #a4262c;">-${removed}</div>
-                    <div class="stat-label">Lines</div>
-                </div>
+                <span>Lines</span>
+                <span style="color: #107c10;" title="Added">+${added}</span>
+                <span style="color: #a4262c;" title="Removed">-${removed}</span>
             `;
         }
 
@@ -2551,56 +2563,25 @@
 
             // Stats HTML (right sidebar)
             const statsHtml = `
-                <h4>Thread Stats</h4>
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-label">Total Threads</div>
-                        <div class="stat-value">${threads.length}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Active</div>
-                        <div class="stat-value">${statusCounts.active || 0}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Fixed</div>
-                        <div class="stat-value">${statusCounts.fixed || 0}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Closed</div>
-                        <div class="stat-value">${statusCounts.closed || 0}</div>
-                    </div>
-                    ${statusCounts.deleted ? `
-                    <div class="stat">
-                        <div class="stat-label">Deleted</div>
-                        <div class="stat-value" style="color: #a4262c;">${statusCounts.deleted}</div>
-                    </div>
-                    ` : ''}
+                <h4>Threads</h4>
+                <div class="compact-stats">
+                    <span title="Total threads">💬 ${threads.length}</span>
+                    <span title="Active" style="color: #d83b01;">🔴 ${statusCounts.active || 0}</span>
+                    <span title="Fixed" style="color: #107c10;">✅ ${statusCounts.fixed || 0}</span>
+                    <span title="Closed" style="color: #605e5c;">⬜ ${statusCounts.closed || 0}</span>
+                    ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ ${statusCounts.deleted}</span>` : ''}
                 </div>
                 ${currentFileChangeStats ? `
-                <h4 style="margin-top: 15px;">File Changes</h4>
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-label">Files Changed</div>
-                        <div class="stat-value">${currentFileChangeStats.totalFiles}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Added</div>
-                        <div class="stat-value" style="color: #107c10;">+${currentFileChangeStats.added}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Modified</div>
-                        <div class="stat-value" style="color: #0078d4;">~${currentFileChangeStats.modified}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Deleted</div>
-                        <div class="stat-value" style="color: #a4262c;">-${currentFileChangeStats.deleted}</div>
-                    </div>
-                    <div id="lineStatsContainer">
-                        <div class="stat">
-                            <div class="stat-label">Lines...</div>
-                            <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
-                        </div>
-                    </div>
+                <h4 style="margin-top: 15px;">Change Stats</h4>
+                <div class="compact-stats">
+                    <span>Files</span>
+                    <span style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</span>
+                    <span style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</span>
+                    <span style="color: #a4262c;" title="Deleted">-${currentFileChangeStats.deleted}</span>
+                </div>
+                <div id="lineStatsContainer" class="compact-stats">
+                    <span>Lines</span>
+                    <span style="color: #605e5c;">⏳</span>
                 </div>
                 ` : ''}
             `;
