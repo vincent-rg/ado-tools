@@ -1256,7 +1256,7 @@
             const container = document.getElementById('lineStatsContainer');
             if (!container) return;
             container.innerHTML = `
-                <strong>Lines</strong>
+                <span>Lines</span>
                 <span style="color: #605e5c;">⏳</span>
             `;
         }
@@ -1266,9 +1266,9 @@
             if (!container) return;
 
             container.innerHTML = `
-                <strong>Lines</strong>
-                <span style="color: #107c10;" title="Added">+${added}</span>
-                <span style="color: #a4262c;" title="Removed">-${removed}</span>
+                <span>Lines</span>
+                <strong style="color: #107c10;" title="Added">+${added}</strong>
+                <strong style="color: #a4262c;" title="Removed">-${removed}</strong>
             `;
         }
 
@@ -2565,23 +2565,23 @@
             const statsHtml = `
                 <h4>Threads</h4>
                 <div class="compact-stats">
-                    <span title="Active">💬 ${statusCounts.active || 0}</span>
-                    <span title="Resolved" style="color: #107c10;">✅ ${statusCounts.fixed || 0}</span>
-                    <span title="Closed" style="color: #605e5c;">🔒 ${statusCounts.closed || 0}</span>
-                    ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ ${statusCounts.pending}</span>` : ''}
-                    ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 ${statusCounts.wontFix}</span>` : ''}
-                    ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ ${statusCounts.deleted}</span>` : ''}
+                    <span title="Active">💬 <strong>${statusCounts.active || 0}</strong></span>
+                    <span title="Resolved" style="color: #107c10;">✅ <strong>${statusCounts.fixed || 0}</strong></span>
+                    <span title="Closed" style="color: #605e5c;">🔒 <strong>${statusCounts.closed || 0}</strong></span>
+                    ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ <strong>${statusCounts.pending}</strong></span>` : ''}
+                    ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 <strong>${statusCounts.wontFix}</strong></span>` : ''}
+                    ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ <strong>${statusCounts.deleted}</strong></span>` : ''}
                 </div>
                 ${currentFileChangeStats ? `
                 <h4 style="margin-top: 15px;">Change Stats</h4>
                 <div class="compact-stats">
-                    <strong>Files</strong>
-                    <span style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</span>
-                    <span style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</span>
-                    <span style="color: #a4262c;" title="Deleted">-${currentFileChangeStats.deleted}</span>
+                    <span>Files</span>
+                    <strong style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</strong>
+                    <strong style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</strong>
+                    <strong style="color: #a4262c;" title="Deleted">-${currentFileChangeStats.deleted}</strong>
                 </div>
                 <div id="lineStatsContainer" class="compact-stats">
-                    <strong>Lines</strong>
+                    <span>Lines</span>
                     <span style="color: #605e5c;">⏳</span>
                 </div>
                 ` : ''}
