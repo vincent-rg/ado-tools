@@ -54,7 +54,6 @@
         .results-container {
             flex: 1;
             overflow-y: auto;
-            padding-right: 10px;
         }
 
         /* Filter section styling */
@@ -2554,7 +2553,7 @@
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                     ${prData.description ? `
                     <div style="margin-top: 15px;">
-                        <div style="color: #0078d4; font-weight: 600; margin-bottom: 10px;">📝 Description</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">Description</div>
                         <div class="pr-description" style="padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
                     </div>
                     ` : ''}
