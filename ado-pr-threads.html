@@ -13,7 +13,7 @@
         /* Sidebar layout */
         .page-layout {
             display: flex;
-            gap: 20px;
+            gap: 0;
             height: calc(100vh - 50px);
         }
 
@@ -21,7 +21,7 @@
             width: 280px;
             min-width: 200px;
             max-width: 400px;
-            background: #f3f2f1;
+            background: #edebe9;
             border-radius: 0;
             padding: 20px;
             overflow-y: auto;
@@ -757,7 +757,7 @@
             width: 300px;
             min-width: 200px;
             max-width: 500px;
-            background: #f3f2f1;
+            background: #edebe9;
             padding: 20px;
             overflow-y: auto;
             flex-shrink: 0;
@@ -2553,10 +2553,10 @@
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                     ${prData.description ? `
-                    <details style="margin-top: 15px;" open>
-                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
-                        <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
-                    </details>
+                    <div style="margin-top: 15px;">
+                        <div style="color: #0078d4; font-weight: 600; margin-bottom: 10px;">📝 Description</div>
+                        <div class="pr-description" style="padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
+                    </div>
                     ` : ''}
                 </div>
             `;
