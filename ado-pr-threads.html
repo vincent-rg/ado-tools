@@ -751,6 +751,81 @@
             font-size: 11px;
             font-style: italic;
         }
+
+        /* Right sidebar */
+        .right-sidebar {
+            width: 300px;
+            min-width: 200px;
+            max-width: 500px;
+            background: #f3f2f1;
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        /* Left-edge resize handle for right sidebar */
+        .resize-handle-left {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+        }
+
+        .resize-handle-left:hover {
+            background: rgba(0, 120, 212, 0.2);
+        }
+
+        /* Vertical stats layout for right sidebar */
+        .right-sidebar .stats {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .right-sidebar .stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: white;
+        }
+
+        .right-sidebar .stat-value {
+            font-size: 18px;
+            order: 2;
+        }
+
+        .right-sidebar .stat-label {
+            font-size: 13px;
+            order: 1;
+        }
+
+        /* PR header in middle column */
+        .pr-header {
+            background: #f3f2f1;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        /* Right sidebar section styling */
+        .right-sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .right-sidebar-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .right-sidebar-section h4 {
+            margin: 0 0 10px 0;
+            color: #323130;
+            font-size: 14px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -768,7 +843,7 @@
 
         <div class="page-layout">
             <!-- Left Sidebar with Filters -->
-            <div class="sidebar" id="threadFilters" style="display: none;">
+            <div class="sidebar left-sidebar" id="threadFilters" style="display: none;">
                 <div class="resize-handle" id="resizeHandle"></div>
                 <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
 
@@ -882,6 +957,14 @@
                 <div class="results-container">
                     <div id="results"></div>
                 </div>
+            </div>
+
+            <!-- Right Sidebar with Stats, Reviewers, Checks -->
+            <div class="sidebar right-sidebar" id="rightSidebar" style="display: none;">
+                <div class="resize-handle resize-handle-left" id="resizeHandleRight"></div>
+                <div id="rightSidebarStats" class="right-sidebar-section"></div>
+                <div id="rightSidebarReviewers" class="right-sidebar-section"></div>
+                <div id="rightSidebarChecks" class="right-sidebar-section"></div>
             </div>
         </div>
     </div>
@@ -1363,7 +1446,7 @@
         }
 
         function updateChecksDisplay() {
-            const container = document.getElementById('checksSection');
+            const container = document.getElementById('rightSidebarChecks');
             if (!container) return;
 
             container.innerHTML = renderChecksSection();
@@ -2448,78 +2531,94 @@
                 }
             }
 
+            // PR Header HTML (middle column)
             let html = `
-                <div class="pr-info">
-                    <div class="pr-info-main">
-                        <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                            <span>${statusBadgeHtml} ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
-                            <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
-                        </h2>
-                        <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
-                        <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
-                        ${prData.description ? `
-                        <details style="margin-top: 15px;" open>
-                            <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
-                            <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
-                        </details>
-                        ` : ''}
-                        <div id="checksSection">${renderChecksSection()}</div>
-                    </div>
-                    <div class="pr-info-sidebar">
-                        ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
-                        ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
-                    </div>
-                </div>
-
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">${threads.length}</div>
-                        <div class="stat-label">Total Threads</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${statusCounts.active || 0}</div>
-                        <div class="stat-label">Active</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${statusCounts.fixed || 0}</div>
-                        <div class="stat-label">Fixed</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${statusCounts.closed || 0}</div>
-                        <div class="stat-label">Closed</div>
-                    </div>
-                    ${statusCounts.deleted ? `
-                    <div class="stat">
-                        <div class="stat-value" style="color: #a4262c;">${statusCounts.deleted}</div>
-                        <div class="stat-label">Deleted</div>
-                    </div>
-                    ` : ''}
-                    ${currentFileChangeStats ? `
-                    <div class="stat" style="border-left: 2px solid #d1d1d1; padding-left: 20px; margin-left: 10px;">
-                        <div class="stat-value">${currentFileChangeStats.totalFiles}</div>
-                        <div class="stat-label">Files Changed</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value" style="color: #107c10;">+${currentFileChangeStats.added}</div>
-                        <div class="stat-label">Added</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value" style="color: #0078d4;">~${currentFileChangeStats.modified}</div>
-                        <div class="stat-label">Modified</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value" style="color: #a4262c;">-${currentFileChangeStats.deleted}</div>
-                        <div class="stat-label">Deleted</div>
-                    </div>
-                    <div id="lineStatsContainer" style="display: contents;">
-                        <div class="stat">
-                            <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
-                            <div class="stat-label">Lines...</div>
-                        </div>
-                    </div>
+                <div class="pr-header">
+                    <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                        <span>${statusBadgeHtml} ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
+                        <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
+                    </h2>
+                    <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
+                    <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
+                    ${prData.description ? `
+                    <details style="margin-top: 15px;" open>
+                        <summary style="cursor: pointer; color: #0078d4; font-weight: 600;">📝 Description</summary>
+                        <div class="pr-description" style="margin-top: 10px; padding: 12px; background: #f8f8f8; border-radius: 0; white-space: pre-wrap;">${ADOContent.processContent(prData.description)}</div>
+                    </details>
                     ` : ''}
                 </div>
             `;
+
+            // Stats HTML (right sidebar)
+            const statsHtml = `
+                <h4>Thread Stats</h4>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">Total Threads</div>
+                        <div class="stat-value">${threads.length}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Active</div>
+                        <div class="stat-value">${statusCounts.active || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Fixed</div>
+                        <div class="stat-value">${statusCounts.fixed || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Closed</div>
+                        <div class="stat-value">${statusCounts.closed || 0}</div>
+                    </div>
+                    ${statusCounts.deleted ? `
+                    <div class="stat">
+                        <div class="stat-label">Deleted</div>
+                        <div class="stat-value" style="color: #a4262c;">${statusCounts.deleted}</div>
+                    </div>
+                    ` : ''}
+                </div>
+                ${currentFileChangeStats ? `
+                <h4 style="margin-top: 15px;">File Changes</h4>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">Files Changed</div>
+                        <div class="stat-value">${currentFileChangeStats.totalFiles}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Added</div>
+                        <div class="stat-value" style="color: #107c10;">+${currentFileChangeStats.added}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Modified</div>
+                        <div class="stat-value" style="color: #0078d4;">~${currentFileChangeStats.modified}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Deleted</div>
+                        <div class="stat-value" style="color: #a4262c;">-${currentFileChangeStats.deleted}</div>
+                    </div>
+                    <div id="lineStatsContainer">
+                        <div class="stat">
+                            <div class="stat-label">Lines...</div>
+                            <div class="stat-value" style="color: #605e5c; font-size: 12px;">⏳</div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+
+            // Reviewers HTML (right sidebar)
+            const reviewersHtml = `
+                ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
+                ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
+            `;
+
+            // Checks HTML (right sidebar)
+            const checksHtml = renderChecksSection();
+
+            // Inject right sidebar content
+            document.getElementById('rightSidebarStats').innerHTML = statsHtml;
+            document.getElementById('rightSidebarReviewers').innerHTML = reviewersHtml;
+            document.getElementById('rightSidebarChecks').innerHTML = checksHtml;
+            document.getElementById('rightSidebar').style.display = '';
 
             if (threads.length === 0) {
                 html += '<div class="info">No threads found for this Pull Request.</div>';
@@ -2818,10 +2917,10 @@
             }, 0);
         }
 
-        // Sidebar resize functionality
-        (function initSidebarResize() {
+        // Left sidebar resize functionality
+        (function initLeftSidebarResize() {
             const resizeHandle = document.getElementById('resizeHandle');
-            const sidebar = document.querySelector('.sidebar');
+            const sidebar = document.querySelector('.left-sidebar');
             let isResizing = false;
             let startX = 0;
             let startWidth = 0;
@@ -2843,6 +2942,45 @@
 
                 // Apply min/max constraints
                 if (newWidth >= 200 && newWidth <= 600) {
+                    sidebar.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
+
+        // Right sidebar resize functionality
+        (function initRightSidebarResize() {
+            const resizeHandle = document.getElementById('resizeHandleRight');
+            const sidebar = document.getElementById('rightSidebar');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                // Note: direction is reversed (dragging left increases width)
+                const diff = startX - e.clientX;
+                const newWidth = startWidth + diff;
+
+                // Apply min/max constraints
+                if (newWidth >= 200 && newWidth <= 500) {
                     sidebar.style.width = newWidth + 'px';
                 }
             });
