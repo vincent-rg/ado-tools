@@ -2565,10 +2565,11 @@
             const statsHtml = `
                 <h4>Threads</h4>
                 <div class="compact-stats">
-                    <span title="Total threads">💬 ${threads.length}</span>
-                    <span title="Active" style="color: #d83b01;">🔴 ${statusCounts.active || 0}</span>
-                    <span title="Fixed" style="color: #107c10;">✅ ${statusCounts.fixed || 0}</span>
-                    <span title="Closed" style="color: #605e5c;">⬜ ${statusCounts.closed || 0}</span>
+                    <span title="Active" style="color: #d83b01;">💬 ${statusCounts.active || 0}</span>
+                    <span title="Resolved" style="color: #107c10;">✅ ${statusCounts.fixed || 0}</span>
+                    <span title="Closed" style="color: #605e5c;">🔒 ${statusCounts.closed || 0}</span>
+                    ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ ${statusCounts.pending}</span>` : ''}
+                    ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 ${statusCounts.wontFix}</span>` : ''}
                     ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ ${statusCounts.deleted}</span>` : ''}
                 </div>
                 ${currentFileChangeStats ? `
