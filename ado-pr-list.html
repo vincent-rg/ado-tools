@@ -347,6 +347,33 @@
             color: #0078d4;
         }
 
+        /* Build status SVG icons */
+        .build-status-icon {
+            vertical-align: middle;
+        }
+
+        .build-status-running {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .build-status-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .build-status-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            font-size: 11px;
+        }
+
         .pr-meta {
             font-size: 13px;
             color: #605e5c;
@@ -2960,43 +2987,74 @@
                 }
             }
 
-            // Status checks indicator (compact)
-            if (statuses.length > 0) {
-                const counts = ChecksFormatter.countStatuses(statuses);
-
+            // Status checks indicator (compact) - only show if there are actual checks
+            const statusCounts = ChecksFormatter.countStatuses(statuses);
+            if (statusCounts.total > 0) {
                 let statusClass = 'status-indicator-success';
                 let statusIcon = '✓';
-                let statusText = `${counts.total}`;
+                let statusText = `${statusCounts.total}`;
 
-                if (counts.failed > 0) {
+                if (statusCounts.failed > 0) {
                     statusClass = 'status-indicator-error';
                     statusIcon = '✗';
-                    statusText = `${counts.failed}/${counts.total}`;
-                } else if (counts.pending > 0) {
+                    statusText = `${statusCounts.failed}/${statusCounts.total}`;
+                } else if (statusCounts.pending > 0) {
                     statusClass = 'status-indicator-pending';
                     statusIcon = '●';
-                    statusText = `${counts.pending}/${counts.total}`;
+                    statusText = `${statusCounts.pending}/${statusCounts.total}`;
                 }
 
-                indicators.push(`<span class="status-indicator ${statusClass}">🔧 ${statusIcon} ${statusText}</span>`);
+                indicators.push(`<span class="status-indicator ${statusClass}">📊 ${statusIcon} ${statusText}</span>`);
             }
 
-            // Policy evaluations indicator (compact)
-            if (policies.length > 0) {
-                const counts = ChecksFormatter.countPolicies(policies);
+            // Build policies indicator (with SVG icons grouped by state)
+            const buildCounts = ChecksFormatter.countBuildPolicies(policies);
+            if (buildCounts.total > 0) {
+                // Determine overall status class
+                let buildClass = 'status-indicator-success';
+                if (buildCounts.failed > 0) {
+                    buildClass = 'status-indicator-error';
+                } else if (buildCounts.running > 0 || buildCounts.queued > 0 || buildCounts.notTriggered > 0) {
+                    buildClass = 'status-indicator-pending';
+                }
 
+                const parts = [];
+
+                // Order: failed, notTriggered, running, queued, succeeded
+                if (buildCounts.failed > 0) {
+                    parts.push(`<span class="build-status-count">${buildCounts.failed}${ChecksFormatter.getBuildStatusSvg('failed', 14)}</span>`);
+                }
+                if (buildCounts.notTriggered > 0) {
+                    parts.push(`<span class="build-status-count">${buildCounts.notTriggered}${ChecksFormatter.getBuildStatusSvg('notTriggered', 14)}</span>`);
+                }
+                if (buildCounts.running > 0) {
+                    parts.push(`<span class="build-status-count">${buildCounts.running}${ChecksFormatter.getBuildStatusSvg('running', 14)}</span>`);
+                }
+                if (buildCounts.queued > 0) {
+                    parts.push(`<span class="build-status-count">${buildCounts.queued}${ChecksFormatter.getBuildStatusSvg('queued', 14)}</span>`);
+                }
+                if (buildCounts.succeeded > 0) {
+                    parts.push(`<span class="build-status-count">${buildCounts.succeeded}${ChecksFormatter.getBuildStatusSvg('succeeded', 14)}</span>`);
+                }
+
+                indicators.push(`<span class="status-indicator build-status-group ${buildClass}">🔧 ${parts.join(' ')}</span>`);
+            }
+
+            // Non-build policy evaluations indicator (compact)
+            const policyCounts = ChecksFormatter.countPolicies(policies);
+            if (policyCounts.total > 0) {
                 let policyClass = 'status-indicator-success';
                 let policyIcon = '✓';
-                let policyText = `${counts.total}`;
+                let policyText = `${policyCounts.total}`;
 
-                if (counts.rejected > 0) {
+                if (policyCounts.rejected > 0) {
                     policyClass = 'status-indicator-error';
                     policyIcon = '✗';
-                    policyText = `${counts.rejected}/${counts.total}`;
-                } else if (counts.running > 0) {
+                    policyText = `${policyCounts.rejected}/${policyCounts.total}`;
+                } else if (policyCounts.running > 0) {
                     policyClass = 'status-indicator-pending';
                     policyIcon = '●';
-                    policyText = `${counts.running}/${counts.total}`;
+                    policyText = `${policyCounts.running}/${policyCounts.total}`;
                 }
 
                 indicators.push(`<span class="status-indicator ${policyClass}">📋 ${policyIcon} ${policyText}</span>`);

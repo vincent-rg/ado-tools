@@ -796,6 +796,47 @@ const ChecksFormatter = {
     },
 
     /**
+     * Get ADO-style SVG icon for build status
+     * @param {string} state - Build state (notTriggered, queued, running, succeeded, failed)
+     * @param {number} size - Icon size in pixels (default 16)
+     * @returns {string} SVG markup
+     */
+    getBuildStatusSvg(state, size = 16) {
+        const icons = {
+            notTriggered: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#8a8886"/><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v7.377l4.026 4.027a1.5 1.5 0 0 1-2.12 2.121l-4.428-4.427A1.496 1.496 0 0 1 14.5 16.5v-8A1.5 1.5 0 0 1 16 7z" fill="#fff"/></svg>`,
+            queued: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#0078d4"/><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v7.377l4.026 4.027a1.5 1.5 0 0 1-2.12 2.121l-4.428-4.427A1.496 1.496 0 0 1 14.5 16.5v-8A1.5 1.5 0 0 1 16 7z" fill="#fff"/></svg>`,
+            running: `<svg class="build-status-icon build-status-running" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#0078d4"/><path d="M23 16c0 .325-.022.645-.065.959-.07.509.137 1.031.582 1.289.622.36 1.42.058 1.545-.65a9.204 9.204 0 0 0-6.27-10.367c-.664-.21-1.292.324-1.292 1.02 0 .532.374.982.873 1.162A7.003 7.003 0 0 1 23 16zM9 16a7.003 7.003 0 0 1 4.627-6.587c.5-.18.873-.63.873-1.161 0-.697-.628-1.232-1.292-1.02a9.204 9.204 0 0 0-6.27 10.367c.124.707.924 1.008 1.545.649.445-.258.652-.78.582-1.29A7.062 7.062 0 0 1 9 16zm7 7a6.975 6.975 0 0 0 4.728-1.838c.403-.37.999-.484 1.472-.21.586.339.744 1.121.261 1.597A9.17 9.17 0 0 1 16 25.2a9.17 9.17 0 0 1-6.461-2.65c-.482-.477-.325-1.26.261-1.599.473-.273 1.069-.159 1.472.21A6.975 6.975 0 0 0 16 23z" fill="#fff"/></svg>`,
+            succeeded: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#107c10"/><path d="M12.799 20.83l-.005-.003L9.94 17.97a1.5 1.5 0 1 1 2.121-2.12l1.8 1.798 6.209-6.21a1.5 1.5 0 1 1 2.12 2.122l-7.264 7.264-.005.006a1.5 1.5 0 0 1-2.121 0z" fill="#fff"/></svg>`,
+            failed: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#d13438"/><path d="M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z" fill="#fff"/></svg>`
+        };
+        return icons[state] || icons.notTriggered;
+    },
+
+    /**
+     * Determine actual build state from policy evaluation
+     * @param {object} policy - Policy evaluation object
+     * @returns {string} Build state (notTriggered, queued, running, succeeded, failed)
+     */
+    getBuildState(policy) {
+        if (policy.status === 'approved') return 'succeeded';
+        if (policy.status === 'rejected') return 'failed';
+        if (policy.status === 'running') return 'running';
+        if (policy.status === 'queued') {
+            return policy.context?.buildId ? 'queued' : 'notTriggered';
+        }
+        return 'notTriggered';
+    },
+
+    /**
+     * Check if a policy is a build policy
+     * @param {object} policy - Policy evaluation object
+     * @returns {boolean}
+     */
+    isBuildPolicy(policy) {
+        return policy.configuration?.type?.displayName?.toLowerCase() === 'build';
+    },
+
+    /**
      * Format a policy evaluation for display
      * @param {object} policy - Policy evaluation object
      * @returns {object} { label, extra } - formatted label and optional extra info
@@ -813,7 +854,10 @@ const ChecksFormatter = {
         if (typeLower === 'build') {
             const buildName = settings.displayName || context.buildDefinitionName || 'Unknown build';
             label = `Build: ${buildName}`;
-            if (context.isExpired) {
+            const buildState = this.getBuildState(policy);
+            if (buildState === 'notTriggered') {
+                extra = '(not triggered)';
+            } else if (context.isExpired) {
                 extra = '(expired)';
             }
         } else if (typeLower === 'status') {
@@ -845,8 +889,11 @@ const ChecksFormatter = {
      * @returns {object} { name, description, url }
      */
     formatStatus(status) {
+        const name = status.context?.name || 'Unknown check';
+        const genre = status.context?.genre;
+        const displayName = genre ? `${name} (${genre})` : name;
         return {
-            name: status.context?.name || status.description || 'Unknown check',
+            name: displayName,
             description: status.description || '',
             url: status.targetUrl || null
         };
@@ -885,40 +932,59 @@ const ChecksFormatter = {
 
         // Status checks (pipelines)
         if (statuses.length > 0) {
-            // Group by latest per context
-            const latestStatuses = new Map();
-            statuses.forEach(s => {
-                const key = s.context?.name || s.description || 'Unknown';
-                const existing = latestStatuses.get(key);
-                if (!existing || new Date(s.creationDate) > new Date(existing.creationDate)) {
-                    latestStatuses.set(key, s);
-                }
-            });
-
-            const statusList = Array.from(latestStatuses.values());
+            const statusList = this.getLatestStatuses(statuses);
             const failed = statusList.filter(s => s.state === 'failed' || s.state === 'error');
-            const pending = statusList.filter(s => s.state === 'pending');
+            const pending = statusList.filter(s => s.state === 'pending' || !s.state);  // no state = queued
             const succeeded = statusList.filter(s => s.state === 'succeeded');
 
             if (statusList.length > 0) {
                 lines.push('');
-                lines.push('Pipeline Checks:');
+                lines.push('📊 Status Checks:');
                 [...failed, ...pending, ...succeeded].forEach(s => {
-                    const icon = this.getIcon(s.state);
+                    const icon = this.getIcon(s.state || 'pending');
                     const info = this.formatStatus(s);
                     lines.push(`  ${icon} ${info.name}`);
                 });
             }
         }
 
-        // Policy evaluations
-        if (policies.length > 0) {
-            const rejected = policies.filter(e => e.status === 'rejected');
-            const running = policies.filter(e => e.status === 'running' || e.status === 'queued');
-            const approved = policies.filter(e => e.status === 'approved');
+        // Build policies (separate section)
+        const buildPolicies = policies.filter(p => this.isBuildPolicy(p));
+        if (buildPolicies.length > 0) {
+            // Sort by state: failed, notTriggered, running, queued, succeeded
+            const stateOrder = { failed: 0, notTriggered: 1, running: 2, queued: 3, succeeded: 4 };
+            const sorted = buildPolicies.sort((a, b) => {
+                const stateA = this.getBuildState(a);
+                const stateB = this.getBuildState(b);
+                return (stateOrder[stateA] ?? 5) - (stateOrder[stateB] ?? 5);
+            });
 
             lines.push('');
-            lines.push('Policies:');
+            lines.push('🔧 Builds:');
+            sorted.forEach(p => {
+                const state = this.getBuildState(p);
+                const stateIcons = {
+                    notTriggered: '○',
+                    queued: '◷',
+                    running: '⟳',
+                    succeeded: '✓',
+                    failed: '✗'
+                };
+                const icon = stateIcons[state] || '○';
+                const { label, extra } = this.formatPolicy(p);
+                lines.push(`  ${icon} ${label}${extra ? ' ' + extra : ''}`);
+            });
+        }
+
+        // Other policy evaluations (non-build)
+        const nonBuildPolicies = policies.filter(p => !this.isBuildPolicy(p));
+        if (nonBuildPolicies.length > 0) {
+            const rejected = nonBuildPolicies.filter(e => e.status === 'rejected');
+            const running = nonBuildPolicies.filter(e => e.status === 'running' || e.status === 'queued');
+            const approved = nonBuildPolicies.filter(e => e.status === 'approved');
+
+            lines.push('');
+            lines.push('📋 Policies:');
             [...rejected, ...running, ...approved].forEach(p => {
                 const icon = this.getIcon(p.status);
                 const { label, extra } = this.formatPolicy(p);
@@ -930,38 +996,84 @@ const ChecksFormatter = {
     },
 
     /**
-     * Count statuses by state
+     * Get deduplicated statuses - latest per context (name+genre) for latest iteration
+     * @param {Array} statuses - Raw statuses from API
+     * @returns {Array} Deduplicated status list
      */
-    countStatuses(statuses) {
-        // Group by latest per context first
+    getLatestStatuses(statuses) {
+        if (!statuses || statuses.length === 0) return [];
+
+        // Find the latest iterationId
+        const maxIterationId = Math.max(...statuses.map(s => s.iterationId || 0));
+
+        // Filter to latest iteration only
+        const latestIterationStatuses = statuses.filter(s => (s.iterationId || 0) === maxIterationId);
+
+        // Group by context name + genre, keeping latest by creationDate
         const latestStatuses = new Map();
-        statuses.forEach(s => {
-            const key = s.context?.name || s.description || 'Unknown';
+        latestIterationStatuses.forEach(s => {
+            const name = s.context?.name || s.description || 'Unknown';
+            const genre = s.context?.genre || '';
+            const key = genre ? `${name}/${genre}` : name;
+
             const existing = latestStatuses.get(key);
             if (!existing || new Date(s.creationDate) > new Date(existing.creationDate)) {
                 latestStatuses.set(key, s);
             }
         });
 
-        const list = Array.from(latestStatuses.values());
+        // Filter out notApplicable statuses
+        return Array.from(latestStatuses.values()).filter(s => s.state !== 'notApplicable');
+    },
+
+    /**
+     * Count statuses by state
+     */
+    countStatuses(statuses) {
+        const list = this.getLatestStatuses(statuses);
         return {
             total: list.length,
             succeeded: list.filter(s => s.state === 'succeeded').length,
             failed: list.filter(s => s.state === 'failed' || s.state === 'error').length,
-            pending: list.filter(s => s.state === 'pending').length
+            pending: list.filter(s => s.state === 'pending' || !s.state).length  // no state = queued/pending
         };
     },
 
     /**
-     * Count policies by status
+     * Count policies by status (for non-build policies)
      */
     countPolicies(policies) {
+        const nonBuildPolicies = policies.filter(p => !this.isBuildPolicy(p));
         return {
-            total: policies.length,
-            approved: policies.filter(e => e.status === 'approved').length,
-            rejected: policies.filter(e => e.status === 'rejected').length,
-            running: policies.filter(e => e.status === 'running' || e.status === 'queued').length
+            total: nonBuildPolicies.length,
+            approved: nonBuildPolicies.filter(e => e.status === 'approved').length,
+            rejected: nonBuildPolicies.filter(e => e.status === 'rejected').length,
+            running: nonBuildPolicies.filter(e => e.status === 'running' || e.status === 'queued').length
         };
+    },
+
+    /**
+     * Count build policies by state
+     * @param {Array} policies - All policy evaluations
+     * @returns {object} Counts by build state
+     */
+    countBuildPolicies(policies) {
+        const buildPolicies = policies.filter(p => this.isBuildPolicy(p));
+        const counts = {
+            total: buildPolicies.length,
+            notTriggered: 0,
+            queued: 0,
+            running: 0,
+            succeeded: 0,
+            failed: 0
+        };
+
+        buildPolicies.forEach(p => {
+            const state = this.getBuildState(p);
+            counts[state]++;
+        });
+
+        return counts;
     },
 
     /**
