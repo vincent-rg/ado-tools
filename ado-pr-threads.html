@@ -603,8 +603,6 @@
             height: 18px;
             border-radius: 50%;
             background: #ffb900;
-            color: #323130;
-            font-size: 9px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -612,12 +610,21 @@
             z-index: 5;
         }
 
+        .author-badge svg {
+            width: 10px;
+            height: 10px;
+        }
+
         .comment-author-info .author-badge {
             width: 12px;
             height: 12px;
-            font-size: 7px;
             top: -3px;
             left: -3px;
+        }
+
+        .comment-author-info .author-badge svg {
+            width: 7px;
+            height: 7px;
         }
 
         /* PR title avatar */
@@ -1428,7 +1435,7 @@
             // PR Author badge (top-left)
             let authorBadgeHtml = '';
             if (isPRAuthor) {
-                authorBadgeHtml = `<span class="author-badge" title="PR Author">★</span>`;
+                authorBadgeHtml = `<span class="author-badge" title="PR Author"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#323130"/></svg></span>`;
             }
 
             return `<div class="avatar-wrapper" data-user-id="${user.id || ''}">${avatarHtml}${voteBadgeHtml}${threadBadgeHtml}${authorBadgeHtml}</div>`;
@@ -2957,7 +2964,7 @@
                             if (comment.author?.id) {
                                 const authorTitle = ADOContent.escapeHtml(comment.author.displayName || 'Unknown');
                                 const isCommentByPRAuthor = comment.author.id === prData.createdBy?.id;
-                                const authorBadge = isCommentByPRAuthor ? `<span class="author-badge" title="PR Author">★</span>` : '';
+                                const authorBadge = isCommentByPRAuthor ? `<span class="author-badge" title="PR Author"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#323130"/></svg></span>` : '';
                                 const cachedUrl = AvatarLoader.getCached(comment.author.id);
                                 if (cachedUrl) {
                                     commentAvatarHtml = `<div class="avatar-wrapper"><img src="${cachedUrl}" alt="${authorTitle}" title="${authorTitle}" class="avatar">${authorBadge}</div>`;
