@@ -875,10 +875,7 @@ const ChecksFormatter = {
         if (typeLower === 'build') {
             const buildName = settings.displayName || context.buildDefinitionName || 'Unknown build';
             label = `Build: ${buildName}`;
-            const buildState = this.getBuildState(policy);
-            if (buildState === 'notTriggered') {
-                extra = '(not triggered)';
-            } else if (context.isExpired) {
+            if (context.isExpired) {
                 extra = '(expired)';
             }
         } else if (typeLower === 'status') {
