@@ -755,6 +755,20 @@
             font-style: italic;
         }
 
+        /* Build status SVG icons */
+        .build-status-icon {
+            vertical-align: middle;
+        }
+
+        .build-status-running {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         /* Right sidebar */
         .right-sidebar {
             width: 300px;
@@ -1535,36 +1549,26 @@
                 }
             }
 
-            // Pipeline/Status checks section
-            if (statuses.length > 0) {
-                // Group by latest status per context (pipeline may have multiple runs)
-                const latestStatuses = new Map();
-                statuses.forEach(s => {
-                    const key = s.context?.name || s.description || 'Unknown';
-                    const existing = latestStatuses.get(key);
-                    if (!existing || new Date(s.creationDate) > new Date(existing.creationDate)) {
-                        latestStatuses.set(key, s);
-                    }
-                });
-
-                const statusList = Array.from(latestStatuses.values());
+            // Status checks section - use improved deduplication from common.js
+            const statusList = ChecksFormatter.getLatestStatuses(statuses);
+            if (statusList.length > 0) {
                 const failed = statusList.filter(s => s.state === 'failed' || s.state === 'error');
-                const pending = statusList.filter(s => s.state === 'pending');
+                const pending = statusList.filter(s => s.state === 'pending' || !s.state);
                 const succeeded = statusList.filter(s => s.state === 'succeeded');
 
-                let checksHtml = '<div class="check-group"><div class="check-group-header">Pipeline Checks</div><ul class="check-list">';
+                let checksHtml = '<div class="check-group"><div class="check-group-header">📊 Status Checks</div><ul class="check-list">';
 
                 // Show failed first, then pending, then succeeded
                 [...failed, ...pending, ...succeeded].forEach(s => {
-                    const name = s.context?.name || s.description || 'Unknown check';
-                    const icon = getStatusIcon(s.state);
-                    const cls = getStatusClass(s.state);
+                    const info = ChecksFormatter.formatStatus(s);
+                    const icon = getStatusIcon(s.state || 'pending');
+                    const cls = getStatusClass(s.state || 'pending');
                     const desc = s.description ? ` - ${ADOContent.escapeHtml(s.description)}` : '';
 
-                    if (s.targetUrl) {
-                        checksHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> <a href="${ADOContent.escapeHtml(s.targetUrl)}" target="_blank" rel="noopener">${ADOContent.escapeHtml(name)}</a>${desc}</li>`;
+                    if (info.url) {
+                        checksHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> <a href="${ADOContent.escapeHtml(info.url)}" target="_blank" rel="noopener">${ADOContent.escapeHtml(info.name)}</a>${desc}</li>`;
                     } else {
-                        checksHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(name)}${desc}</li>`;
+                        checksHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(info.name)}${desc}</li>`;
                     }
                 });
 
@@ -1572,13 +1576,41 @@
                 sections.push(checksHtml);
             }
 
-            // Policy evaluations section
-            if (policies.length > 0) {
-                const rejected = policies.filter(e => e.status === 'rejected');
-                const running = policies.filter(e => e.status === 'running' || e.status === 'queued');
-                const approved = policies.filter(e => e.status === 'approved');
+            // Build policies section - separate with SVG icons
+            const buildPolicies = policies.filter(p => ChecksFormatter.isBuildPolicy(p));
+            if (buildPolicies.length > 0) {
+                // Sort by state: failed, notTriggered, running, queued, succeeded
+                const stateOrder = { failed: 0, notTriggered: 1, running: 2, queued: 3, succeeded: 4 };
+                const sorted = buildPolicies.sort((a, b) => {
+                    const stateA = ChecksFormatter.getBuildState(a);
+                    const stateB = ChecksFormatter.getBuildState(b);
+                    return (stateOrder[stateA] ?? 5) - (stateOrder[stateB] ?? 5);
+                });
 
-                let policyHtml = '<div class="check-group"><div class="check-group-header">Policies</div><ul class="check-list">';
+                let buildHtml = '<div class="check-group"><div class="check-group-header">🔧 Builds</div><ul class="check-list">';
+
+                sorted.forEach(p => {
+                    const state = ChecksFormatter.getBuildState(p);
+                    const icon = ChecksFormatter.getBuildStatusSvg(state, 14);
+                    const cls = getStatusClass(p.status);
+                    const { label, extra } = ChecksFormatter.formatPolicy(p);
+                    const extraHtml = extra ? ` <span class="check-extra">${extra}</span>` : '';
+
+                    buildHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extraHtml}</li>`;
+                });
+
+                buildHtml += '</ul></div>';
+                sections.push(buildHtml);
+            }
+
+            // Non-build policy evaluations section
+            const nonBuildPolicies = policies.filter(p => !ChecksFormatter.isBuildPolicy(p));
+            if (nonBuildPolicies.length > 0) {
+                const rejected = nonBuildPolicies.filter(e => e.status === 'rejected');
+                const running = nonBuildPolicies.filter(e => e.status === 'running' || e.status === 'queued');
+                const approved = nonBuildPolicies.filter(e => e.status === 'approved');
+
+                let policyHtml = '<div class="check-group"><div class="check-group-header">📋 Policies</div><ul class="check-list">';
 
                 // Show rejected first, then running, then approved
                 [...rejected, ...running, ...approved].forEach(p => {
