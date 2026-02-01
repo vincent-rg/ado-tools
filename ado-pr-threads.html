@@ -375,6 +375,12 @@
             align-items: center;
         }
 
+        .iteration-range {
+            font-size: 11px;
+            color: #605e5c;
+            margin-left: 8px;
+        }
+
         .comment-content {
             color: #323130;
             white-space: pre-wrap;
@@ -2385,28 +2391,37 @@
             let beforeLink = null;
             let afterLink = null;
             let completeLink = null;
+            let beforeRange = null;
+            let afterRange = null;
+            let completeRange = null;
 
             const baseUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}`;
             const pathParam = filePath ? `&path=${encodeURIComponent(filePath)}` : '';
             const commentParams = `&discussionId=${discussionId}&commentId=${commentId}`;
 
-            if (lastBeforeIndex >= 0) {
+            const formatRange = (start, end) => start === end ? `${start}` : `${start}..${end}`;
+
+            // Only show before link if there are iterations after (otherwise it's same as complete)
+            if (lastBeforeIndex >= 0 && firstAfterIndex >= 0) {
                 const baseIteration = 0;
                 const targetIteration = sortedIterations[lastBeforeIndex].id;
                 beforeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
+                beforeRange = formatRange(1, targetIteration);
             }
 
             if (firstAfterIndex >= 0) {
                 const baseIteration = sortedIterations[firstAfterIndex].id - 1;
                 const targetIteration = latestIteration.id;
                 afterLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
+                afterRange = formatRange(sortedIterations[firstAfterIndex].id, targetIteration);
             }
 
             const baseIteration = 0;
             const targetIteration = latestIteration.id;
             completeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
+            completeRange = formatRange(1, targetIteration);
 
-            return { beforeLink, afterLink, completeLink };
+            return { beforeLink, afterLink, completeLink, beforeRange, afterRange, completeRange };
         }
 
         async function renderCodeSuggestion(thread, comment) {
@@ -2990,9 +3005,9 @@
                                             <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
                                             ${iterationLinks.completeLink ? `
                                             <span class="code-links">
-                                                ${iterationLinks.beforeLink ? `<a href="${iterationLinks.beforeLink}" target="_blank" class="comment-link" title="Diff from first update to last update before this comment"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></a>` : ''}
-                                                ${iterationLinks.afterLink ? `<a href="${iterationLinks.afterLink}" target="_blank" class="comment-link" title="Diff from first update after this comment to latest"><svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/></svg></a>` : ''}
-                                                <a href="${iterationLinks.completeLink}" target="_blank" class="comment-link" title="Complete diff from first to latest update"><svg viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></a>
+                                                ${iterationLinks.beforeLink ? `<span class="iteration-range">${iterationLinks.beforeRange}</span><a href="${iterationLinks.beforeLink}" target="_blank" class="comment-link" title="Diff from first update to last update before this comment"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></a>` : ''}
+                                                ${iterationLinks.afterLink ? `<a href="${iterationLinks.afterLink}" target="_blank" class="comment-link" title="Diff from first update after this comment to latest"><svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/></svg></a><span class="iteration-range">${iterationLinks.afterRange}</span>` : ''}
+                                                <a href="${iterationLinks.completeLink}" target="_blank" class="comment-link" title="Complete diff from first to latest update"><svg viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></a><span class="iteration-range">${iterationLinks.completeRange}</span>
                                             </span>
                                             ` : ''}
                                             ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
