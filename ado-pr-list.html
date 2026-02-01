@@ -1190,8 +1190,8 @@
             reviewers: 'Reviewers',
             otherAuthors: 'Other Authors',
             status: 'Status',
-            updates: 'Updates',
-            comments: 'Comments',
+            updates: '🔄',
+            comments: '💬',
             created: 'Created'
         };
         const HIDEABLE_COLUMNS = ['title', 'author', 'repository', 'reviewers', 'otherAuthors', 'status', 'updates', 'comments', 'created'];
@@ -2319,8 +2319,8 @@
                             ${col('reviewers', `<th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>`)}
                             ${col('otherAuthors', `<th data-column="otherAuthors" style="${getColumnStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>`)}
                             ${col('status', `<th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>`)}
-                            ${col('updates', `<th data-column="updates" style="${getColumnStyle('updates')}">Updates<div class="column-resize-handle" data-column="updates"></div></th>`)}
-                            ${col('comments', `<th data-column="comments" style="${getColumnStyle('comments')}">Comments<div class="column-resize-handle" data-column="comments"></div></th>`)}
+                            ${col('updates', `<th data-column="updates" style="${getColumnStyle('updates')} text-align: center;">🔄<div class="column-resize-handle" data-column="updates"></div></th>`)}
+                            ${col('comments', `<th data-column="comments" style="${getColumnStyle('comments')} text-align: center;">💬<div class="column-resize-handle" data-column="comments"></div></th>`)}
                             ${col('created', `<th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}<div class="column-resize-handle" data-column="created"></div></th>`)}
                         </tr>
                     </thead>
