@@ -427,6 +427,27 @@ const ADOAPI = {
         }
 
         return response.json();
+    },
+
+    /**
+     * Requeue a policy evaluation (triggers build for build policies)
+     * @param {object} config - ADO configuration
+     * @param {string} project - Project name
+     * @param {string} evaluationId - Policy evaluation ID
+     */
+    async requeuePolicyEvaluation(config, project, evaluationId) {
+        const baseUrl = config.serverUrl.replace(/\/+$/, '');
+        const url = `${baseUrl}/${config.organization}/${project}/_apis/policy/evaluations/${evaluationId}?api-version=6.0-preview.1`;
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH'
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to requeue policy: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
     }
 };
 

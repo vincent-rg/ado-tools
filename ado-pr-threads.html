@@ -769,6 +769,28 @@
             to { transform: rotate(360deg); }
         }
 
+        .queue-build-btn {
+            background: none;
+            border: 1px solid #0078d4;
+            color: #0078d4;
+            padding: 2px 6px;
+            margin-left: auto;
+            cursor: pointer;
+            font-size: 10px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .queue-build-btn:hover {
+            background: #0078d4;
+            color: white;
+        }
+
+        .queue-build-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Right sidebar */
         .right-sidebar {
             width: 300px;
@@ -1481,8 +1503,10 @@
             `;
         }
 
-        // Checks (statuses, policies, conflicts) caching
+        // Checks (statuses, policies, conflicts) caching and polling
         let prChecksData = null;
+        let checksPollingInterval = null;
+        const CHECKS_POLL_INTERVAL = 15000; // 15 seconds
 
         async function fetchPRChecks(config, prData) {
             const projectId = prData.repository?.project?.id || config.project;
@@ -1497,11 +1521,61 @@
             updateChecksDisplay();
         }
 
+        function startChecksPolling(config, prData) {
+            if (checksPollingInterval) return; // Already polling
+
+            checksPollingInterval = setInterval(async () => {
+                if (document.hidden) return; // Don't poll if tab is hidden
+                await fetchPRChecks(config, prData);
+            }, CHECKS_POLL_INTERVAL);
+        }
+
+        function stopChecksPolling() {
+            if (checksPollingInterval) {
+                clearInterval(checksPollingInterval);
+                checksPollingInterval = null;
+            }
+        }
+
+        // Refresh checks when tab becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && currentPRData) {
+                const config = ADOConfig.get();
+                if (config) fetchPRChecks(config, currentPRData);
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', stopChecksPolling);
+
         function updateChecksDisplay() {
             const container = document.getElementById('rightSidebarChecks');
             if (!container) return;
 
             container.innerHTML = renderChecksSection();
+
+            // Attach click handlers for queue build buttons
+            container.querySelectorAll('.queue-build-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const evaluationId = btn.dataset.evaluationId;
+                    if (!evaluationId || !currentPRData) return;
+
+                    btn.disabled = true;
+                    btn.textContent = '⏳';
+
+                    try {
+                        const config = ADOConfig.get();
+                        await ADOAPI.requeuePolicyEvaluation(config, config.project, evaluationId);
+
+                        // Refresh checks after queueing
+                        await fetchPRChecks(config, currentPRData);
+                    } catch (err) {
+                        alert(`Failed to queue build: ${err.message}`);
+                        btn.disabled = false;
+                        btn.textContent = '▶';
+                    }
+                });
+            });
         }
 
         // Use shared utilities from common.js
@@ -1596,7 +1670,16 @@
                     const { label, extra } = ChecksFormatter.formatPolicy(p);
                     const extraHtml = extra ? ` <span class="check-extra">${extra}</span>` : '';
 
-                    buildHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extraHtml}</li>`;
+                    // Queue button for builds that can be queued/requeued
+                    const canQueue = ['notTriggered', 'failed', 'succeeded'].includes(state);
+                    const evaluationId = p.evaluationId;
+                    let queueBtn = '';
+                    if (canQueue && evaluationId) {
+                        const tooltip = state === 'notTriggered' ? 'Queue build' : 'Requeue build';
+                        queueBtn = `<button class="queue-build-btn" data-evaluation-id="${evaluationId}" title="${tooltip}">▶</button>`;
+                    }
+
+                    buildHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extraHtml}${queueBtn}</li>`;
                 });
 
                 buildHtml += '</ul></div>';
@@ -2908,8 +2991,9 @@
             // Load avatars
             AvatarLoader.loadPending();
 
-            // Fetch PR checks (statuses, policies) asynchronously
+            // Fetch PR checks (statuses, policies) asynchronously and start polling
             fetchPRChecks(config, prData);
+            startChecksPolling(config, prData);
 
             // Fetch line stats asynchronously
             fetchLineStatsAsync(config, prData);
