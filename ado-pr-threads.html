@@ -770,7 +770,7 @@
         }
 
         .queue-build-btn {
-            background: none;
+            background: transparent;
             border: none;
             padding: 0;
             margin-left: auto;
@@ -779,10 +779,21 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
         }
 
-        .queue-build-btn:hover svg circle {
-            fill: #106ebe;
+        .queue-build-btn:hover,
+        .queue-build-btn:focus,
+        .queue-build-btn:active {
+            background: transparent;
+            outline: none;
+            box-shadow: none;
+        }
+
+        .queue-build-btn:hover svg {
+            filter: drop-shadow(0 0 3px #0078d4);
         }
 
         .queue-build-btn:disabled {
