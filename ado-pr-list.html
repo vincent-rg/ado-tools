@@ -3014,15 +3014,18 @@
                 let buildClass = 'status-indicator-success';
                 if (buildCounts.failed > 0) {
                     buildClass = 'status-indicator-error';
-                } else if (buildCounts.running > 0 || buildCounts.queued > 0 || buildCounts.notTriggered > 0) {
+                } else if (buildCounts.running > 0 || buildCounts.queued > 0 || buildCounts.notTriggered > 0 || buildCounts.expired > 0) {
                     buildClass = 'status-indicator-pending';
                 }
 
                 const parts = [];
 
-                // Order: failed, notTriggered, running, queued, succeeded
+                // Order: failed, expired, notTriggered, running, queued, succeeded
                 if (buildCounts.failed > 0) {
                     parts.push(`<span class="build-status-count">${buildCounts.failed}${ChecksFormatter.getBuildStatusSvg('failed', 14)}</span>`);
+                }
+                if (buildCounts.expired > 0) {
+                    parts.push(`<span class="build-status-count">${buildCounts.expired}${ChecksFormatter.getBuildStatusSvg('expired', 14)}</span>`);
                 }
                 if (buildCounts.notTriggered > 0) {
                     parts.push(`<span class="build-status-count">${buildCounts.notTriggered}${ChecksFormatter.getBuildStatusSvg('notTriggered', 14)}</span>`);

@@ -825,6 +825,7 @@ const ChecksFormatter = {
     getBuildStatusSvg(state, size = 16) {
         const icons = {
             notTriggered: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#8a8886"/><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v7.377l4.026 4.027a1.5 1.5 0 0 1-2.12 2.121l-4.428-4.427A1.496 1.496 0 0 1 14.5 16.5v-8A1.5 1.5 0 0 1 16 7z" fill="#fff"/></svg>`,
+            expired: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#ca8c00"/><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v7.377l4.026 4.027a1.5 1.5 0 0 1-2.12 2.121l-4.428-4.427A1.496 1.496 0 0 1 14.5 16.5v-8A1.5 1.5 0 0 1 16 7z" fill="#fff"/></svg>`,
             queued: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#0078d4"/><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v7.377l4.026 4.027a1.5 1.5 0 0 1-2.12 2.121l-4.428-4.427A1.496 1.496 0 0 1 14.5 16.5v-8A1.5 1.5 0 0 1 16 7z" fill="#fff"/></svg>`,
             running: `<svg class="build-status-icon build-status-running" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#0078d4"/><path d="M23 16c0 .325-.022.645-.065.959-.07.509.137 1.031.582 1.289.622.36 1.42.058 1.545-.65a9.204 9.204 0 0 0-6.27-10.367c-.664-.21-1.292.324-1.292 1.02 0 .532.374.982.873 1.162A7.003 7.003 0 0 1 23 16zM9 16a7.003 7.003 0 0 1 4.627-6.587c.5-.18.873-.63.873-1.161 0-.697-.628-1.232-1.292-1.02a9.204 9.204 0 0 0-6.27 10.367c.124.707.924 1.008 1.545.649.445-.258.652-.78.582-1.29A7.062 7.062 0 0 1 9 16zm7 7a6.975 6.975 0 0 0 4.728-1.838c.403-.37.999-.484 1.472-.21.586.339.744 1.121.261 1.597A9.17 9.17 0 0 1 16 25.2a9.17 9.17 0 0 1-6.461-2.65c-.482-.477-.325-1.26.261-1.599.473-.273 1.069-.159 1.472.21A6.975 6.975 0 0 0 16 23z" fill="#fff"/></svg>`,
             succeeded: `<svg class="build-status-icon" height="${size}" viewBox="0 0 32 32" width="${size}"><circle cx="16" cy="16" r="16" fill="#107c10"/><path d="M12.799 20.83l-.005-.003L9.94 17.97a1.5 1.5 0 1 1 2.121-2.12l1.8 1.798 6.209-6.21a1.5 1.5 0 1 1 2.12 2.122l-7.264 7.264-.005.006a1.5 1.5 0 0 1-2.121 0z" fill="#fff"/></svg>`,
@@ -836,9 +837,10 @@ const ChecksFormatter = {
     /**
      * Determine actual build state from policy evaluation
      * @param {object} policy - Policy evaluation object
-     * @returns {string} Build state (notTriggered, queued, running, succeeded, failed)
+     * @returns {string} Build state (notTriggered, queued, running, succeeded, failed, expired)
      */
     getBuildState(policy) {
+        if (policy.context?.isExpired) return 'expired';
         if (policy.status === 'approved') return 'succeeded';
         if (policy.status === 'rejected') return 'failed';
         if (policy.status === 'running') return 'running';
@@ -875,9 +877,6 @@ const ChecksFormatter = {
         if (typeLower === 'build') {
             const buildName = settings.displayName || context.buildDefinitionName || 'Unknown build';
             label = `Build: ${buildName}`;
-            if (context.isExpired) {
-                extra = '(expired)';
-            }
         } else if (typeLower === 'status') {
             const statusName = settings.statusName || 'Unknown';
             const statusGenre = settings.statusGenre ? ` (${settings.statusGenre})` : '';
@@ -969,8 +968,8 @@ const ChecksFormatter = {
         // Build policies (separate section)
         const buildPolicies = policies.filter(p => this.isBuildPolicy(p));
         if (buildPolicies.length > 0) {
-            // Sort by state: failed, notTriggered, running, queued, succeeded
-            const stateOrder = { failed: 0, notTriggered: 1, running: 2, queued: 3, succeeded: 4 };
+            // Sort by state: failed, expired, notTriggered, running, queued, succeeded
+            const stateOrder = { failed: 0, expired: 1, notTriggered: 2, running: 3, queued: 4, succeeded: 5 };
             const sorted = buildPolicies.sort((a, b) => {
                 const stateA = this.getBuildState(a);
                 const stateB = this.getBuildState(b);
@@ -1080,6 +1079,7 @@ const ChecksFormatter = {
         const counts = {
             total: buildPolicies.length,
             notTriggered: 0,
+            expired: 0,
             queued: 0,
             running: 0,
             succeeded: 0,

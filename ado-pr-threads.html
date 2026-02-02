@@ -756,6 +756,14 @@
             color: #0078d4;
         }
 
+        .check-item.status-indicator-expired {
+            background-color: rgba(202, 140, 0, 0.1);
+        }
+
+        .check-item.status-indicator-not-triggered {
+            background-color: rgba(138, 136, 134, 0.1);
+        }
+
         .check-item-note {
             font-size: 12px;
             color: #605e5c;
@@ -1677,8 +1685,8 @@
             // Build policies section - separate with SVG icons
             const buildPolicies = policies.filter(p => ChecksFormatter.isBuildPolicy(p));
             if (buildPolicies.length > 0) {
-                // Sort by state: failed, notTriggered, running, queued, succeeded
-                const stateOrder = { failed: 0, notTriggered: 1, running: 2, queued: 3, succeeded: 4 };
+                // Sort by state: failed, expired, notTriggered, running, queued, succeeded
+                const stateOrder = { failed: 0, expired: 1, notTriggered: 2, running: 3, queued: 4, succeeded: 5 };
                 const sorted = buildPolicies.sort((a, b) => {
                     const stateA = ChecksFormatter.getBuildState(a);
                     const stateB = ChecksFormatter.getBuildState(b);
@@ -1690,12 +1698,13 @@
                 sorted.forEach(p => {
                     const state = ChecksFormatter.getBuildState(p);
                     const icon = ChecksFormatter.getBuildStatusSvg(state, 14);
-                    const cls = getStatusClass(p.status);
+                    const stateClasses = { expired: 'status-indicator-expired', notTriggered: 'status-indicator-not-triggered' };
+                    const cls = stateClasses[state] || getStatusClass(p.status);
                     const { label, extra } = ChecksFormatter.formatPolicy(p);
                     const extraHtml = extra ? ` <span class="check-extra">${extra}</span>` : '';
 
                     // Queue button for builds that can be queued/requeued
-                    const canQueue = ['notTriggered', 'failed', 'succeeded'].includes(state);
+                    const canQueue = ['notTriggered', 'failed', 'succeeded', 'expired'].includes(state);
                     const evaluationId = p.evaluationId;
                     let queueBtn = '';
                     if (canQueue && evaluationId) {
