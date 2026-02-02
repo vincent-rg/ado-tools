@@ -3102,7 +3102,7 @@
             let html = '';
             filtered.slice(0, 10).forEach(item => {
                 html += `
-                    <div class="autocomplete-item" onclick="selectAutocomplete('${type}', '${ADOContent.escapeHtml(item)}')">
+                    <div class="autocomplete-item" onclick="selectAutocomplete('${type}', '${ADOContent.escapeJs(item)}')">
                         ${ADOContent.escapeHtml(item)}
                     </div>
                 `;

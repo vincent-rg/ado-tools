@@ -3147,8 +3147,8 @@
                             // Use 0 for base comparison, 1 for iteration 1+
                             const oldIterationForDiff = secondIterationId === 1 ? 0 : 1;
                             const onclickHandler = showDiff
-                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${oldIterationForDiff}, ${secondIterationId}, ${startLine}, ${endLine})`
-                                : `toggleFilePreview('file-preview-${threadId}', '${ADOContent.escapeHtml(ctx.filePath)}', ${startLine}, ${endLine}, null, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`;
+                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${oldIterationForDiff}, ${secondIterationId}, ${startLine}, ${endLine})`
+                                : `toggleFilePreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${startLine}, ${endLine}, null, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`;
 
                             html += `
                                 <div class="file-preview">
@@ -3192,7 +3192,7 @@
 
                                     html += `
                                         <div class="file-preview" style="margin: 12px 0;">
-                                            <div class="file-preview-header" onclick="toggleIterationPreview('${previewId}', '${ADOContent.escapeHtml(filePath)}', ${prevIterationId}, ${currentIterationId}, ${startLine}, ${endLine})">
+                                            <div class="file-preview-header" onclick="toggleIterationPreview('${previewId}', '${ADOContent.escapeJs(filePath)}', ${prevIterationId}, ${currentIterationId}, ${startLine}, ${endLine})">
                                                 <span>▶</span>
                                                 <span><strong>File changed:</strong> ${ADOContent.escapeHtml(filePath)}${iterLineInfo} <span style="color: #605e5c; font-size: 11px;">(iteration ${prevIterationId} → ${currentIterationId})</span></span>
                                             </div>

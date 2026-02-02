@@ -528,6 +528,14 @@ const ADOContent = {
     },
 
     /**
+     * Escape for JavaScript string (use in onclick handlers, etc.)
+     */
+    escapeJs(text) {
+        if (!text) return '';
+        return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    },
+
+    /**
      * Resolve mentions in plain text
      */
     resolveMentions(text) {
