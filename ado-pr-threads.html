@@ -1416,9 +1416,9 @@
             const iterationCount = allIterations.length;
             const cacheKey = getLineStatsCacheKey(config, prData.pullRequestId, iterationCount);
 
-            // Check cache first
+            // Check cache first (validate that values are numbers, not null)
             const cached = getCachedLineStats(cacheKey);
-            if (cached) {
+            if (cached && typeof cached.added === 'number' && typeof cached.removed === 'number') {
                 console.log('Line stats from cache:', cached);
                 updateLineStatsDisplay(cached.added, cached.removed);
                 return;
