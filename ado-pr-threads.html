@@ -2497,32 +2497,21 @@
             }
         }
 
-        function getIterationForComment(comment, iterations) {
-            if (!iterations || iterations.length === 0) return null;
-
-            const sortedIterations = [...iterations].sort((a, b) =>
-                new Date(a.createdDate) - new Date(b.createdDate)
-            );
-
-            const commentTime = new Date(comment.publishedDate);
-
-            // Find last iteration before or at comment time
-            for (let i = sortedIterations.length - 1; i >= 0; i--) {
-                if (new Date(sortedIterations[i].createdDate) <= commentTime) {
-                    return sortedIterations[i];
-                }
-            }
-
-            // If comment is before all iterations, return first iteration
-            return sortedIterations[0];
-        }
-
         // Use histogram diff for region diffs
         function computeRegionDiff(oldLines, newLines) {
             return HistogramDiff.diffLines(oldLines, newLines);
         }
 
-        function getIterationLinksForComment(comment, thread, iterations, config, prData, filePath) {
+        function getLastIterationBeforeTime(sortedIterations, time) {
+            for (let i = sortedIterations.length - 1; i >= 0; i--) {
+                if (new Date(sortedIterations[i].createdDate) < time) {
+                    return sortedIterations[i];
+                }
+            }
+            return null;
+        }
+
+        function getIterationLinksForComment(comment, thread, iterations, config, prData, filePath, isFirstComment = false) {
             const commentId = comment.id;
             const discussionId = thread.id;
 
@@ -2535,26 +2524,22 @@
             );
 
             const commentTime = new Date(comment.publishedDate);
-
-            // Find last iteration before comment
-            let lastBeforeIndex = -1;
-            for (let i = sortedIterations.length - 1; i >= 0; i--) {
-                if (new Date(sortedIterations[i].createdDate) < commentTime) {
-                    lastBeforeIndex = i;
-                    break;
-                }
-            }
-
-            // Find first iteration after comment
-            let firstAfterIndex = -1;
-            for (let i = 0; i < sortedIterations.length; i++) {
-                if (new Date(sortedIterations[i].createdDate) > commentTime) {
-                    firstAfterIndex = i;
-                    break;
-                }
-            }
-
             const latestIteration = sortedIterations[sortedIterations.length - 1];
+
+            // For the first comment, use the thread's secondComparingIteration (what ADO recorded)
+            // For subsequent comments, calculate based on timestamp
+            let targetIterationId;
+            if (isFirstComment) {
+                targetIterationId = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
+            }
+            // Fallback to timestamp-based if not first comment or not available
+            if (targetIterationId === null || targetIterationId === undefined) {
+                const lastBefore = getLastIterationBeforeTime(sortedIterations, commentTime);
+                targetIterationId = lastBefore ? lastBefore.id : sortedIterations[0].id;
+            }
+
+            // Check if there are iterations after this comment
+            const hasIterationsAfter = targetIterationId < latestIteration.id;
 
             let beforeLink = null;
             let afterLink = null;
@@ -2569,25 +2554,17 @@
 
             const formatRange = (start, end) => start === end ? `${start}` : `${start}..${end}`;
 
-            // Only show before link if there are iterations after (otherwise it's same as complete)
-            if (lastBeforeIndex >= 0 && firstAfterIndex >= 0) {
-                const baseIteration = 0;
-                const targetIteration = sortedIterations[lastBeforeIndex].id;
-                beforeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
-                beforeRange = formatRange(1, targetIteration);
+            // Only show before/after links if there are iterations after (otherwise it's same as complete)
+            if (hasIterationsAfter) {
+                beforeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIterationId}&base=0${commentParams}`;
+                beforeRange = formatRange(1, targetIterationId);
+
+                afterLink = `${baseUrl}?_a=files${pathParam}&iteration=${latestIteration.id}&base=${targetIterationId}${commentParams}`;
+                afterRange = formatRange(targetIterationId + 1, latestIteration.id);
             }
 
-            if (firstAfterIndex >= 0) {
-                const baseIteration = sortedIterations[firstAfterIndex].id - 1;
-                const targetIteration = latestIteration.id;
-                afterLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
-                afterRange = formatRange(sortedIterations[firstAfterIndex].id, targetIteration);
-            }
-
-            const baseIteration = 0;
-            const targetIteration = latestIteration.id;
-            completeLink = `${baseUrl}?_a=files${pathParam}&iteration=${targetIteration}&base=${baseIteration}${commentParams}`;
-            completeRange = formatRange(1, targetIteration);
+            completeLink = `${baseUrl}?_a=files${pathParam}&iteration=${latestIteration.id}&base=0${commentParams}`;
+            completeRange = formatRange(1, latestIteration.id);
 
             return { beforeLink, afterLink, completeLink, beforeRange, afterRange, completeRange };
         }
@@ -3136,18 +3113,15 @@
                             const startLine = fileStart.line;
                             const endLine = fileEnd ? fileEnd.line : startLine;
 
-                            // Show diff: from base (0) to iteration 1, or from iteration 1 to current
+                            // First file preview: always show diff from base (0) to secondIterationId
                             const showDiff = secondIterationId && secondIterationId >= 1;
                             const iterationLabel = showDiff
-                                ? (secondIterationId === 1
-                                    ? ` <span style="color: #605e5c; font-size: 11px;">(base → iteration 1)</span>`
-                                    : ` <span style="color: #605e5c; font-size: 11px;">(iteration 1 → ${secondIterationId})</span>`)
+                                ? ` <span style="color: #605e5c; font-size: 11px;">(base → iteration ${secondIterationId})</span>`
                                 : '';
 
-                            // Use 0 for base comparison, 1 for iteration 1+
-                            const oldIterationForDiff = secondIterationId === 1 ? 0 : 1;
+                            // Always compare from base (0) to the thread's iteration context
                             const onclickHandler = showDiff
-                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${oldIterationForDiff}, ${secondIterationId}, ${startLine}, ${endLine})`
+                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', 0, ${secondIterationId}, ${startLine}, ${endLine})`
                                 : `toggleFilePreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${startLine}, ${endLine}, null, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`;
 
                             html += `
@@ -3171,19 +3145,27 @@
 
                     // Show all comments in the thread
                     if (thread.comments && thread.comments.length > 0) {
-                        let prevIterationId = null;
+                        let prevCommentIterationId = null;
                         const filePath = thread.threadContext?.filePath || null;
                         const ctx = thread.threadContext;
                         const fileStart = ctx?.rightFileStart || ctx?.leftFileStart;
                         const fileEnd = ctx?.rightFileEnd || ctx?.leftFileEnd;
 
-                        thread.comments.forEach((comment, commentIdx) => {
-                            // Check if iteration changed since last comment (only for file-based threads)
-                            if (filePath && fileStart && iterations.length > 0) {
-                                const currentIteration = getIterationForComment(comment, iterations);
-                                const currentIterationId = currentIteration?.id;
+                        // Sort iterations for calculating iteration contexts
+                        const sortedIterations = iterations.length > 0
+                            ? [...iterations].sort((a, b) => new Date(a.createdDate) - new Date(b.createdDate))
+                            : [];
 
-                                if (prevIterationId !== null && currentIterationId !== prevIterationId) {
+                        thread.comments.forEach((comment, commentIdx) => {
+                            const isFirstComment = commentIdx === 0;
+
+                            // Check if iteration changed since last comment (only for file-based threads)
+                            if (filePath && fileStart && sortedIterations.length > 0) {
+                                const commentTime = new Date(comment.publishedDate);
+                                const lastIterBefore = getLastIterationBeforeTime(sortedIterations, commentTime);
+                                const currentIterationId = lastIterBefore ? lastIterBefore.id : sortedIterations[0].id;
+
+                                if (prevCommentIterationId !== null && currentIterationId !== prevCommentIterationId) {
                                     // Iteration changed - insert a diff preview divider
                                     const previewId = `iteration-preview-${threadId}-${commentIdx}`;
                                     const startLine = fileStart.line;
@@ -3192,16 +3174,16 @@
 
                                     html += `
                                         <div class="file-preview" style="margin: 12px 0;">
-                                            <div class="file-preview-header" onclick="toggleIterationPreview('${previewId}', '${ADOContent.escapeJs(filePath)}', ${prevIterationId}, ${currentIterationId}, ${startLine}, ${endLine})">
+                                            <div class="file-preview-header" onclick="toggleIterationPreview('${previewId}', '${ADOContent.escapeJs(filePath)}', ${prevCommentIterationId}, ${currentIterationId}, ${startLine}, ${endLine})">
                                                 <span>▶</span>
-                                                <span><strong>File changed:</strong> ${ADOContent.escapeHtml(filePath)}${iterLineInfo} <span style="color: #605e5c; font-size: 11px;">(iteration ${prevIterationId} → ${currentIterationId})</span></span>
+                                                <span><strong>File changed:</strong> ${ADOContent.escapeHtml(filePath)}${iterLineInfo} <span style="color: #605e5c; font-size: 11px;">(iteration ${prevCommentIterationId} → ${currentIterationId})</span></span>
                                             </div>
                                             <div id="${previewId}" class="file-preview-content"></div>
                                         </div>
                                     `;
                                 }
 
-                                prevIterationId = currentIterationId;
+                                prevCommentIterationId = currentIterationId;
                             }
 
                             // Check if this is a code suggestion
@@ -3226,7 +3208,8 @@
                                 iterations,
                                 config,
                                 prData,
-                                filePath
+                                filePath,
+                                isFirstComment
                             );
 
                             // Check if comment is deleted
