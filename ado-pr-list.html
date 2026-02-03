@@ -2327,6 +2327,7 @@
                 const statusClass = ADOUI.getStatusBadgeClass(pr.status);
                 const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}&project=${encodeURIComponent(pr._project)}&repo=${encodeURIComponent(pr._repo.name)}`;
                 const draftBadge = pr.isDraft ? '<span class="badge badge-draft" style="margin-left: 5px;">DRAFT</span>' : '';
+                const autoCompleteIcon = ADOUI.getAutoCompleteIcon(pr);
 
                 // Get comment count display
                 const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
@@ -2382,7 +2383,7 @@
                         ${col('otherAuthors', `<td class="pr-meta pr-other-authors" style="${getColumnStyle('otherAuthors')}">
                             <span style="color: #8a8886;">-</span>
                         </td>`)}
-                        ${col('status', `<td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${pr.status.toUpperCase()}</span>${draftBadge}</td>`)}
+                        ${col('status', `<td style="${getColumnStyle('status')}"><span class="badge ${statusClass}">${autoCompleteIcon}${pr.status.toUpperCase()}</span>${draftBadge}</td>`)}
                         ${col('updates', `<td class="pr-meta pr-updates" style="text-align: center; ${getColumnStyle('updates')}">${updatesDisplay}</td>`)}
                         ${col('comments', `<td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>`)}
                         ${col('created', `<td class="pr-meta" style="${getColumnStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>`)}
@@ -3788,7 +3789,8 @@
             if (statusCell) {
                 const statusClass = ADOUI.getStatusBadgeClass(freshPR.status);
                 statusCell.className = `badge ${statusClass}`;
-                statusCell.textContent = freshPR.status.toUpperCase();
+                const autoCompleteIcon = ADOUI.getAutoCompleteIcon(freshPR);
+                statusCell.innerHTML = autoCompleteIcon + freshPR.status.toUpperCase();
             }
 
             // Update draft badge

@@ -448,6 +448,116 @@ const ADOAPI = {
         }
 
         return response.json();
+    },
+
+    /**
+     * Update PR status (active, abandoned, completed) with optional options
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} status - New status: 'active', 'abandoned', or 'completed'
+     * @param {object} options - Optional: { isDraft, lastMergeSourceCommit, completionOptions }
+     */
+    async updatePRStatus(config, prId, status, options = {}) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
+
+        const payload = { status };
+        if (options.isDraft !== undefined) {
+            payload.isDraft = options.isDraft;
+        }
+        if (options.lastMergeSourceCommit) {
+            payload.lastMergeSourceCommit = options.lastMergeSourceCommit;
+        }
+        if (options.completionOptions) {
+            payload.completionOptions = options.completionOptions;
+        }
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to update PR: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get repository details (for merge strategy options)
+     * @param {object} config - ADO configuration
+     * @param {string} repoId - Repository ID (optional, defaults to config.repository)
+     */
+    async getRepository(config, repoId = null) {
+        const repo = repoId || config.repository;
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${repo}?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch repository: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Set PR to draft mode or publish it
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {boolean} isDraft - True to make draft, false to publish
+     */
+    async setDraft(config, prId, isDraft) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${btoa(':' + config.pat)}`
+            },
+            body: JSON.stringify({ isDraft })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to ${isDraft ? 'set draft' : 'publish'}: ${response.status} - ${errorText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Abandon a PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     */
+    async abandonPR(config, prId) {
+        return this.updatePRStatus(config, prId, 'abandoned');
+    },
+
+    /**
+     * Reactivate an abandoned PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     */
+    async reactivatePR(config, prId) {
+        return this.updatePRStatus(config, prId, 'active');
+    },
+
+    /**
+     * Complete a PR with merge options
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} lastMergeSourceCommitId - Commit ID to complete from
+     * @param {object} completionOptions - { mergeStrategy, deleteSourceBranch, mergeCommitMessage }
+     */
+    async completePR(config, prId, lastMergeSourceCommitId, completionOptions) {
+        return this.updatePRStatus(config, prId, 'completed', {
+            lastMergeSourceCommit: { commitId: lastMergeSourceCommitId },
+            completionOptions
+        });
     }
 };
 
@@ -739,10 +849,20 @@ const ADOUI = {
             'closed': 'CLOSED',
             'wontFix': "WON'T FIX",
             'pending': 'PENDING',
-            'unknown': 'UNKNOWN'
+            'unknown': 'UNKNOWN',
+            'completed': 'COMPLETED',
+            'abandoned': 'ABANDONED'
         };
 
         return statusLabels[status] || 'UNKNOWN';
+    },
+
+    /**
+     * Get auto-complete icon SVG (lightning bolt) if PR has auto-complete set
+     */
+    getAutoCompleteIcon(prData) {
+        if (!prData?.autoCompleteSetBy) return '';
+        return '<svg class="auto-complete-icon" viewBox="4 0 18 24" width="18" height="24" title="Auto-complete enabled"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>';
     }
 };
 

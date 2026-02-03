@@ -217,6 +217,138 @@
             background: white;
         }
 
+        /* PR Status and Actions inline */
+        #prStatusBadges {
+            display: inline;
+            vertical-align: middle;
+        }
+
+        #prStatusActions {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 8px;
+            margin-right: 6px;
+        }
+
+        /* PR Action Dropdown */
+        .pr-action-select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            padding: 4px 24px 4px 10px;
+            border: 1px solid #0078d4;
+            border-radius: 2px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #0078d4;
+            background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%230078d4' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E") no-repeat right 6px center;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+
+        .pr-action-select:hover {
+            background-color: #e1f3ff;
+            border-color: #106ebe;
+        }
+
+        .pr-action-select:focus {
+            outline: none;
+            border-color: #106ebe;
+            box-shadow: 0 0 0 1px #106ebe;
+        }
+
+        .pr-action-select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* PR Action Modal */
+        .pr-modal-body-loading {
+            text-align: center;
+            padding: 30px;
+            color: #605e5c;
+        }
+
+        .blocker-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+
+        .blocker-list li {
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .blocker-list li.blocker-conflict {
+            background: #fff4ce;
+            color: #8a6d3b;
+            border-left: 3px solid #ffb900;
+        }
+
+        .blocker-list li.blocker-policy {
+            background: #fde7e9;
+            color: #d13438;
+            border-left: 3px solid #d13438;
+        }
+
+        .blocker-list li.blocker-running {
+            background: #e1f3ff;
+            color: #0078d4;
+            border-left: 3px solid #0078d4;
+        }
+
+        .merge-option-group {
+            margin-bottom: 15px;
+        }
+
+        .merge-option-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .merge-option-group select,
+        .merge-option-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d1d1;
+            border-radius: 0;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .merge-option-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .merge-option-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            font-weight: normal;
+        }
+
+        .merge-option-checkbox input[type="checkbox"] {
+            width: auto;
+        }
+
+        .pr-action-modal-footer {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding-top: 15px;
+            border-top: 1px solid #edebe9;
+        }
+
         .thread-checkbox {
             margin-right: 10px;
         }
@@ -1655,7 +1787,8 @@
                     const statusBadgeClass = `badge-${prData.status}`;
                     const statusLabel = prData.status.charAt(0).toUpperCase() + prData.status.slice(1);
                     const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
-                    statusBadgesEl.innerHTML = `<span class="badge ${statusBadgeClass}">${statusLabel}</span>${draftBadge}`;
+                    const autoCompleteIcon = ADOUI.getAutoCompleteIcon(prData);
+                    statusBadgesEl.innerHTML = `<span class="badge ${statusBadgeClass}">${autoCompleteIcon}${statusLabel}</span>${draftBadge}`;
                 }
 
                 // Update target branch
@@ -2014,6 +2147,21 @@
             currentPRId = urlParams.get('prId') || urlParams.get('id');
             urlProject = urlParams.get('project');
             urlRepo = urlParams.get('repo');
+
+            // Set up PR action modal event listeners
+            const prActionModal = document.getElementById('prActionModal');
+            if (prActionModal) {
+                prActionModal.addEventListener('click', (e) => {
+                    if (e.target.id === 'prActionModal') {
+                        closePRActionModal();
+                    }
+                });
+            }
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && document.getElementById('prActionModal')?.classList.contains('show')) {
+                    closePRActionModal();
+                }
+            });
 
             // Load saved configuration from localStorage
             const savedConfig = ADOConfig.get();
@@ -2545,6 +2693,324 @@
             }
         }
 
+        // ==================== PR Status Actions ====================
+
+        function showPRActionModal(title, bodyHtml, footerHtml) {
+            document.getElementById('prActionModalTitle').textContent = title;
+            document.getElementById('prActionModalBody').innerHTML = bodyHtml;
+            document.getElementById('prActionModalFooter').innerHTML = footerHtml;
+            document.getElementById('prActionModal').classList.add('show');
+        }
+
+        function closePRActionModal() {
+            document.getElementById('prActionModal').classList.remove('show');
+        }
+
+        function renderPRStatusActions(prData) {
+            if (!prData) return '';
+
+            const status = prData.status;
+            const isDraft = prData.isDraft;
+
+            // Completed PRs have no actions
+            if (status === 'completed') return '';
+
+            let actions = [];
+
+            if (status === 'active') {
+                if (isDraft) {
+                    actions.push(`<option value="publish">Publish (Remove Draft)</option>`);
+                } else {
+                    actions.push(`<option value="draft">Mark as Draft</option>`);
+                }
+                actions.push(`<option value="abandon">Abandon</option>`);
+                actions.push(`<option value="complete">Complete</option>`);
+            } else if (status === 'abandoned') {
+                actions.push(`<option value="reactivate">Reactivate</option>`);
+            }
+
+            if (actions.length === 0) return '';
+
+            return `
+                <select id="prStatusActionSelect" onchange="handlePRStatusAction(this.value); this.value='';" class="pr-action-select">
+                    <option value="">Set to</option>
+                    ${actions.join('')}
+                </select>
+            `;
+        }
+
+        async function handlePRStatusAction(action) {
+            if (!action || !currentConfig || !currentPRData) return;
+
+            switch (action) {
+                case 'draft':
+                    await handleSetDraft(true);
+                    break;
+                case 'publish':
+                    await handleSetDraft(false);
+                    break;
+                case 'abandon':
+                    await handleAbandon();
+                    break;
+                case 'reactivate':
+                    await handleReactivate();
+                    break;
+                case 'complete':
+                    await handleComplete();
+                    break;
+            }
+        }
+
+        async function handleSetDraft(isDraft) {
+            const actionText = isDraft ? 'mark as draft' : 'publish';
+            const confirmed = confirm(`Are you sure you want to ${actionText} this PR?`);
+            if (!confirmed) return;
+
+            try {
+                await ADOAPI.setDraft(currentConfig, currentPRId, isDraft);
+                // Refresh PR data
+                currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
+                updatePRStatusDisplay();
+            } catch (error) {
+                alert(`Failed to ${actionText}: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+            }
+        }
+
+        async function handleAbandon() {
+            const confirmed = confirm('Are you sure you want to abandon this PR?\n\nThis will mark the PR as abandoned. It can be reactivated later.');
+            if (!confirmed) return;
+
+            try {
+                await ADOAPI.abandonPR(currentConfig, currentPRId);
+                currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
+                updatePRStatusDisplay();
+            } catch (error) {
+                alert(`Failed to abandon PR: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+            }
+        }
+
+        async function handleReactivate() {
+            const confirmed = confirm('Are you sure you want to reactivate this PR?');
+            if (!confirmed) return;
+
+            try {
+                await ADOAPI.reactivatePR(currentConfig, currentPRId);
+                currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
+                updatePRStatusDisplay();
+            } catch (error) {
+                alert(`Failed to reactivate PR: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+            }
+        }
+
+        async function handleComplete() {
+            // Show loading modal
+            showPRActionModal(
+                'Complete Pull Request',
+                '<div class="pr-modal-body-loading">Checking completion requirements...</div>',
+                ''
+            );
+
+            try {
+                // Use the already-fetched prChecksData if available, otherwise fetch
+                let checksData = prChecksData;
+                if (!checksData) {
+                    const projectId = currentPRData.repository?.project?.id || currentConfig.project;
+                    checksData = await ChecksFormatter.fetchPRChecks(
+                        currentConfig,
+                        currentConfig.project,
+                        currentConfig.repository,
+                        currentPRId,
+                        projectId,
+                        currentPRData.mergeStatus
+                    );
+                }
+
+                // Check for blocking issues
+                const blockingIssues = getCompletionBlockers(checksData, currentPRData);
+
+                if (blockingIssues.length > 0) {
+                    showCompletionBlockedModal(blockingIssues);
+                } else {
+                    await showCompletionOptionsModal();
+                }
+            } catch (error) {
+                showPRActionModal(
+                    'Error',
+                    `<div class="error">Failed to check completion requirements: ${ADOContent.escapeHtml(error.message)}</div>`,
+                    `<button class="btn-secondary" onclick="closePRActionModal()">Close</button>`
+                );
+            }
+        }
+
+        function getCompletionBlockers(checksData, prData) {
+            const blockers = [];
+
+            // Check merge status
+            if (prData.mergeStatus === 'conflicts') {
+                blockers.push({
+                    type: 'conflict',
+                    message: 'This PR has merge conflicts that must be resolved'
+                });
+            }
+
+            // Check required policies
+            if (checksData && checksData.policies) {
+                checksData.policies.forEach(p => {
+                    const isBlocking = p.configuration?.isBlocking;
+                    const status = p.status;
+
+                    if (isBlocking && status !== 'approved') {
+                        const { label } = ChecksFormatter.formatPolicy(p);
+                        blockers.push({
+                            type: 'policy',
+                            status: status,
+                            message: `Required policy not met: ${label}`
+                        });
+                    }
+                });
+            }
+
+            return blockers;
+        }
+
+        function showCompletionBlockedModal(blockers) {
+            let bodyHtml = `
+                <p style="margin-bottom: 15px;">This PR cannot be completed due to the following issues:</p>
+                <ul class="blocker-list">
+            `;
+
+            blockers.forEach(b => {
+                let cls, icon;
+                if (b.type === 'conflict') {
+                    cls = 'blocker-conflict';
+                    icon = '⚠';
+                } else if (b.status === 'running' || b.status === 'queued') {
+                    cls = 'blocker-running';
+                    icon = '⏳';
+                } else {
+                    cls = 'blocker-policy';
+                    icon = '✗';
+                }
+                bodyHtml += `<li class="${cls}">${icon} ${ADOContent.escapeHtml(b.message)}</li>`;
+            });
+
+            bodyHtml += '</ul>';
+
+            showPRActionModal(
+                'Cannot Complete PR',
+                bodyHtml,
+                `<button class="btn-secondary" onclick="closePRActionModal()">Close</button>`
+            );
+        }
+
+        async function showCompletionOptionsModal() {
+            // Build merge strategy options
+            const mergeStrategies = [
+                { value: 'noFastForward', label: 'Merge (no fast forward)' },
+                { value: 'squash', label: 'Squash commit' },
+                { value: 'rebase', label: 'Rebase' },
+                { value: 'rebaseMerge', label: 'Rebase and merge' }
+            ];
+
+            const strategyOptions = mergeStrategies
+                .map(s => `<option value="${s.value}">${s.label}</option>`)
+                .join('');
+
+            // Build default merge commit message
+            const defaultMessage = `Merged PR ${currentPRId}: ${currentPRData.title || ''}`;
+
+            const bodyHtml = `
+                <div class="merge-option-group">
+                    <label for="mergeStrategy">Merge Type:</label>
+                    <select id="mergeStrategy">
+                        ${strategyOptions}
+                    </select>
+                </div>
+                <div class="merge-option-group">
+                    <label for="mergeCommitMessage">Commit Message:</label>
+                    <textarea id="mergeCommitMessage">${ADOContent.escapeHtml(defaultMessage)}</textarea>
+                </div>
+                <div class="merge-option-group">
+                    <label class="merge-option-checkbox">
+                        <input type="checkbox" id="deleteSourceBranch" checked>
+                        Delete source branch after merging
+                    </label>
+                </div>
+            `;
+
+            const footerHtml = `
+                <button class="btn-secondary" onclick="closePRActionModal()">Cancel</button>
+                <button class="btn-primary" onclick="executePRCompletion()">Complete</button>
+            `;
+
+            showPRActionModal('Complete Pull Request', bodyHtml, footerHtml);
+        }
+
+        async function executePRCompletion() {
+            const mergeStrategy = document.getElementById('mergeStrategy').value;
+            const deleteSourceBranch = document.getElementById('deleteSourceBranch').checked;
+            const mergeCommitMessage = document.getElementById('mergeCommitMessage').value;
+
+            // Update modal to show loading
+            document.getElementById('prActionModalBody').innerHTML =
+                '<div class="pr-modal-body-loading">Completing pull request...</div>';
+            document.getElementById('prActionModalFooter').innerHTML = '';
+
+            try {
+                const completionOptions = {
+                    mergeStrategy,
+                    deleteSourceBranch,
+                    mergeCommitMessage
+                };
+
+                const lastMergeSourceCommitId = currentPRData.lastMergeSourceCommit?.commitId;
+                if (!lastMergeSourceCommitId) {
+                    throw new Error('Cannot determine source commit for completion. The PR may need to be re-queued for merge.');
+                }
+
+                const updatedPR = await ADOAPI.completePR(
+                    currentConfig,
+                    currentPRId,
+                    lastMergeSourceCommitId,
+                    completionOptions
+                );
+
+                closePRActionModal();
+
+                // Update PR data from response and refresh display
+                currentPRData = updatedPR;
+                updatePRStatusDisplay();
+
+                // Show success message briefly
+                alert('Pull request completed successfully!');
+            } catch (error) {
+                showPRActionModal(
+                    'Completion Failed',
+                    `<div class="error">${ADOContent.escapeHtml(error.message)}</div>`,
+                    `<button class="btn-secondary" onclick="closePRActionModal()">Close</button>`
+                );
+            }
+        }
+
+        function updatePRStatusDisplay() {
+            const statusBadgesEl = document.getElementById('prStatusBadges');
+            const actionsEl = document.getElementById('prStatusActions');
+
+            if (statusBadgesEl && currentPRData) {
+                const statusBadgeClass = ADOUI.getStatusBadgeClass(currentPRData.status);
+                const statusLabel = ADOUI.getStatusText(currentPRData.status);
+                const draftBadge = currentPRData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
+                const autoCompleteIcon = ADOUI.getAutoCompleteIcon(currentPRData);
+                statusBadgesEl.innerHTML = `<span class="badge ${statusBadgeClass}">${autoCompleteIcon}${statusLabel}</span>${draftBadge}`;
+            }
+
+            if (actionsEl && currentPRData) {
+                actionsEl.innerHTML = renderPRStatusActions(currentPRData);
+            }
+        }
+
+        // ==================== End PR Status Actions ====================
+
         async function applyBulkStatusChange() {
             const newStatus = document.getElementById('bulkStatusSelect').value;
 
@@ -3062,7 +3528,8 @@
             const statusBadgeClass = `badge-${prData.status}`;
             const statusLabel = prData.status.charAt(0).toUpperCase() + prData.status.slice(1);
             const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
-            const statusBadgeHtml = `<span class="badge ${statusBadgeClass}">${statusLabel}</span>${draftBadge}`;
+            const autoCompleteIcon = ADOUI.getAutoCompleteIcon(prData);
+            const statusBadgeHtml = `<span class="badge ${statusBadgeClass}">${autoCompleteIcon}${statusLabel}</span>${draftBadge}`;
 
             // Generate PR author avatar for title
             let prAuthorAvatarHtml = '';
@@ -3080,7 +3547,7 @@
             let html = `
                 <div class="pr-header">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                        <span><span id="prStatusBadges">${statusBadgeHtml}</span> ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
+                        <span style="display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span>PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span></span>
                         <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
                     </h2>
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
@@ -3551,5 +4018,17 @@
             });
         })();
     </script>
+
+    <!-- PR Action Modal -->
+    <div class="modal-overlay" id="prActionModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="prActionModalTitle">PR Action</h3>
+                <button class="modal-close" onclick="closePRActionModal()">&times;</button>
+            </div>
+            <div id="prActionModalBody"></div>
+            <div class="pr-action-modal-footer" id="prActionModalFooter"></div>
+        </div>
+    </div>
 </body>
 </html>

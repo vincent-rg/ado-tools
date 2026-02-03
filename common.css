@@ -269,14 +269,27 @@ button:disabled {
 }
 
 .badge-abandoned {
-    background: #edebe9;
-    color: #605e5c;
+    background: rgba(214, 127, 60, 1);
+    color: white;
 }
 
 .badge-draft {
     background: white;
     color: #0078d4;
     border: 1px solid #0078d4;
+}
+
+/* Auto-complete lightning icon */
+.auto-complete-icon {
+    vertical-align: middle;
+    margin-right: 4px;
+    margin-top: -2px;
+}
+
+.auto-complete-icon path {
+    fill: #ffc107;
+    stroke: #000;
+    stroke-width: 1;
 }
 
 /* Links */
