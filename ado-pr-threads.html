@@ -1639,50 +1639,200 @@
             `;
         }
 
-        // Checks (statuses, policies, conflicts) caching and polling
+        // PR data polling
         let prChecksData = null;
-        let checksPollingInterval = null;
-        const CHECKS_POLL_INTERVAL = 15000; // 15 seconds
+        let prPollingInterval = null;
+        const PR_POLL_INTERVAL = 15000; // 15 seconds
 
-        async function fetchPRChecks(config, prData) {
-            const projectId = prData.repository?.project?.id || config.project;
-            prChecksData = await ChecksFormatter.fetchPRChecks(
-                config,
-                config.project,
-                config.repository,
-                prData.pullRequestId,
-                projectId,
-                prData.mergeStatus
-            );
-            updateChecksDisplay();
-        }
+        // Fetch and update PR basic info (status, draft, target branch)
+        async function fetchAndUpdatePRInfo(config) {
+            try {
+                const prData = await ADOAPI.getPR(config, currentPRId);
 
-        function startChecksPolling(config, prData) {
-            if (checksPollingInterval) return; // Already polling
+                // Update status badges
+                const statusBadgesEl = document.getElementById('prStatusBadges');
+                if (statusBadgesEl) {
+                    const statusBadgeClass = `badge-${prData.status}`;
+                    const statusLabel = prData.status.charAt(0).toUpperCase() + prData.status.slice(1);
+                    const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
+                    statusBadgesEl.innerHTML = `<span class="badge ${statusBadgeClass}">${statusLabel}</span>${draftBadge}`;
+                }
 
-            checksPollingInterval = setInterval(async () => {
-                if (document.hidden) return; // Don't poll if tab is hidden
-                await fetchPRChecks(config, prData);
-            }, CHECKS_POLL_INTERVAL);
-        }
+                // Update target branch
+                const targetBranchEl = document.getElementById('prTargetBranch');
+                if (targetBranchEl) {
+                    targetBranchEl.textContent = prData.targetRefName?.replace('refs/heads/', '') || 'Unknown';
+                }
 
-        function stopChecksPolling() {
-            if (checksPollingInterval) {
-                clearInterval(checksPollingInterval);
-                checksPollingInterval = null;
+                // Update reviewers
+                const threadCounts = getActiveThreadCounts(allThreads);
+                const reviewersHtml = `
+                    ${renderReviewersSection(prData.reviewers, threadCounts, prData.createdBy?.id)}
+                    ${renderOtherAuthorsSection(allThreads, prData.reviewers, threadCounts, prData.createdBy?.id)}
+                `;
+                const reviewersContainer = document.getElementById('rightSidebarReviewers');
+                if (reviewersContainer) {
+                    reviewersContainer.innerHTML = reviewersHtml;
+                    AvatarLoader.loadPending();
+                }
+
+                // Update stored PR data
+                currentPRData = prData;
+            } catch (error) {
+                console.error('Failed to fetch PR info:', error);
             }
         }
 
-        // Refresh checks when tab becomes visible
+        // Fetch and update threads
+        async function fetchAndUpdateThreads(config) {
+            try {
+                const threadsData = await ADOAPI.getPRThreads(config, currentPRId);
+                const newThreads = threadsData.value || [];
+
+                // Check if threads changed
+                if (JSON.stringify(newThreads) !== JSON.stringify(allThreads)) {
+                    allThreads = newThreads;
+                    updateThreadStats();
+                    // Re-apply filters to refresh thread display
+                    applyThreadFilters();
+                }
+            } catch (error) {
+                console.error('Failed to fetch threads:', error);
+            }
+        }
+
+        // Update thread stats display
+        function updateThreadStats() {
+            const container = document.getElementById('threadStatsContainer');
+            if (!container) return;
+
+            const statusCounts = allThreads.reduce((acc, thread) => {
+                if (thread.isDeleted === true) {
+                    acc.deleted = (acc.deleted || 0) + 1;
+                } else if (thread.status === undefined) {
+                    acc.noStatus = (acc.noStatus || 0) + 1;
+                } else {
+                    const status = thread.status;
+                    acc[status] = (acc[status] || 0) + 1;
+                }
+                return acc;
+            }, {});
+
+            container.innerHTML = `
+                <span title="Active">💬 <strong>${statusCounts.active || 0}</strong></span>
+                <span title="Resolved" style="color: #107c10;">✅ <strong>${statusCounts.fixed || 0}</strong></span>
+                <span title="Closed" style="color: #605e5c;">🔒 <strong>${statusCounts.closed || 0}</strong></span>
+                ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ <strong>${statusCounts.pending}</strong></span>` : ''}
+                ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 <strong>${statusCounts.wontFix}</strong></span>` : ''}
+                ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ <strong>${statusCounts.deleted}</strong></span>` : ''}
+            `;
+        }
+
+        // Fetch and update iterations
+        async function fetchAndUpdateIterations(config) {
+            try {
+                const iterationsData = await ADOAPI.getPRIterations(config, currentPRId);
+                const newIterations = iterationsData.value || [];
+
+                // Check if iterations changed
+                if (newIterations.length !== allIterations.length) {
+                    allIterations = newIterations;
+
+                    // Update iterations count
+                    const container = document.getElementById('updatesStatsContainer');
+                    if (container) {
+                        container.innerHTML = `<span>Updates</span><strong>${allIterations.length}</strong>`;
+                    }
+
+                    // Refresh file change stats if we have a new iteration
+                    if (allIterations.length > 0) {
+                        try {
+                            const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, 1);
+                            currentFileChangeStats = calculateFileChangeStats(changesData.changeEntries || []);
+                            updateFileStats();
+                            // Also refresh line stats
+                            fetchLineStatsAsync(config, currentPRData);
+                        } catch (e) {
+                            console.warn('Failed to fetch file change stats:', e);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch iterations:', error);
+            }
+        }
+
+        // Update file stats display
+        function updateFileStats() {
+            const container = document.getElementById('fileStatsContainer');
+            if (!container || !currentFileChangeStats) return;
+
+            container.innerHTML = `
+                <span>Files</span>
+                <strong style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</strong>
+                <strong style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</strong>
+                <strong style="color: #a4262c;" title="Deleted">-${currentFileChangeStats.deleted}</strong>
+            `;
+        }
+
+        // Fetch and update checks (statuses, policies, conflicts)
+        async function fetchAndUpdateChecks(config, prData) {
+            try {
+                const projectId = prData.repository?.project?.id || config.project;
+                prChecksData = await ChecksFormatter.fetchPRChecks(
+                    config,
+                    config.project,
+                    config.repository,
+                    prData.pullRequestId,
+                    projectId,
+                    prData.mergeStatus
+                );
+                updateChecksDisplay();
+            } catch (error) {
+                console.error('Failed to fetch checks:', error);
+            }
+        }
+
+        // Legacy alias for fetchAndUpdateChecks
+        async function fetchPRChecks(config, prData) {
+            await fetchAndUpdateChecks(config, prData);
+        }
+
+        // Poll all PR data
+        async function pollPRData(config) {
+            if (document.hidden) return; // Don't poll if tab is hidden
+
+            await Promise.all([
+                fetchAndUpdatePRInfo(config),
+                fetchAndUpdateThreads(config),
+                fetchAndUpdateIterations(config),
+                fetchAndUpdateChecks(config, currentPRData)
+            ]);
+        }
+
+        function startPRPolling(config) {
+            if (prPollingInterval) return; // Already polling
+
+            prPollingInterval = setInterval(() => pollPRData(config), PR_POLL_INTERVAL);
+        }
+
+        function stopPRPolling() {
+            if (prPollingInterval) {
+                clearInterval(prPollingInterval);
+                prPollingInterval = null;
+            }
+        }
+
+        // Refresh all data when tab becomes visible
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && currentPRData) {
                 const config = ADOConfig.get();
-                if (config) fetchPRChecks(config, currentPRData);
+                if (config) pollPRData(config);
             }
         });
 
         // Cleanup on page unload
-        window.addEventListener('beforeunload', stopChecksPolling);
+        window.addEventListener('beforeunload', stopPRPolling);
 
         function updateChecksDisplay() {
             const container = document.getElementById('rightSidebarChecks');
@@ -2930,11 +3080,11 @@
             let html = `
                 <div class="pr-header">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                        <span>${statusBadgeHtml} ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
+                        <span><span id="prStatusBadges">${statusBadgeHtml}</span> ${prAuthorAvatarHtml}PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span>
                         <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
                     </h2>
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
-                    <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code>${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
+                    <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code id="prTargetBranch">${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                     ${prData.description ? `
                     <div class="description-card">
                         <div class="description-card-header">Description</div>
@@ -2949,7 +3099,7 @@
             // Stats HTML (right sidebar)
             const statsHtml = `
                 <h4>Threads</h4>
-                <div class="compact-stats">
+                <div id="threadStatsContainer" class="compact-stats">
                     <span title="Active">💬 <strong>${statusCounts.active || 0}</strong></span>
                     <span title="Resolved" style="color: #107c10;">✅ <strong>${statusCounts.fixed || 0}</strong></span>
                     <span title="Closed" style="color: #605e5c;">🔒 <strong>${statusCounts.closed || 0}</strong></span>
@@ -2957,9 +3107,10 @@
                     ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 <strong>${statusCounts.wontFix}</strong></span>` : ''}
                     ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ <strong>${statusCounts.deleted}</strong></span>` : ''}
                 </div>
+                <div id="changeStatsContainer">
                 ${currentFileChangeStats ? `
                 <h4 style="margin-top: 15px;">Change Stats</h4>
-                <div class="compact-stats">
+                <div id="fileStatsContainer" class="compact-stats">
                     <span>Files</span>
                     <strong style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</strong>
                     <strong style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</strong>
@@ -2969,11 +3120,12 @@
                     <span>Lines</span>
                     <span style="color: #605e5c;">⏳</span>
                 </div>
-                <div class="compact-stats">
+                <div id="updatesStatsContainer" class="compact-stats">
                     <span>Updates</span>
                     <strong>${iterations.length}</strong>
                 </div>
                 ` : ''}
+                </div>
             `;
 
             // Reviewers HTML (right sidebar)
@@ -3271,8 +3423,8 @@
             AvatarLoader.loadPending();
 
             // Fetch PR checks (statuses, policies) asynchronously and start polling
-            fetchPRChecks(config, prData);
-            startChecksPolling(config, prData);
+            fetchAndUpdateChecks(config, prData);
+            startPRPolling(config);
 
             // Fetch line stats asynchronously
             fetchLineStatsAsync(config, prData);
