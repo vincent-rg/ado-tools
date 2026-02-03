@@ -841,20 +841,20 @@ const ADOUI = {
      * Get status text
      */
     getStatusText(status, isDeleted = false) {
-        if (isDeleted) return 'DELETED';
+        if (isDeleted) return 'Deleted';
 
         const statusLabels = {
-            'active': 'ACTIVE',
-            'fixed': 'RESOLVED',
-            'closed': 'CLOSED',
-            'wontFix': "WON'T FIX",
-            'pending': 'PENDING',
-            'unknown': 'UNKNOWN',
-            'completed': 'COMPLETED',
-            'abandoned': 'ABANDONED'
+            'active': 'Active',
+            'fixed': 'Resolved',
+            'closed': 'Closed',
+            'wontFix': "Won't Fix",
+            'pending': 'Pending',
+            'unknown': 'Unknown',
+            'completed': 'Completed',
+            'abandoned': 'Abandoned'
         };
 
-        return statusLabels[status] || 'UNKNOWN';
+        return statusLabels[status] || 'Unknown';
     },
 
     /**
@@ -862,7 +862,21 @@ const ADOUI = {
      */
     getAutoCompleteIcon(prData) {
         if (!prData?.autoCompleteSetBy) return '';
-        return '<svg class="auto-complete-icon" viewBox="4 0 18 24" width="18" height="24" title="Auto-complete enabled"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>';
+        return '<svg class="auto-complete-icon" viewBox="4 4 18 18" width="16" height="18" title="Auto-complete enabled"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>';
+    },
+
+    /**
+     * Render a complete PR status badge HTML
+     * @param {string} status - PR status (active, completed, abandoned)
+     * @param {object} prData - PR data object with isDraft and autoCompleteSetBy
+     */
+    renderStatusBadge(status, prData = {}) {
+        const statusClass = this.getStatusBadgeClass(status);
+        const statusText = this.getStatusText(status);
+        const autoCompleteIcon = this.getAutoCompleteIcon(prData);
+        const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
+
+        return `<span class="badge ${statusClass}">${autoCompleteIcon}${statusText}</span>${draftBadge}`;
     }
 };
 

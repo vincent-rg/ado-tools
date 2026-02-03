@@ -219,8 +219,8 @@
 
         /* PR Status and Actions inline */
         #prStatusBadges {
-            display: inline;
-            vertical-align: middle;
+            display: inline-flex;
+            align-items: center;
         }
 
         #prStatusActions {
@@ -1784,11 +1784,7 @@
                 // Update status badges
                 const statusBadgesEl = document.getElementById('prStatusBadges');
                 if (statusBadgesEl) {
-                    const statusBadgeClass = `badge-${prData.status}`;
-                    const statusLabel = prData.status.charAt(0).toUpperCase() + prData.status.slice(1);
-                    const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
-                    const autoCompleteIcon = ADOUI.getAutoCompleteIcon(prData);
-                    statusBadgesEl.innerHTML = `<span class="badge ${statusBadgeClass}">${autoCompleteIcon}${statusLabel}</span>${draftBadge}`;
+                    statusBadgesEl.innerHTML = ADOUI.renderStatusBadge(prData.status, prData);
                 }
 
                 // Update target branch
@@ -2997,11 +2993,7 @@
             const actionsEl = document.getElementById('prStatusActions');
 
             if (statusBadgesEl && currentPRData) {
-                const statusBadgeClass = ADOUI.getStatusBadgeClass(currentPRData.status);
-                const statusLabel = ADOUI.getStatusText(currentPRData.status);
-                const draftBadge = currentPRData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
-                const autoCompleteIcon = ADOUI.getAutoCompleteIcon(currentPRData);
-                statusBadgesEl.innerHTML = `<span class="badge ${statusBadgeClass}">${autoCompleteIcon}${statusLabel}</span>${draftBadge}`;
+                statusBadgesEl.innerHTML = ADOUI.renderStatusBadge(currentPRData.status, currentPRData);
             }
 
             if (actionsEl && currentPRData) {
@@ -3525,11 +3517,7 @@
             const prUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/pullrequest/${prData.pullRequestId}`;
 
             // Generate status badge for title
-            const statusBadgeClass = `badge-${prData.status}`;
-            const statusLabel = prData.status.charAt(0).toUpperCase() + prData.status.slice(1);
-            const draftBadge = prData.isDraft ? ' <span class="badge badge-draft">Draft</span>' : '';
-            const autoCompleteIcon = ADOUI.getAutoCompleteIcon(prData);
-            const statusBadgeHtml = `<span class="badge ${statusBadgeClass}">${autoCompleteIcon}${statusLabel}</span>${draftBadge}`;
+            const statusBadgeHtml = ADOUI.renderStatusBadge(prData.status, prData);
 
             // Generate PR author avatar for title
             let prAuthorAvatarHtml = '';

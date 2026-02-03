@@ -244,28 +244,28 @@ button:disabled {
 }
 
 .badge-active {
-    background: #e1f3ff;
-    color: #004578;
+    background: #0078d4;
+    color: white;
 }
 
 .badge-fixed {
-    background: #dff6dd;
-    color: #107c10;
+    background: #107c10;
+    color: white;
 }
 
 .badge-closed {
-    background: #edebe9;
-    color: #605e5c;
+    background: #605e5c;
+    color: white;
 }
 
 .badge-deleted {
-    background: #fde7e9;
-    color: #a4262c;
+    background: #a4262c;
+    color: white;
 }
 
 .badge-completed {
-    background: #dff6dd;
-    color: #107c10;
+    background: #107c10;
+    color: white;
 }
 
 .badge-abandoned {
@@ -282,13 +282,11 @@ button:disabled {
 /* Auto-complete lightning icon */
 .auto-complete-icon {
     vertical-align: middle;
-    margin-right: 4px;
-    margin-top: -2px;
 }
 
 .auto-complete-icon path {
     fill: #ffc107;
-    stroke: #000;
+    stroke: white;
     stroke-width: 1;
 }
 
