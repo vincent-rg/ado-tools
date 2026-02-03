@@ -2683,23 +2683,35 @@
                     ADOAPI.getIterations(config, pr._project, pr._repo.id, pr.pullRequestId).catch(() => ({ value: [] }))
                 ]);
 
-                const activeThreads = (threads.value || []).filter(thread =>
-                    !thread.isDeleted &&
-                    (thread.status === 'active' || thread.status === 'Active' || thread.status === 1)
+                const allThreads = (threads.value || []).filter(thread => !thread.isDeleted);
+                const activeThreads = allThreads.filter(thread =>
+                    thread.status === 'active' || thread.status === 'Active' || thread.status === 1
                 );
                 const activeCount = activeThreads.length;
 
-                // Count active threads per author and collect author objects
-                const authorCounts = {};
+                // Collect ALL thread authors (for display in "other authors" column)
+                // Skip system (3/'system') and codeChange (2/'codeChange') threads
                 const authorObjects = {};
+                allThreads.forEach(thread => {
+                    const firstComment = thread.comments && thread.comments[0];
+                    const commentType = firstComment?.commentType;
+                    const isRealComment = commentType === 1 || commentType === 'text';
+                    const author = firstComment?.author;
+                    if (author?.id && isRealComment && !authorObjects[author.id]) {
+                        authorObjects[author.id] = author;
+                    }
+                });
+
+                // Count ACTIVE threads per author (for badges)
+                // Skip system and codeChange threads
+                const authorCounts = {};
                 activeThreads.forEach(thread => {
                     const firstComment = thread.comments && thread.comments[0];
+                    const commentType = firstComment?.commentType;
+                    const isRealComment = commentType === 1 || commentType === 'text';
                     const author = firstComment?.author;
-                    if (author?.id) {
+                    if (author?.id && isRealComment) {
                         authorCounts[author.id] = (authorCounts[author.id] || 0) + 1;
-                        if (!authorObjects[author.id]) {
-                            authorObjects[author.id] = author;
-                        }
                     }
                 });
 
