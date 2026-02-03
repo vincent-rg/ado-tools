@@ -3030,9 +3030,13 @@
                     const compactClass = isCompactView ? 'compact-view' : '';
                     const isChecked = selectedThreadIds.has(threadId) ? 'checked' : '';
 
-                    // Build status dropdown (only when not in bulk mode and not deleted)
+                    // Check if this is a system thread (first comment is system type)
+                    const firstComment = thread.comments && thread.comments[0];
+                    const isSystemThread = firstComment && (firstComment.commentType === 'system' || firstComment.commentType === 3);
+
+                    // Build status dropdown (only when not in bulk mode, not deleted, and not a system thread)
                     let statusControl = '';
-                    if (!isBulkMode && !isThreadDeleted) {
+                    if (!isBulkMode && !isThreadDeleted && !isSystemThread) {
                         if (hasStatus) {
                             // Thread has status: show "Change status:" with current selection and remove button
                             statusControl = `
