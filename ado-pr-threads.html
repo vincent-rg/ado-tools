@@ -202,32 +202,6 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        .thread.compact-view .comment {
-            padding: 8px 15px;
-        }
-
-        .thread.compact-view .comment-content {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-
-        .thread.compact-view .comment-header {
-            margin-bottom: 4px;
-        }
-
-        .thread.compact-view .thread-context,
-        .thread.compact-view .raw-json-container {
-            display: none;
-        }
-
-        .thread.compact-view .comment-content pre,
-        .thread.compact-view .comment-content code,
-        .thread.compact-view .comment-content img {
-            display: none;
-        }
-
         .thread-status-change {
             display: inline-flex;
             align-items: center;
@@ -1051,9 +1025,6 @@
 
                 <div class="filter-section">
                     <h4>View Options</h4>
-                    <button id="viewToggle" onclick="toggleView()" class="btn-secondary" style="width: 100%; margin-bottom: 8px;">
-                        Switch to Compact
-                    </button>
                     <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary" style="width: 100%;">
                         Enable Bulk Selection
                     </button>
@@ -1144,7 +1115,6 @@
         let currentPRData = null;
         let currentConfig = null;
         let currentFileChangeStats = null;
-        let isCompactView = false;
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
@@ -1991,11 +1961,6 @@
                 params.set('search', search);
             }
 
-            // View mode
-            if (isCompactView) {  // Only add to URL if compact (default is detailed)
-                params.set('view', 'compact');
-            }
-
             const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
             history.replaceState(null, '', newURL);
         }
@@ -2050,11 +2015,6 @@
                 // Restore search filter
                 if (urlParams.search) {
                     document.getElementById('searchFilter').value = urlParams.search;
-                }
-
-                // Restore view mode
-                if (urlParams.view === 'compact' && !isCompactView) {
-                    toggleView();
                 }
             } finally {
                 isRestoringFromURL = false;
@@ -2290,15 +2250,6 @@
                 // This preserves the exact data-status attribute value for URL persistence
                 return chip.dataset.status;
             });
-        }
-
-        function toggleView() {
-            isCompactView = !isCompactView;
-            const button = document.getElementById('viewToggle');
-            button.textContent = isCompactView ? 'Switch to Detailed' : 'Switch to Compact';
-
-            // Re-apply filters to refresh display
-            applyThreadFilters();
         }
 
         function toggleBulkMode() {
@@ -3027,7 +2978,6 @@
                     const threadUrl = ADOURL.buildThreadUrl(config, prData.pullRequestId, threadId, thread.threadContext?.filePath);
                     const apiEndpoint = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads/${threadId}?api-version=6.0`;
 
-                    const compactClass = isCompactView ? 'compact-view' : '';
                     const isChecked = selectedThreadIds.has(threadId) ? 'checked' : '';
 
                     // Check if this is a system thread (first comment is system type)
@@ -3072,31 +3022,19 @@
                     }
 
                     html += `
-                        <div class="thread ${compactClass}">
+                        <div class="thread">
                             <div class="thread-header">
                                 <span>
                                     ${isBulkMode ? `<input type="checkbox" class="thread-checkbox" id="thread-checkbox-${threadId}" data-thread-id="${threadId}" ${isChecked} onchange="toggleThreadSelection('${threadId}')">` : ''}
                                     Thread #${index + 1}
                                     <a href="${threadUrl}" target="_blank" style="font-size: 13px; margin-left: 8px; color: #0078d4; text-decoration: none;" title="Open thread in Azure DevOps (${thread.threadContext ? 'files tab' : 'overview tab'})">🔗</a>
+                                    <a href="${apiEndpoint}" target="_blank" style="font-size: 13px; margin-left: 4px; color: #0078d4; text-decoration: none;" title="Open REST API response (requires authentication)">📡</a>
                                 </span>
                                 <span>
-                                    <button class="raw-json-toggle" onclick="ADOUI.toggleRawJson('thread-${index}')">View Raw JSON</button>
                                     ${hasStatus ? `<span class="badge ${statusClass}">${statusText}</span>` : ''}
                                     ${statusControl}
                                 </span>
                             </div>
-                    `;
-
-                    // Add raw JSON container
-                    const jsonString = JSON.stringify(thread, null, 2);
-                    html += `
-                        <div id="thread-${index}" class="raw-json-container">
-                            <div style="margin-bottom: 10px; color: #9cdcfe;">
-                                <strong>API Endpoint:</strong><br>
-                                <a href="${apiEndpoint}" target="_blank" class="api-link" title="Open in new tab (requires authentication)">${apiEndpoint}</a>
-                            </div>
-                            <pre>${ADOContent.escapeHtml(jsonString)}</pre>
-                        </div>
                     `;
 
                     // Show thread context if it's a code comment
