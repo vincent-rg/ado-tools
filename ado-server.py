@@ -32,7 +32,7 @@ if len(sys.argv) > 1:
         print("Usage: python ado-server.py [port]")
         sys.exit(1)
 
-# Custom handler to set proper MIME types and proxy avatar requests
+# Custom handler to set proper MIME types and proxy requests
 class ADOHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         # Handle avatar proxy requests
@@ -40,6 +40,13 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_avatar_proxy()
         else:
             super().do_GET()
+
+    def do_POST(self):
+        # Handle identity search proxy requests
+        if self.path.startswith('/identity-search'):
+            self.handle_identity_search_proxy()
+        else:
+            self.send_error(404, 'Not Found')
 
     def handle_avatar_proxy(self):
         """Proxy avatar requests to Azure DevOps with PAT authentication"""
@@ -82,6 +89,52 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
 
         except urllib.error.HTTPError as e:
             self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
+        except urllib.error.URLError as e:
+            self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
+        except Exception as e:
+            self.send_error(500, f'Proxy error: {str(e)}')
+
+    def handle_identity_search_proxy(self):
+        """Proxy identity search requests to Azure DevOps Identity Picker API"""
+        # Get headers
+        pat = self.headers.get('X-ADO-PAT', '')
+        org = self.headers.get('X-ADO-Org', '')
+        server_url = self.headers.get('X-ADO-Server', 'https://dev.azure.com')
+
+        if not pat or not org:
+            self.send_error(400, 'Missing required headers: X-ADO-PAT, X-ADO-Org')
+            return
+
+        # Read the POST body
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_body = self.rfile.read(content_length)
+
+        # Build Azure DevOps Identity Picker URL
+        server_url = server_url.rstrip('/')
+        ado_url = f"{server_url}/{org}/_apis/IdentityPicker/Identities?api-version=5.1-preview.1"
+
+        try:
+            # Create request with PAT authentication
+            auth_string = base64.b64encode(f":{pat}".encode()).decode()
+            req = urllib.request.Request(ado_url, data=post_body, method='POST')
+            req.add_header('Authorization', f'Basic {auth_string}')
+            req.add_header('Content-Type', 'application/json')
+
+            # Fetch from Azure DevOps
+            with urllib.request.urlopen(req, timeout=10) as response:
+                response_data = response.read()
+                content_type = response.headers.get('Content-Type', 'application/json')
+
+                # Send response
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Length', len(response_data))
+                self.end_headers()
+                self.wfile.write(response_data)
+
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8', errors='replace')
+            self.send_error(e.code, f'Azure DevOps returned: {e.reason} - {error_body}')
         except urllib.error.URLError as e:
             self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
         except Exception as e:

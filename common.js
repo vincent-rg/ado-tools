@@ -751,6 +751,112 @@ const ADOAPI = {
 
         // DELETE returns empty response on success
         return;
+    },
+
+    /**
+     * Add or update a reviewer on a PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} reviewerId - Reviewer's identity ID
+     * @param {boolean} isRequired - Whether the reviewer is required
+     * @returns {Promise<object>} Updated reviewer object
+     */
+    async addReviewer(config, prId, reviewerId, isRequired) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/reviewers/${encodeURIComponent(reviewerId)}?api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PUT',
+            body: JSON.stringify({
+                vote: 0,
+                isRequired: isRequired
+            })
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to add reviewer: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Remove a reviewer from a PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} reviewerId - Reviewer's identity ID
+     * @returns {Promise<void>}
+     */
+    async removeReviewer(config, prId, reviewerId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/reviewers/${encodeURIComponent(reviewerId)}?api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to remove reviewer: ${response.status} ${response.statusText}`);
+        }
+
+        return;
+    },
+
+    /**
+     * Update a reviewer's required status
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} reviewerId - Reviewer's identity ID
+     * @param {boolean} isRequired - New required status
+     * @returns {Promise<object>} Updated reviewer object
+     */
+    async updateReviewerRequired(config, prId, reviewerId, isRequired) {
+        // Use the same endpoint as addReviewer - PUT updates if reviewer exists
+        return this.addReviewer(config, prId, reviewerId, isRequired);
+    },
+
+    /**
+     * Search for identities (users/groups) by name or email
+     * Uses local proxy to avoid CORS issues with Identity Picker API
+     * @param {object} config - ADO configuration
+     * @param {string} query - Search query
+     * @returns {Promise<array>} Array of identity objects
+     */
+    async searchIdentities(config, query) {
+        // Use local proxy to bypass CORS restrictions
+        const response = await fetch('/identity-search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-ADO-PAT': config.pat,
+                'X-ADO-Org': config.organization,
+                'X-ADO-Server': config.serverUrl
+            },
+            body: JSON.stringify({
+                query: query,
+                identityTypes: ['user', 'group'],
+                operationScopes: ['ims', 'source'],
+                options: {
+                    MinResults: 5,
+                    MaxResults: 20
+                },
+                properties: ['DisplayName', 'Mail', 'SubjectDescriptor']
+            })
+        });
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            throw new Error(text || `Failed to search identities: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        // Results are in data.results[0].identities
+        // localId is the Azure DevOps identity ID (GUID) we need for the reviewers API
+        return (data.results?.[0]?.identities || []).map(identity => ({
+            localId: identity.localId,
+            displayName: identity.displayName,
+            mail: identity.mail || identity.signInAddress || ''
+        }));
     }
 };
 
