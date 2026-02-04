@@ -262,6 +262,41 @@
             cursor: not-allowed;
         }
 
+        /* Auto-complete button */
+        .auto-complete-btn {
+            padding: 4px 10px;
+            border: 1px solid #0078d4;
+            border-radius: 2px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #0078d4;
+            background: white;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .auto-complete-btn:hover {
+            background-color: #e1f3ff;
+            border-color: #106ebe;
+        }
+
+        .auto-complete-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .auto-complete-btn.active {
+            background: #0078d4;
+            color: white;
+        }
+
+        .auto-complete-btn.active:hover {
+            background: #106ebe;
+        }
+
         /* PR Action Modal */
         .pr-modal-body-loading {
             text-align: center;
@@ -2735,6 +2770,50 @@
             `;
         }
 
+        function renderAutoCompleteButton(prData) {
+            if (!prData) return '';
+
+            // Only show for active, non-draft PRs
+            if (prData.status !== 'active' || prData.isDraft) return '';
+
+            const isSet = !!prData.autoCompleteSetBy;
+            const buttonClass = isSet ? 'auto-complete-btn active' : 'auto-complete-btn';
+            const buttonText = isSet ? 'Remove Auto-Complete' : 'Set Auto-Complete';
+            const lightningIcon = ADOUI.getLightningSvg(14, 14, 'auto-complete-icon');
+
+            return `<button id="autoCompleteBtn" class="${buttonClass}" onclick="handleAutoCompleteToggle()" title="${buttonText}">${lightningIcon} ${buttonText}</button>`;
+        }
+
+        async function handleAutoCompleteToggle() {
+            if (!currentConfig || !currentPRData) return;
+
+            const isCurrentlySet = !!currentPRData.autoCompleteSetBy;
+            const actionText = isCurrentlySet ? 'remove auto-complete from' : 'set auto-complete on';
+
+            // Disable button during operation
+            const btn = document.getElementById('autoCompleteBtn');
+            if (btn) btn.disabled = true;
+
+            try {
+                if (isCurrentlySet) {
+                    // Remove auto-complete
+                    await ADOAPI.removeAutoComplete(currentConfig, currentPRId);
+                } else {
+                    // Set auto-complete - need to get current user first
+                    const currentUser = await ADOAPI.getCurrentUser(currentConfig);
+                    await ADOAPI.setAutoComplete(currentConfig, currentPRId, { id: currentUser.id });
+                }
+
+                // Refresh PR data
+                currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
+                updatePRStatusDisplay();
+            } catch (error) {
+                alert(`Failed to ${actionText} this PR: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         async function handlePRStatusAction(action) {
             if (!action || !currentConfig || !currentPRData) return;
 
@@ -2991,6 +3070,7 @@
         function updatePRStatusDisplay() {
             const statusBadgesEl = document.getElementById('prStatusBadges');
             const actionsEl = document.getElementById('prStatusActions');
+            const autoCompleteEl = document.getElementById('autoCompleteBtnContainer');
 
             if (statusBadgesEl && currentPRData) {
                 statusBadgesEl.innerHTML = ADOUI.renderStatusBadge(currentPRData.status, currentPRData);
@@ -2998,6 +3078,10 @@
 
             if (actionsEl && currentPRData) {
                 actionsEl.innerHTML = renderPRStatusActions(currentPRData);
+            }
+
+            if (autoCompleteEl && currentPRData) {
+                autoCompleteEl.innerHTML = renderAutoCompleteButton(currentPRData);
             }
         }
 
@@ -3536,7 +3620,7 @@
                 <div class="pr-header">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
                         <span style="display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span>PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span></span>
-                        <a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a>
+                        <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
                     </h2>
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code id="prTargetBranch">${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>

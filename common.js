@@ -558,6 +558,85 @@ const ADOAPI = {
             lastMergeSourceCommit: { commitId: lastMergeSourceCommitId },
             completionOptions
         });
+    },
+
+    /**
+     * Get the current authenticated user's identity
+     * Uses the connection data endpoint to get info about the PAT owner
+     * @param {object} config - ADO configuration
+     * @returns {Promise<object>} User identity object with id and displayName
+     */
+    async getCurrentUser(config) {
+        const url = `${config.serverUrl}/${config.organization}/_apis/connectionData`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to get current user: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return {
+            id: data.authenticatedUser.id,
+            displayName: data.authenticatedUser.providerDisplayName || data.authenticatedUser.displayName
+        };
+    },
+
+    /**
+     * Set auto-complete on a PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {object} autoCompleteSetBy - User identity object { id }
+     * @param {object} completionOptions - Optional completion options (mergeStrategy, deleteSourceBranch, etc.)
+     */
+    async setAutoComplete(config, prId, autoCompleteSetBy, completionOptions = {}) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
+
+        const payload = {
+            autoCompleteSetBy: autoCompleteSetBy,
+            completionOptions: {
+                mergeStrategy: completionOptions.mergeStrategy || 'squash',
+                deleteSourceBranch: completionOptions.deleteSourceBranch !== false
+            }
+        };
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to set auto-complete: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Remove auto-complete from a PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     */
+    async removeAutoComplete(config, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
+
+        // Use zeroed GUID to clear autoCompleteSetBy (this is what ADO uses)
+        const payload = {
+            autoCompleteSetBy: { id: '00000000-0000-0000-0000-000000000000' }
+        };
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to remove auto-complete: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
     }
 };
 
@@ -860,9 +939,20 @@ const ADOUI = {
     /**
      * Get auto-complete icon SVG (lightning bolt) if PR has auto-complete set
      */
+    /**
+     * Get lightning bolt SVG for auto-complete indicators
+     * @param {number} width - SVG width (default 16)
+     * @param {number} height - SVG height (default 18)
+     * @param {string} className - Optional CSS class name
+     */
+    getLightningSvg(width = 16, height = 18, className = '') {
+        const classAttr = className ? ` class="${className}"` : '';
+        return `<svg${classAttr} viewBox="4 4 18 18" width="${width}" height="${height}"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>`;
+    },
+
     getAutoCompleteIcon(prData) {
         if (!prData?.autoCompleteSetBy) return '';
-        return '<svg class="auto-complete-icon" viewBox="4 4 18 18" width="16" height="18" title="Auto-complete enabled"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>';
+        return this.getLightningSvg(16, 18, 'auto-complete-icon');
     },
 
     /**
