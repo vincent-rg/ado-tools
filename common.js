@@ -637,6 +637,120 @@ const ADOAPI = {
         }
 
         return response.json();
+    },
+
+    /**
+     * Create a new thread with initial comment
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} content - Comment content
+     * @param {number} status - Thread status (1=active, default)
+     * @returns {Promise<object>} Created thread
+     */
+    async createThread(config, prId, content, status = 1) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads?api-version=6.0`;
+
+        const payload = {
+            comments: [{
+                content: content,
+                commentType: 1  // 1 = text comment
+            }],
+            status: status
+        };
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to create thread: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Add a reply comment to an existing thread
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {number} threadId - Thread ID
+     * @param {string} content - Comment content
+     * @returns {Promise<object>} Created comment
+     */
+    async addComment(config, prId, threadId, content) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}/comments?api-version=6.0`;
+
+        const payload = {
+            content: content,
+            commentType: 1  // 1 = text comment
+        };
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to add comment: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Update an existing comment's content
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {number} threadId - Thread ID
+     * @param {number} commentId - Comment ID
+     * @param {string} content - New comment content
+     * @returns {Promise<object>} Updated comment
+     */
+    async updateComment(config, prId, threadId, commentId, content) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}/comments/${commentId}?api-version=6.0`;
+
+        const payload = {
+            content: content
+        };
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to update comment: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Delete a comment (soft delete - marks as deleted)
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {number} threadId - Thread ID
+     * @param {number} commentId - Comment ID
+     * @returns {Promise<void>}
+     */
+    async deleteComment(config, prId, threadId, commentId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}/comments/${commentId}?api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to delete comment: ${response.status} ${response.statusText}`);
+        }
+
+        // DELETE returns empty response on success
+        return;
     }
 };
 
