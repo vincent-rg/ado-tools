@@ -5138,6 +5138,7 @@
             }
 
             titleBarContainer.innerHTML = titleBarHtml;
+            document.title = `PR #${prData.pullRequestId}: ${prData.title}`;
             headerContainer.innerHTML = headerHtml;
             newThreadContainer.style.display = '';
             threadListContainer.innerHTML = threadListHtml;
