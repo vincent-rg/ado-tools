@@ -1379,10 +1379,27 @@
             order: 1;
         }
 
-        /* PR header in middle column */
+        /* Sticky PR title bar */
+        #pr-title-bar-container {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .pr-title-bar {
+            background: #f9f8f7;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e1dfdd;
+        }
+
+        .pr-title-bar h2 {
+            margin: 0;
+        }
+
+        /* PR header details (non-sticky) */
         .pr-header {
             background: #f9f8f7;
-            padding: 20px;
+            padding: 4px 20px 20px 20px;
         }
 
         /* Description card */
@@ -1569,6 +1586,7 @@
                 </div>
 
                 <div class="results-container">
+                    <div id="pr-title-bar-container"></div>
                     <div id="results">
                         <div id="pr-header-container"></div>
                         <div class="new-thread-container" id="newThreadContainer" style="display: none;">
@@ -4590,13 +4608,19 @@
                 }
             }
 
-            // PR Header HTML (middle column)
-            const headerHtml = `
-                <div class="pr-header">
+            // PR title bar HTML (sticky, rendered outside #results)
+            const titleBarHtml = `
+                <div class="pr-title-bar">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
                         <span style="display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span>PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span></span>
                         <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
                     </h2>
+                </div>
+            `;
+
+            // PR header details HTML (non-sticky)
+            const headerHtml = `
+                <div class="pr-header">
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code id="prTargetBranch">${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                     ${prData.description ? `
@@ -4977,12 +5001,18 @@
 
             // Update containers separately (new thread form is static, not re-rendered)
             // If containers don't exist (e.g., after showNoPRError), recreate them
+            let titleBarContainer = document.getElementById('pr-title-bar-container');
             let headerContainer = document.getElementById('pr-header-container');
             let newThreadContainer = document.getElementById('newThreadContainer');
             let threadListContainer = document.getElementById('thread-list-container');
 
             if (!headerContainer || !threadListContainer) {
-                // Recreate the structure
+                // Recreate the structure (title bar is outside #results, sibling in .results-container)
+                if (!titleBarContainer) {
+                    titleBarContainer = document.createElement('div');
+                    titleBarContainer.id = 'pr-title-bar-container';
+                    resultsDiv.parentNode.insertBefore(titleBarContainer, resultsDiv);
+                }
                 resultsDiv.innerHTML = `
                     <div id="pr-header-container"></div>
                     <div class="new-thread-container" id="newThreadContainer" style="display: none;">
@@ -4996,6 +5026,7 @@
                 threadListContainer = document.getElementById('thread-list-container');
             }
 
+            titleBarContainer.innerHTML = titleBarHtml;
             headerContainer.innerHTML = headerHtml;
             newThreadContainer.style.display = '';
             threadListContainer.innerHTML = threadListHtml;
