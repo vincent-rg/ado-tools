@@ -1572,7 +1572,7 @@
 
         // Search filter function
         function filterProjectTree() {
-            const searchTerm = document.getElementById('modalProjectSearch').value.toLowerCase().trim();
+            const searchTerm = ADOSearch.normalize(document.getElementById('modalProjectSearch').value.trim());
             const projectItems = document.querySelectorAll('.project-item');
 
             if (!searchTerm) {
@@ -1586,14 +1586,14 @@
             }
 
             projectItems.forEach(projectItem => {
-                const projectName = projectItem.dataset.projectName.toLowerCase();
+                const projectName = ADOSearch.normalize(projectItem.dataset.projectName);
                 const repoItems = projectItem.querySelectorAll('.repo-item');
 
                 let projectMatch = projectName.includes(searchTerm);
                 let hasVisibleRepo = false;
 
                 repoItems.forEach(repoItem => {
-                    const repoName = repoItem.dataset.repoName.toLowerCase();
+                    const repoName = ADOSearch.normalize(repoItem.dataset.repoName);
                     const repoMatch = repoName.includes(searchTerm);
 
                     if (repoMatch || projectMatch) {
@@ -1943,8 +1943,8 @@
 
             const prIdFilter = document.getElementById('prIdFilter').value.trim();
             const titleFilter = document.getElementById('titleFilter').value.trim();
-            const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
-            const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
+            const createdByFilter = ADOSearch.normalize(document.getElementById('createdByFilter').value.trim());
+            const assignedToFilter = ADOSearch.normalize(document.getElementById('assignedToFilter').value.trim());
             const selectedStatuses = getSelectedStatuses();
 
             filteredPRs = allPRs.filter(pr => {
@@ -1955,12 +1955,12 @@
 
                 // Title filter - subsequence matching
                 if (titleFilter) {
-                    const titleLower = pr.title.toLowerCase();
-                    const pieces = titleFilter.toLowerCase().split(/\s+/).filter(p => p.length > 0);
+                    const titleNorm = ADOSearch.normalize(pr.title);
+                    const pieces = ADOSearch.normalize(titleFilter).split(/\s+/).filter(p => p.length > 0);
 
                     let lastIndex = -1;
                     for (const piece of pieces) {
-                        const index = titleLower.indexOf(piece, lastIndex + 1);
+                        const index = titleNorm.indexOf(piece, lastIndex + 1);
                         if (index === -1) {
                             return false;
                         }
@@ -1979,7 +1979,7 @@
                 if (createdByFilter) {
                     const authors = createdByFilter.split(';').map(a => a.trim()).filter(a => a.length > 0);
                     if (authors.length > 0) {
-                        const authorName = pr.createdBy.displayName.toLowerCase();
+                        const authorName = ADOSearch.normalize(pr.createdBy.displayName);
                         const matchesAny = authors.some(a => authorName.includes(a));
                         if (!matchesAny) {
                             return false;
@@ -1993,7 +1993,7 @@
                     if (reviewerFilters.length > 0) {
                         const matchesAny = reviewerFilters.some(rf =>
                             pr.reviewers.some(reviewer =>
-                                reviewer.displayName.toLowerCase().includes(rf)
+                                ADOSearch.normalize(reviewer.displayName).includes(rf)
                             )
                         );
                         if (!matchesAny) {
@@ -3116,7 +3116,7 @@
 
             // Work with the segment after the last semicolon
             const segments = fullValue.split(';');
-            const currentSegment = segments[segments.length - 1].trim().toLowerCase();
+            const currentSegment = ADOSearch.normalize(segments[segments.length - 1].trim());
 
             if (currentSegment.length === 0) {
                 autocompleteDiv.classList.remove('show');
@@ -3126,13 +3126,13 @@
 
             // Get already-selected users to exclude from suggestions
             const alreadySelected = new Set(
-                segments.slice(0, -1).map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+                segments.slice(0, -1).map(s => ADOSearch.normalize(s.trim())).filter(s => s.length > 0)
             );
 
             const items = type === 'createdBy' ? Array.from(allAuthors) : Array.from(allReviewers);
             const filtered = items.filter(item =>
-                item.toLowerCase().includes(currentSegment) &&
-                !alreadySelected.has(item.toLowerCase())
+                ADOSearch.normalize(item).includes(currentSegment) &&
+                !alreadySelected.has(ADOSearch.normalize(item))
             );
 
             if (filtered.length === 0) {
