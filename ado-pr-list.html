@@ -1170,6 +1170,7 @@
         const BATCH_DELAY_MS = 200;
         const MAX_CALLS_PER_CYCLE = 120;
         const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+        let _commentAuthorFilterDebounceTimer = null;
 
         // Column resize state
         const DEFAULT_COLUMN_WIDTHS = {
@@ -2755,6 +2756,20 @@
                 console.error('Error processing priority queue:', error);
             } finally {
                 isFetchingPriorityQueue = false;
+
+                // If comment author filter is active and there are still unfetched PRs,
+                // schedule another cycle to continue loading data
+                const commentAuthorActive = document.getElementById('commentAuthorFilter')?.value.trim().length > 0;
+                if (commentAuthorActive) {
+                    const hasUnfetched = allPRs.some(pr => {
+                        const prKey = getPRKey(pr);
+                        return prCommentCounts[prKey] === undefined;
+                    });
+                    if (hasUnfetched) {
+                        console.log('Comment author filter active, scheduling next fetch cycle for unfetched PRs');
+                        setTimeout(() => processPriorityQueue(), 300);
+                    }
+                }
             }
         }
 
@@ -2833,10 +2848,11 @@
                     }
                 });
 
-                // Re-apply comment author filter if active (new data may change results)
+                // Debounced re-apply when comment author filter is active
                 const commentAuthorFilterValue = document.getElementById('commentAuthorFilter')?.value.trim();
                 if (commentAuthorFilterValue) {
-                    applyFilters();
+                    clearTimeout(_commentAuthorFilterDebounceTimer);
+                    _commentAuthorFilterDebounceTimer = setTimeout(() => applyFilters(), 500);
                 }
 
                 // Store iteration count
