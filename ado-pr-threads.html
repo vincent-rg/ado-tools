@@ -1379,10 +1379,24 @@
             order: 1;
         }
 
-        /* PR header in middle column */
+        /* Sticky PR title bar */
+        .pr-title-bar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #f9f8f7;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e1dfdd;
+        }
+
+        .pr-title-bar h2 {
+            margin: 0;
+        }
+
+        /* PR header details (non-sticky) */
         .pr-header {
             background: #f9f8f7;
-            padding: 20px;
+            padding: 4px 20px 20px 20px;
         }
 
         /* Description card */
@@ -4487,11 +4501,13 @@
 
             // PR Header HTML (middle column)
             const headerHtml = `
-                <div class="pr-header">
+                <div class="pr-title-bar">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
                         <span style="display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span>PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span></span>
                         <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
                     </h2>
+                </div>
+                <div class="pr-header">
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code id="prTargetBranch">${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
                     ${prData.description ? `
