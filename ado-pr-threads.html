@@ -3890,19 +3890,8 @@
         }
 
         function updateReviewersDisplay() {
-            // Recalculate thread counts
-            const threadCounts = {};
-            allThreads.forEach(thread => {
-                if (thread.isDeleted) return;
-                const status = thread.status;
-                if (status !== 'fixed' && status !== 'closed' && status !== 'wontFix') {
-                    thread.comments?.forEach(comment => {
-                        if (comment.author?.id && !comment.isDeleted) {
-                            threadCounts[comment.author.id] = (threadCounts[comment.author.id] || 0) + 1;
-                        }
-                    });
-                }
-            });
+            // Recalculate thread counts (reuse canonical logic from getActiveThreadCounts)
+            const threadCounts = getActiveThreadCounts(allThreads);
 
             // Check if avatar containers exist (structure already rendered)
             const requiredAvatarsContainer = document.getElementById('requiredReviewersAvatars');
