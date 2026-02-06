@@ -159,14 +159,33 @@ const ADOAPI = {
 
     /**
      * Get PR iteration changes (files changed in an iteration)
+     * @param {number} [compareTo] - Iteration to compare against (0 = base/before PR). Omit for default (previous iteration).
      */
-    async getPRIterationChanges(config, prId, iterationId) {
-        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/iterations/${iterationId}/changes?api-version=6.0`;
+    async getPRIterationChanges(config, prId, iterationId, compareTo) {
+        let url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/iterations/${iterationId}/changes?api-version=6.0`;
+        if (compareTo !== undefined) {
+            url += `&$compareTo=${compareTo}`;
+        }
         const response = await this.fetchWithAuth(url, config.pat);
 
         if (!response.ok) {
             const data = await response.json().catch(() => ({}));
             throw new Error(data.message || `Failed to fetch PR iteration changes: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get merge bases between two commits
+     */
+    async getMergeBases(config, commitId, otherCommitId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/mergebases/${commitId}?otherCommitId=${otherCommitId}&api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch merge bases: ${response.status} ${response.statusText}`);
         }
 
         return response.json();
