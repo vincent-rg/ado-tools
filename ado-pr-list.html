@@ -2705,10 +2705,41 @@
 
             try {
                 const config = ADOConfig.get();
+                const commentAuthorActive = document.getElementById('commentAuthorFilter')?.value.trim().length > 0;
                 const queue = buildCommentFetchQueue();
 
                 if (queue.length === 0) {
                     isFetchingPriorityQueue = false;
+                    return;
+                }
+
+                // Fast path: when comment author filter is active, fetch only comments
+                // with higher concurrency and no per-cycle budget to resolve the filter quickly
+                if (commentAuthorActive) {
+                    const COMMENT_FILTER_BATCH_SIZE = 15;
+                    const COMMENT_FILTER_BATCH_DELAY = 50;
+
+                    console.log(`Comment author filter: fetching comment data for ${queue.length} PRs`);
+
+                    let currentBatch = [];
+                    for (let i = 0; i < queue.length; i++) {
+                        currentBatch.push(queue[i].pr);
+
+                        if (currentBatch.length >= COMMENT_FILTER_BATCH_SIZE || i === queue.length - 1) {
+                            // Only fetch comments, skip checks - we just need author data
+                            const promises = currentBatch.map(pr =>
+                                fetchPRCommentCount(config, pr, forceRefresh)
+                            );
+                            await Promise.all(promises);
+
+                            if (i < queue.length - 1) {
+                                await new Promise(resolve => setTimeout(resolve, COMMENT_FILTER_BATCH_DELAY));
+                            }
+                            currentBatch = [];
+                        }
+                    }
+
+                    console.log(`Comment author filter: fetched comment data for ${queue.length} PRs`);
                     return;
                 }
 
@@ -2756,20 +2787,6 @@
                 console.error('Error processing priority queue:', error);
             } finally {
                 isFetchingPriorityQueue = false;
-
-                // If comment author filter is active and there are still unfetched PRs,
-                // schedule another cycle to continue loading data
-                const commentAuthorActive = document.getElementById('commentAuthorFilter')?.value.trim().length > 0;
-                if (commentAuthorActive) {
-                    const hasUnfetched = allPRs.some(pr => {
-                        const prKey = getPRKey(pr);
-                        return prCommentCounts[prKey] === undefined;
-                    });
-                    if (hasUnfetched) {
-                        console.log('Comment author filter active, scheduling next fetch cycle for unfetched PRs');
-                        setTimeout(() => processPriorityQueue(), 300);
-                    }
-                }
             }
         }
 
