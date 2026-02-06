@@ -1697,6 +1697,20 @@ const AvatarLoader = (() => {
     };
 })();
 
+/**
+ * Text Search Utilities
+ */
+const ADOSearch = {
+    /**
+     * Normalize text for accent-insensitive comparison.
+     * Decomposes Unicode characters (NFD) and strips combining diacritical marks,
+     * so that e.g. "é" becomes "e", "ü" becomes "u", etc.
+     */
+    normalize(text) {
+        return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    }
+};
+
 // Make utilities globally available
 window.ADOConfig = ADOConfig;
 window.ADOAPI = ADOAPI;
@@ -1704,5 +1718,6 @@ window.ADOIdentity = ADOIdentity;
 window.ADOContent = ADOContent;
 window.ADOUI = ADOUI;
 window.ADOURL = ADOURL;
+window.ADOSearch = ADOSearch;
 window.ChecksFormatter = ChecksFormatter;
 window.AvatarLoader = AvatarLoader;

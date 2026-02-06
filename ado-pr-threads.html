@@ -3120,9 +3120,9 @@
                     if (!thread.comments || thread.comments.length === 0) {
                         return false;
                     }
-                    const searchLower = searchText.toLowerCase();
+                    const searchNorm = ADOSearch.normalize(searchText);
                     const hasMatchingContent = thread.comments.some(comment =>
-                        comment.content && comment.content.toLowerCase().includes(searchLower)
+                        comment.content && ADOSearch.normalize(comment.content).includes(searchNorm)
                     );
                     if (!hasMatchingContent) {
                         return false;
