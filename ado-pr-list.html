@@ -2713,33 +2713,47 @@
                     return;
                 }
 
-                // Fast path: when comment author filter is active, fetch only comments
-                // with higher concurrency and no per-cycle budget to resolve the filter quickly
+                // Fast path: when comment author filter is active, process visible PRs
+                // normally (with checks) then fetch only comments for the rest
                 if (commentAuthorActive) {
-                    const COMMENT_FILTER_BATCH_SIZE = 15;
-                    const COMMENT_FILTER_BATCH_DELAY = 50;
+                    const visibleItems = queue.filter(q => q.reason === 'visible');
+                    const commentFilterItems = queue.filter(q => q.reason === 'comment-filter');
 
-                    console.log(`Comment author filter: fetching comment data for ${queue.length} PRs`);
-
-                    let currentBatch = [];
-                    for (let i = 0; i < queue.length; i++) {
-                        currentBatch.push(queue[i].pr);
-
-                        if (currentBatch.length >= COMMENT_FILTER_BATCH_SIZE || i === queue.length - 1) {
-                            // Only fetch comments, skip checks - we just need author data
-                            const promises = currentBatch.map(pr =>
-                                fetchPRCommentCount(config, pr, forceRefresh)
-                            );
-                            await Promise.all(promises);
-
-                            if (i < queue.length - 1) {
-                                await new Promise(resolve => setTimeout(resolve, COMMENT_FILTER_BATCH_DELAY));
-                            }
-                            currentBatch = [];
-                        }
+                    // Visible PRs: fetch comments + checks as normal
+                    if (visibleItems.length > 0) {
+                        const promises = visibleItems.flatMap(item => [
+                            fetchPRCommentCount(config, item.pr, forceRefresh),
+                            fetchPRChecks(config, item.pr, forceRefresh)
+                        ]);
+                        await Promise.all(promises);
                     }
 
-                    console.log(`Comment author filter: fetched comment data for ${queue.length} PRs`);
+                    // Comment-filter PRs: only fetch comments with higher throughput
+                    if (commentFilterItems.length > 0) {
+                        const COMMENT_FILTER_BATCH_SIZE = 15;
+                        const COMMENT_FILTER_BATCH_DELAY = 50;
+
+                        console.log(`Comment author filter: fetching comment data for ${commentFilterItems.length} PRs`);
+
+                        let currentBatch = [];
+                        for (let i = 0; i < commentFilterItems.length; i++) {
+                            currentBatch.push(commentFilterItems[i].pr);
+
+                            if (currentBatch.length >= COMMENT_FILTER_BATCH_SIZE || i === commentFilterItems.length - 1) {
+                                const promises = currentBatch.map(pr =>
+                                    fetchPRCommentCount(config, pr, forceRefresh)
+                                );
+                                await Promise.all(promises);
+
+                                if (i < commentFilterItems.length - 1) {
+                                    await new Promise(resolve => setTimeout(resolve, COMMENT_FILTER_BATCH_DELAY));
+                                }
+                                currentBatch = [];
+                            }
+                        }
+
+                        console.log(`Comment author filter: done fetching comment data`);
+                    }
                     return;
                 }
 
