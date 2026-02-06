@@ -1786,7 +1786,16 @@
             const targetCommit = prData.lastMergeSourceCommit?.commitId;
             const repositoryId = prData.repository?.id;
 
+            console.group('[LineStats:InternalAPI] Starting');
+            console.log('baseCommit (lastMergeTargetCommit):', baseCommit);
+            console.log('targetCommit (lastMergeSourceCommit):', targetCommit);
+            console.log('repositoryId:', repositoryId);
+            console.log('NOTE: base=target branch HEAD, target=source branch HEAD');
+            console.log('If target branch advanced since PR created, diff will include unrelated changes!');
+
             if (!baseCommit || !targetCommit || !repositoryId) {
+                console.warn('Missing commit IDs or repositoryId, returning null');
+                console.groupEnd();
                 return null;
             }
 
@@ -1795,40 +1804,65 @@
                 .filter(e => e.item?.path)
                 .map(e => e.item.path);
 
+            console.log('File paths from iteration changes:', filePaths);
+
             if (filePaths.length === 0) {
+                console.log('No file paths, returning {added:0, removed:0}');
+                console.groupEnd();
                 return { added: 0, removed: 0 };
             }
 
             // Call internal API
             const diffData = await ADOAPI.getFileDiffs(config, repositoryId, baseCommit, targetCommit, filePaths);
-            console.log('Internal API response:', diffData);
+            console.log('Raw internal API response:', diffData);
 
             // Parse response and sum line counts
             let added = 0, removed = 0;
             const fileDiffs = diffData?.dataProviders?.['ms.vss-code-web.file-diff-data-provider']?.fileDiffs || [];
 
+            console.log(`Processing ${fileDiffs.length} file diffs:`);
             for (const fileDiff of fileDiffs) {
-                for (const block of (fileDiff.lineDiffBlocks || [])) {
+                let fileAdded = 0, fileRemoved = 0;
+                const blocks = fileDiff.lineDiffBlocks || [];
+                console.group(`  File: ${fileDiff.originalFile || fileDiff.modifiedFile || '(unknown)'} — ${blocks.length} blocks`);
+                for (const block of blocks) {
                     const changeType = block.changeType;
+                    const origCount = block.originalLinesCount || 0;
+                    const modCount = block.modifiedLinesCount || 0;
+                    const changeLabel = changeType === 0 ? 'none' : changeType === 1 ? 'add' : changeType === 2 ? 'delete' : changeType === 3 ? 'edit' : `unknown(${changeType})`;
                     // changeType: 0 = none, 1 = add, 2 = delete, 3 = edit (need to verify)
                     if (changeType === 1) {
-                        added += block.modifiedLinesCount || 0;
+                        fileAdded += modCount;
                     } else if (changeType === 2) {
-                        removed += block.originalLinesCount || 0;
+                        fileRemoved += origCount;
                     } else if (changeType === 3) {
                         // For edits, count both sides
-                        added += block.modifiedLinesCount || 0;
-                        removed += block.originalLinesCount || 0;
+                        fileAdded += modCount;
+                        fileRemoved += origCount;
+                    }
+                    if (changeType !== 0) {
+                        console.log(`    block changeType=${changeLabel} origLines=${origCount} modLines=${modCount}`);
                     }
                 }
+                console.log(`  => file total: +${fileAdded} -${fileRemoved}`);
+                console.groupEnd();
+                added += fileAdded;
+                removed += fileRemoved;
             }
 
+            console.log(`TOTAL via internal API: +${added} -${removed}`);
+            console.groupEnd();
             return { added, removed };
         }
 
         async function fetchLineStatsViaLocalDiff(config, prData, changes) {
             const baseCommit = prData.lastMergeTargetCommit?.commitId;
             const targetCommit = prData.lastMergeSourceCommit?.commitId;
+
+            console.group('[LineStats:LocalDiff] Starting');
+            console.log('baseCommit (lastMergeTargetCommit):', baseCommit);
+            console.log('targetCommit (lastMergeSourceCommit):', targetCommit);
+            console.log('WARNING: diffing target branch HEAD vs source branch HEAD — NOT merge-base vs source!');
 
             let totalAdded = 0;
             let totalRemoved = 0;
@@ -1842,27 +1876,41 @@
                 // For renames, sourceServerItem contains the old path
                 const oldPath = change.sourceServerItem || newPath;
 
+                console.group(`  File: ${newPath} (changeType: ${changeType})`);
+
                 if (changeType.includes('add')) {
                     const content = await fetchFileContent(config, newPath, targetCommit);
                     if (content) {
-                        totalAdded += content.split('\n').length;
+                        const lines = content.split('\n').length;
+                        console.log(`  Added file: ${lines} lines`);
+                        totalAdded += lines;
                     }
                 } else if (changeType.includes('delete')) {
                     const content = await fetchFileContent(config, oldPath, baseCommit);
                     if (content) {
-                        totalRemoved += content.split('\n').length;
+                        const lines = content.split('\n').length;
+                        console.log(`  Deleted file: ${lines} lines`);
+                        totalRemoved += lines;
                     }
                 } else if (changeType.includes('edit') || changeType.includes('rename')) {
                     const [oldContent, newContent] = await Promise.all([
                         fetchFileContent(config, oldPath, baseCommit),
                         fetchFileContent(config, newPath, targetCommit)
                     ]);
+                    console.log(`  Old content length: ${oldContent?.length ?? 'null'} chars, ${oldContent?.split('\\n').length ?? 0} lines`);
+                    console.log(`  New content length: ${newContent?.length ?? 'null'} chars, ${newContent?.split('\\n').length ?? 0} lines`);
                     const diff = computeLineDiff(oldContent, newContent);
+                    console.log(`  Diff result: +${diff.added} -${diff.removed}`);
                     totalAdded += diff.added;
                     totalRemoved += diff.removed;
                 }
+
+                console.log(`  Running total: +${totalAdded} -${totalRemoved}`);
+                console.groupEnd();
             }
 
+            console.log(`TOTAL via local diff: +${totalAdded} -${totalRemoved}`);
+            console.groupEnd();
             return { added: totalAdded, removed: totalRemoved };
         }
 
@@ -1870,13 +1918,25 @@
             const iterationCount = allIterations.length;
             const cacheKey = getLineStatsCacheKey(config, prData.pullRequestId, iterationCount);
 
+            console.group('[LineStats] fetchLineStatsAsync for PR #' + prData.pullRequestId);
+            console.log('Iteration count:', iterationCount);
+            console.log('Cache key:', cacheKey);
+            console.log('PR source branch:', prData.sourceRefName);
+            console.log('PR target branch:', prData.targetRefName);
+            console.log('lastMergeTargetCommit:', prData.lastMergeTargetCommit?.commitId);
+            console.log('lastMergeSourceCommit:', prData.lastMergeSourceCommit?.commitId);
+            console.log('lastMergeCommit:', prData.lastMergeCommit?.commitId);
+
             // Check cache first (validate that values are numbers, not null)
             const cached = getCachedLineStats(cacheKey);
             if (cached && typeof cached.added === 'number' && typeof cached.removed === 'number') {
-                console.log('Line stats from cache:', cached);
+                console.log('CACHE HIT — returning cached stats:', cached);
+                console.log('To force recalculation, run: localStorage.removeItem("' + cacheKey + '")');
+                console.groupEnd();
                 updateLineStatsDisplay(cached.added, cached.removed);
                 return;
             }
+            console.log('CACHE MISS — computing fresh stats');
 
             // Need to compute - show loading
             updateLineStatsLoading();
@@ -1886,15 +1946,31 @@
                 const targetCommit = prData.lastMergeSourceCommit?.commitId;
 
                 if (!baseCommit || !targetCommit) {
+                    console.warn('Missing base or target commit, aborting');
+                    console.groupEnd();
                     hideLineStatsLoading();
                     return;
                 }
 
                 // Get the file changes from iteration 1
+                console.log('Fetching iteration 1 changes (NOTE: only iteration 1, not all iterations!)');
                 const changesData = await ADOAPI.getPRIterationChanges(config, prData.pullRequestId, 1);
                 const changes = changesData.changeEntries || [];
 
+                console.log('Iteration 1 changes (' + changes.length + ' files):', changes.map(c => ({
+                    path: c.item?.path,
+                    changeType: c.changeType,
+                    sourceServerItem: c.sourceServerItem
+                })));
+
+                if (iterationCount > 1) {
+                    console.warn('PR has ' + iterationCount + ' iterations but only iteration 1 files are used for line stats!');
+                    console.log('Files changed in later iterations may be MISSING from the count.');
+                }
+
                 if (changes.length === 0) {
+                    console.log('No changes found, displaying 0/0');
+                    console.groupEnd();
                     updateLineStatsDisplay(0, 0);
                     return;
                 }
@@ -1905,7 +1981,7 @@
                 try {
                     stats = await fetchLineStatsViaInternalAPI(config, prData, changes);
                     if (stats) {
-                        console.log('Line stats via internal API:', stats);
+                        console.log('Final stats via internal API:', stats);
                     }
                 } catch (e) {
                     console.warn('Internal API failed, falling back to local diff:', e);
@@ -1913,11 +1989,12 @@
 
                 // Fall back to local diff if internal API failed
                 if (!stats) {
-                    console.log('Using local diff computation...');
+                    console.log('Internal API returned null, using local diff computation...');
                     stats = await fetchLineStatsViaLocalDiff(config, prData, changes);
-                    console.log('Line stats via local diff:', stats);
+                    console.log('Final stats via local diff:', stats);
                 }
 
+                console.log('=== FINAL LINE STATS: +' + stats.added + ' -' + stats.removed + ' ===');
                 setCachedLineStats(cacheKey, stats);
                 updateLineStatsDisplay(stats.added, stats.removed);
 
@@ -1925,6 +2002,7 @@
                 console.warn('Failed to compute line stats:', e);
                 hideLineStatsLoading();
             }
+            console.groupEnd();
         }
 
         function hideLineStatsLoading() {
