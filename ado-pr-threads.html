@@ -1443,6 +1443,72 @@
         .compact-stats span {
             cursor: default;
         }
+
+        /* Line stats context menu */
+        .line-stats-menu-wrapper {
+            position: relative;
+            margin-left: auto;
+        }
+
+        .line-stats-menu-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+            color: #605e5c;
+            font-size: 14px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .line-stats-menu-btn:hover {
+            background: #e1dfdd;
+            color: #323130;
+        }
+
+        .line-stats-menu-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .line-stats-context-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: white;
+            border: 1px solid #e1dfdd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 160px;
+            padding: 4px 0;
+        }
+
+        .line-stats-context-menu.open {
+            display: block;
+        }
+
+        .line-stats-context-menu button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 6px 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .line-stats-context-menu button:hover {
+            background: #f3f2f1;
+        }
     </style>
 </head>
 <body>
@@ -1940,7 +2006,61 @@
             container.innerHTML = `
                 <span>Lines</span>
                 <span style="color: #605e5c;">⏳</span>
+                ${getLineStatsMenuHtml()}
             `;
+        }
+
+        function getLineStatsMenuHtml() {
+            return `
+                <div class="line-stats-menu-wrapper">
+                    <button class="line-stats-menu-btn" onclick="toggleLineStatsMenu(event)" title="Options">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>
+                    </button>
+                    <div class="line-stats-context-menu" id="lineStatsContextMenu">
+                        <button onclick="resetLineStats()">🔄 Reset line stat</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleLineStatsMenu(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('lineStatsContextMenu');
+            if (!menu) return;
+            menu.classList.toggle('open');
+
+            // Close on outside click
+            if (menu.classList.contains('open')) {
+                const closeHandler = (e) => {
+                    if (!menu.contains(e.target)) {
+                        menu.classList.remove('open');
+                        document.removeEventListener('click', closeHandler);
+                    }
+                };
+                // Defer so the current click doesn't immediately close it
+                setTimeout(() => document.addEventListener('click', closeHandler), 0);
+            }
+        }
+
+        async function resetLineStats() {
+            // Close the menu
+            const menu = document.getElementById('lineStatsContextMenu');
+            if (menu) menu.classList.remove('open');
+
+            if (!currentConfig || !currentPRData) return;
+
+            // Remove cache entry
+            const iterationCount = allIterations.length;
+            const cacheKey = getLineStatsCacheKey(currentConfig, currentPRData.pullRequestId, iterationCount);
+            try {
+                localStorage.removeItem(cacheKey);
+                console.log('Removed line stats cache for key:', cacheKey);
+            } catch (e) {
+                console.warn('Failed to remove line stats cache:', e);
+            }
+
+            // Trigger fresh computation
+            await fetchLineStatsAsync(currentConfig, currentPRData);
         }
 
         function updateLineStatsDisplay(added, removed) {
@@ -1951,6 +2071,7 @@
                 <span>Lines</span>
                 <strong style="color: #107c10;" title="Added">+${added}</strong>
                 <strong style="color: #a4262c;" title="Removed">-${removed}</strong>
+                ${getLineStatsMenuHtml()}
             `;
         }
 
@@ -4531,6 +4652,7 @@
                 <div id="lineStatsContainer" class="compact-stats">
                     <span>Lines</span>
                     <span style="color: #605e5c;">⏳</span>
+                    ${getLineStatsMenuHtml()}
                 </div>
                 <div id="updatesStatsContainer" class="compact-stats">
                     <span>Updates</span>
