@@ -1526,6 +1526,51 @@
         .line-stats-context-menu button:hover {
             background: #f3f2f1;
         }
+
+        /* Live updates toggle */
+        .live-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #605e5c;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .live-toggle-switch {
+            position: relative;
+            width: 34px;
+            height: 18px;
+            background: #8a8886;
+            border-radius: 9px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .live-toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .live-toggle.active .live-toggle-switch {
+            background: #107c10;
+        }
+
+        .live-toggle.active .live-toggle-switch::after {
+            transform: translateX(16px);
+        }
+
+        .live-toggle-label {
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -1534,7 +1579,11 @@
             <div>
                 <h1 style="font-size: 1.3em; margin: 0;">💬 PR Threads Viewer</h1>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 14px; align-items: center;">
+                <label id="liveUpdatesToggle" class="live-toggle active" onclick="toggleLiveUpdates()">
+                    <span class="live-toggle-switch"></span>
+                    <span class="live-toggle-label">Live Updates</span>
+                </label>
                 <a href="ado-pr-list.html" onclick="const url = sessionStorage.getItem('prListReturnUrl'); if (url) { window.location.href = url; return false; } return true;" style="color: #0078d4; text-decoration: none; font-size: 14px;">📋 PR List</a>
                 <a href="index.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">🏠 Home</a>
                 <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">⚙️ Settings</a>
@@ -1688,6 +1737,7 @@
         let isRestoringFromURL = false;
         let urlProject = null;  // Saved from initial URL
         let urlRepo = null;     // Saved from initial URL
+        let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -2387,6 +2437,31 @@
             `;
         }
 
+        // Live updates toggle
+        function toggleLiveUpdates() {
+            liveUpdatesEnabled = !liveUpdatesEnabled;
+            localStorage.setItem('prThreadsLiveUpdates', liveUpdatesEnabled);
+
+            const toggle = document.getElementById('liveUpdatesToggle');
+            if (liveUpdatesEnabled) {
+                toggle.classList.add('active');
+                const config = ADOConfig.get();
+                if (config && currentPRData) startPRPolling(config);
+            } else {
+                toggle.classList.remove('active');
+                stopPRPolling();
+            }
+        }
+
+        function initLiveUpdatesToggle() {
+            const toggle = document.getElementById('liveUpdatesToggle');
+            if (liveUpdatesEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+        }
+
         // PR data polling
         let prChecksData = null;
         let prPollingInterval = null;
@@ -2551,6 +2626,7 @@
         }
 
         function startPRPolling(config) {
+            if (!liveUpdatesEnabled) return; // Live updates disabled by user
             if (prPollingInterval) return; // Already polling
 
             prPollingInterval = setInterval(() => pollPRData(config), PR_POLL_INTERVAL);
@@ -2565,7 +2641,7 @@
 
         // Refresh all data when tab becomes visible
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && currentPRData) {
+            if (!document.hidden && liveUpdatesEnabled && currentPRData) {
                 const config = ADOConfig.get();
                 if (config) pollPRData(config);
             }
@@ -2779,6 +2855,9 @@
                 document.getElementById('project').value = urlProject || savedConfig.project || '';
                 document.getElementById('repository').value = urlRepo || savedConfig.repository || '';
             }
+
+            // Initialize live updates toggle from saved preference
+            initLiveUpdatesToggle();
 
             // Auto-load or show config
             if (currentPRId) {
