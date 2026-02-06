@@ -1781,17 +1781,15 @@
             }
         }
 
-        async function fetchLineStatsViaInternalAPI(config, prData, changes) {
-            const baseCommit = prData.lastMergeTargetCommit?.commitId;
+        async function fetchLineStatsViaInternalAPI(config, prData, changes, mergeBaseCommit) {
+            const baseCommit = mergeBaseCommit;
             const targetCommit = prData.lastMergeSourceCommit?.commitId;
             const repositoryId = prData.repository?.id;
 
             console.group('[LineStats:InternalAPI] Starting');
-            console.log('baseCommit (lastMergeTargetCommit):', baseCommit);
+            console.log('baseCommit (merge base):', baseCommit);
             console.log('targetCommit (lastMergeSourceCommit):', targetCommit);
             console.log('repositoryId:', repositoryId);
-            console.log('NOTE: base=target branch HEAD, target=source branch HEAD');
-            console.log('If target branch advanced since PR created, diff will include unrelated changes!');
 
             if (!baseCommit || !targetCommit || !repositoryId) {
                 console.warn('Missing commit IDs or repositoryId, returning null');
@@ -1812,7 +1810,7 @@
                 return { added: 0, removed: 0 };
             }
 
-            // Call internal API
+            // Call internal API — diff from merge base to source branch tip
             const diffData = await ADOAPI.getFileDiffs(config, repositoryId, baseCommit, targetCommit, filePaths);
             console.log('Raw internal API response:', diffData);
 
@@ -1855,14 +1853,13 @@
             return { added, removed };
         }
 
-        async function fetchLineStatsViaLocalDiff(config, prData, changes) {
-            const baseCommit = prData.lastMergeTargetCommit?.commitId;
+        async function fetchLineStatsViaLocalDiff(config, prData, changes, mergeBaseCommit) {
+            const baseCommit = mergeBaseCommit;
             const targetCommit = prData.lastMergeSourceCommit?.commitId;
 
             console.group('[LineStats:LocalDiff] Starting');
-            console.log('baseCommit (lastMergeTargetCommit):', baseCommit);
+            console.log('baseCommit (merge base):', baseCommit);
             console.log('targetCommit (lastMergeSourceCommit):', targetCommit);
-            console.log('WARNING: diffing target branch HEAD vs source branch HEAD — NOT merge-base vs source!');
 
             let totalAdded = 0;
             let totalRemoved = 0;
@@ -1942,31 +1939,61 @@
             updateLineStatsLoading();
 
             try {
-                const baseCommit = prData.lastMergeTargetCommit?.commitId;
-                const targetCommit = prData.lastMergeSourceCommit?.commitId;
+                const sourceCommit = prData.lastMergeSourceCommit?.commitId;
+                const targetBranchCommit = prData.lastMergeTargetCommit?.commitId;
 
-                if (!baseCommit || !targetCommit) {
-                    console.warn('Missing base or target commit, aborting');
+                if (!targetBranchCommit || !sourceCommit) {
+                    console.warn('Missing source or target commit, aborting');
                     console.groupEnd();
                     hideLineStatsLoading();
                     return;
                 }
 
-                // Get the file changes from iteration 1
-                console.log('Fetching iteration 1 changes (NOTE: only iteration 1, not all iterations!)');
-                const changesData = await ADOAPI.getPRIterationChanges(config, prData.pullRequestId, 1);
+                // Resolve the merge base (common ancestor) — this is what PR diffs should be against.
+                // Using target branch HEAD was the bug: it includes unrelated changes from the target branch.
+                let mergeBaseCommit = null;
+
+                // Try to get merge base from iteration data first (commonRefCommit)
+                if (allIterations.length > 0 && allIterations[0].commonRefCommit?.commitId) {
+                    mergeBaseCommit = allIterations[0].commonRefCommit.commitId;
+                    console.log('Merge base from iteration commonRefCommit:', mergeBaseCommit);
+                }
+
+                // Fallback: call merge bases API
+                if (!mergeBaseCommit) {
+                    try {
+                        console.log('commonRefCommit not available, calling merge bases API...');
+                        const mergeBasesData = await ADOAPI.getMergeBases(config, sourceCommit, targetBranchCommit);
+                        const bases = mergeBasesData.value || [];
+                        if (bases.length > 0) {
+                            mergeBaseCommit = bases[0].commitId;
+                            console.log('Merge base from API:', mergeBaseCommit);
+                        }
+                    } catch (e) {
+                        console.warn('Merge bases API failed:', e);
+                    }
+                }
+
+                // Last resort: fall back to target branch commit (old behavior)
+                if (!mergeBaseCommit) {
+                    mergeBaseCommit = targetBranchCommit;
+                    console.warn('Could not resolve merge base, falling back to lastMergeTargetCommit (old behavior):', mergeBaseCommit);
+                } else {
+                    console.log('Using merge base:', mergeBaseCommit, '(instead of target branch HEAD:', targetBranchCommit + ')');
+                }
+
+                // Get file changes from the latest iteration compared to base (compareTo=0)
+                // This gives cumulative changes across all pushes, not just the first push
+                const latestIterationId = iterationCount;
+                console.log('Fetching changes for iteration', latestIterationId, 'compared to base (compareTo=0)');
+                const changesData = await ADOAPI.getPRIterationChanges(config, prData.pullRequestId, latestIterationId, 0);
                 const changes = changesData.changeEntries || [];
 
-                console.log('Iteration 1 changes (' + changes.length + ' files):', changes.map(c => ({
+                console.log('Cumulative PR changes (' + changes.length + ' files):', changes.map(c => ({
                     path: c.item?.path,
                     changeType: c.changeType,
                     sourceServerItem: c.sourceServerItem
                 })));
-
-                if (iterationCount > 1) {
-                    console.warn('PR has ' + iterationCount + ' iterations but only iteration 1 files are used for line stats!');
-                    console.log('Files changed in later iterations may be MISSING from the count.');
-                }
 
                 if (changes.length === 0) {
                     console.log('No changes found, displaying 0/0');
@@ -1977,9 +2004,9 @@
 
                 let stats = null;
 
-                // Try internal API first
+                // Try internal API first (using merge base as base commit)
                 try {
-                    stats = await fetchLineStatsViaInternalAPI(config, prData, changes);
+                    stats = await fetchLineStatsViaInternalAPI(config, prData, changes, mergeBaseCommit);
                     if (stats) {
                         console.log('Final stats via internal API:', stats);
                     }
@@ -1990,7 +2017,7 @@
                 // Fall back to local diff if internal API failed
                 if (!stats) {
                     console.log('Internal API returned null, using local diff computation...');
-                    stats = await fetchLineStatsViaLocalDiff(config, prData, changes);
+                    stats = await fetchLineStatsViaLocalDiff(config, prData, changes, mergeBaseCommit);
                     console.log('Final stats via local diff:', stats);
                 }
 
@@ -2321,7 +2348,7 @@
                     // Refresh file change stats if we have a new iteration
                     if (allIterations.length > 0) {
                         try {
-                            const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, 1);
+                            const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, allIterations.length, 0);
                             currentFileChangeStats = calculateFileChangeStats(changesData.changeEntries || []);
                             updateFileStats();
                             // Also refresh line stats
@@ -2820,11 +2847,11 @@
                 currentPRData = prData;
                 currentConfig = config;
 
-                // Fetch file change stats from the first iteration (shows all changes from base)
+                // Fetch file change stats from the latest iteration compared to base (cumulative)
                 let fileChangeStats = null;
                 if (allIterations.length > 0) {
                     try {
-                        const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, 1);
+                        const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, allIterations.length, 0);
                         fileChangeStats = calculateFileChangeStats(changesData.changeEntries || []);
                     } catch (e) {
                         console.warn('Failed to fetch file change stats:', e);
