@@ -2046,7 +2046,8 @@
                             return false;
                         }
                     } else {
-                        // Comment data not loaded yet - keep PR visible
+                        // Comment data not loaded yet - hide until data arrives
+                        return false;
                     }
                 }
 
@@ -3846,6 +3847,8 @@
                     if (!hasCommentAuthor) {
                         return false;
                     }
+                } else {
+                    return false;
                 }
             }
 
