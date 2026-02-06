@@ -61,6 +61,37 @@
             border-color: #0078d4;
         }
 
+        /* Filter progress bar */
+        .filter-progress {
+            margin-bottom: 16px;
+            padding: 10px;
+            background: #f3f2f1;
+            border-radius: 0;
+        }
+
+        .filter-progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #605e5c;
+            margin-bottom: 6px;
+        }
+
+        .filter-progress-track {
+            height: 4px;
+            background: #d1d1d1;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .filter-progress-bar {
+            height: 100%;
+            background: #0078d4;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.2s ease;
+        }
+
         /* Bulk action buttons */
         .bulk-actions {
             display: flex;
@@ -1013,6 +1044,16 @@
 
                 <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
 
+                <div id="filterProgress" class="filter-progress" style="display: none;">
+                    <div class="filter-progress-label">
+                        <span id="filterProgressText">Loading comment data...</span>
+                        <span id="filterProgressPct"></span>
+                    </div>
+                    <div class="filter-progress-track">
+                        <div id="filterProgressBar" class="filter-progress-bar"></div>
+                    </div>
+                </div>
+
                 <div id="selectedFilters" class="selected-filters"></div>
 
                 <div class="filter-section">
@@ -1060,6 +1101,14 @@
                     <div class="autocomplete-container">
                         <input type="text" id="assignedToFilter" placeholder="Filter by reviewer (use ; for multiple)" oninput="showAutocomplete('assignedTo')">
                         <div id="assignedToAutocomplete" class="autocomplete-results"></div>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Comment Author</h4>
+                    <div class="autocomplete-container">
+                        <input type="text" id="commentAuthorFilter" placeholder="Start typing to filter by commenter" oninput="showAutocomplete('commentAuthor')">
+                        <div id="commentAuthorAutocomplete" class="autocomplete-results"></div>
                     </div>
                 </div>
 
@@ -1130,6 +1179,7 @@
         let filteredPRs = [];
         let allAuthors = new Set();
         let allReviewers = new Set();
+        let allCommentAuthors = new Set();
         let isRestoringFromURL = false;
         let currentSort = 'id';
         let currentOrder = 'desc';
@@ -1161,6 +1211,7 @@
         const BATCH_DELAY_MS = 200;
         const MAX_CALLS_PER_CYCLE = 120;
         const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+        let _bulkCommentFetchInProgress = false;
 
         // Column resize state
         const DEFAULT_COLUMN_WIDTHS = {
@@ -1230,6 +1281,7 @@
                 title: params.get('title') || null,
                 createdBy: params.get('createdBy') || null,
                 assignedTo: params.get('assignedTo') || null,
+                commentAuthor: params.get('commentAuthor') || null,
                 sort: params.get('sort') || 'id',
                 order: params.get('order') || 'desc',
                 page: parseInt(params.get('page')) || 1,
@@ -1285,6 +1337,12 @@
             const assignedTo = document.getElementById('assignedToFilter').value.trim();
             if (assignedTo) {
                 params.set('assignedTo', assignedTo);
+            }
+
+            // Comment Author
+            const commentAuthor = document.getElementById('commentAuthorFilter').value.trim();
+            if (commentAuthor) {
+                params.set('commentAuthor', commentAuthor);
             }
 
             // Sort and Order
@@ -1357,6 +1415,9 @@
                 }
                 if (urlParams.assignedTo) {
                     document.getElementById('assignedToFilter').value = urlParams.assignedTo;
+                }
+                if (urlParams.commentAuthor) {
+                    document.getElementById('commentAuthorFilter').value = urlParams.commentAuthor;
                 }
 
                 // Restore sort and order
@@ -1726,9 +1787,10 @@
                 // Remove from loaded set
                 reposToRemove.forEach(key => loadedRepoKeys.delete(key));
 
-                // Rebuild authors/reviewers from remaining PRs
+                // Rebuild authors/reviewers/comment authors from remaining PRs
                 allAuthors = new Set();
                 allReviewers = new Set();
+                allCommentAuthors = new Set();
                 allPRs.forEach(pr => {
                     if (pr.createdBy) {
                         allAuthors.add(pr.createdBy.displayName);
@@ -1736,6 +1798,16 @@
                     if (pr.reviewers) {
                         pr.reviewers.forEach(reviewer => {
                             allReviewers.add(reviewer.displayName);
+                        });
+                    }
+                    // Rebuild comment authors from cached data
+                    const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                    const cached = prCommentCounts[prKey];
+                    if (cached && cached.authorObjects) {
+                        Object.values(cached.authorObjects).forEach(author => {
+                            if (author.displayName) {
+                                allCommentAuthors.add(author.displayName);
+                            }
                         });
                     }
                 });
@@ -1897,6 +1969,7 @@
             allPRs = [];
             allAuthors = new Set();
             allReviewers = new Set();
+            allCommentAuthors = new Set();
 
             // Clear live update state
             grayedOutPRKeys.clear();
@@ -1945,6 +2018,7 @@
             const titleFilter = document.getElementById('titleFilter').value.trim();
             const createdByFilter = ADOSearch.normalize(document.getElementById('createdByFilter').value.trim());
             const assignedToFilter = ADOSearch.normalize(document.getElementById('assignedToFilter').value.trim());
+            const commentAuthorFilter = document.getElementById('commentAuthorFilter').value.trim().toLowerCase();
             const selectedStatuses = getSelectedStatuses();
 
             filteredPRs = allPRs.filter(pr => {
@@ -1999,6 +2073,23 @@
                         if (!matchesAny) {
                             return false;
                         }
+                    }
+                }
+
+                // Comment author filter
+                if (commentAuthorFilter) {
+                    const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                    const cached = prCommentCounts[prKey];
+                    if (cached && cached.authorObjects) {
+                        const hasCommentAuthor = Object.values(cached.authorObjects).some(author =>
+                            author.displayName.toLowerCase().includes(commentAuthorFilter)
+                        );
+                        if (!hasCommentAuthor) {
+                            return false;
+                        }
+                    } else {
+                        // Comment data not loaded yet - hide until data arrives
+                        return false;
                     }
                 }
 
@@ -2059,6 +2150,14 @@
                 });
             }
 
+            const commentAuthorFilter = document.getElementById('commentAuthorFilter').value.trim();
+            if (commentAuthorFilter) {
+                filters.push({ label: `Comment author: ${commentAuthorFilter}`, clear: () => {
+                    document.getElementById('commentAuthorFilter').value = '';
+                    applyFilters();
+                }});
+            }
+
             if (filters.length === 0) {
                 selectedFiltersDiv.innerHTML = '';
                 return;
@@ -2084,6 +2183,23 @@
             if (window._activeFilters && window._activeFilters[index]) {
                 window._activeFilters[index].clear();
             }
+        }
+
+        function showFilterProgress(fetched, total) {
+            const el = document.getElementById('filterProgress');
+            el.style.display = '';
+            updateFilterProgress(fetched, total);
+        }
+
+        function updateFilterProgress(fetched, total) {
+            const pct = total > 0 ? Math.round((fetched / total) * 100) : 0;
+            document.getElementById('filterProgressText').textContent = `Loading comment data: ${fetched} / ${total} PRs`;
+            document.getElementById('filterProgressPct').textContent = `${pct}%`;
+            document.getElementById('filterProgressBar').style.width = `${pct}%`;
+        }
+
+        function hideFilterProgress() {
+            document.getElementById('filterProgress').style.display = 'none';
         }
 
         function sortPRs(column) {
@@ -2558,6 +2674,32 @@
             const queue = [];
             const now = Date.now();
             const sortedPRs = getSortedPRs();
+            const commentAuthorFilterActive = document.getElementById('commentAuthorFilter')?.value.trim().length > 0;
+
+            // When comment author filter is active, prioritize fetching unfetched PRs
+            // so the filter can progressively reveal matches
+            if (commentAuthorFilterActive) {
+                const queuedKeys = new Set();
+                // Still add visible PRs as priority 1
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = Math.min(startIndex + itemsPerPage, sortedPRs.length);
+                sortedPRs.slice(startIndex, endIndex).forEach(pr => {
+                    const prKey = getPRKey(pr);
+                    queue.push({ pr, priority: 1, reason: 'visible' });
+                    queuedKeys.add(prKey);
+                });
+
+                // Add all unfetched PRs as priority 2 so the filter can resolve
+                allPRs.forEach(pr => {
+                    const prKey = getPRKey(pr);
+                    if (!queuedKeys.has(prKey) && prCommentCounts[prKey] === undefined) {
+                        queue.push({ pr, priority: 2, reason: 'comment-filter' });
+                        queuedKeys.add(prKey);
+                    }
+                });
+
+                return queue;
+            }
 
             if (sortedPRs.length === 0) return queue;
 
@@ -2621,10 +2763,73 @@
 
             try {
                 const config = ADOConfig.get();
+                const commentAuthorActive = document.getElementById('commentAuthorFilter')?.value.trim().length > 0;
                 const queue = buildCommentFetchQueue();
 
                 if (queue.length === 0) {
                     isFetchingPriorityQueue = false;
+                    return;
+                }
+
+                // Fast path: when comment author filter is active, process visible PRs
+                // normally (with checks) then fetch only comments for the rest
+                if (commentAuthorActive) {
+                    const visibleItems = queue.filter(q => q.reason === 'visible');
+                    const commentFilterItems = queue.filter(q => q.reason === 'comment-filter');
+
+                    // Visible PRs: fetch comments + checks as normal
+                    if (visibleItems.length > 0) {
+                        const promises = visibleItems.flatMap(item => [
+                            fetchPRCommentCount(config, item.pr, forceRefresh),
+                            fetchPRChecks(config, item.pr, forceRefresh)
+                        ]);
+                        await Promise.all(promises);
+                    }
+
+                    // Comment-filter PRs: only fetch comments with higher throughput
+                    if (commentFilterItems.length > 0) {
+                        const COMMENT_FILTER_BATCH_SIZE = 15;
+                        const COMMENT_FILTER_BATCH_DELAY = 50;
+                        const REFRESH_INTERVAL = 5; // Re-apply filters every N batches
+                        const total = commentFilterItems.length;
+
+                        console.log(`Comment author filter: fetching comment data for ${total} PRs`);
+                        showFilterProgress(0, total);
+
+                        _bulkCommentFetchInProgress = true;
+                        let batchCount = 0;
+                        let fetched = 0;
+                        let currentBatch = [];
+                        for (let i = 0; i < commentFilterItems.length; i++) {
+                            currentBatch.push(commentFilterItems[i].pr);
+
+                            if (currentBatch.length >= COMMENT_FILTER_BATCH_SIZE || i === commentFilterItems.length - 1) {
+                                const promises = currentBatch.map(pr =>
+                                    fetchPRCommentCount(config, pr, forceRefresh)
+                                );
+                                await Promise.all(promises);
+                                batchCount++;
+                                fetched += currentBatch.length;
+                                updateFilterProgress(fetched, total);
+
+                                // Periodically refresh the displayed results
+                                if (batchCount % REFRESH_INTERVAL === 0) {
+                                    applyFilters();
+                                }
+
+                                if (i < commentFilterItems.length - 1) {
+                                    await new Promise(resolve => setTimeout(resolve, COMMENT_FILTER_BATCH_DELAY));
+                                }
+                                currentBatch = [];
+                            }
+                        }
+                        _bulkCommentFetchInProgress = false;
+                        hideFilterProgress();
+
+                        // Final refresh to show all results
+                        applyFilters();
+                        console.log(`Comment author filter: done fetching comment data`);
+                    }
                     return;
                 }
 
@@ -2742,6 +2947,21 @@
                     lastFetch: now,
                     lastAccess: now
                 };
+
+                // Collect comment author names for autocomplete
+                Object.values(authorObjects).forEach(author => {
+                    if (author.displayName) {
+                        allCommentAuthors.add(author.displayName);
+                    }
+                });
+
+                // Re-apply comment author filter if active (unless bulk fetch handles it)
+                if (!_bulkCommentFetchInProgress) {
+                    const commentAuthorFilterValue = document.getElementById('commentAuthorFilter')?.value.trim();
+                    if (commentAuthorFilterValue) {
+                        applyFilters();
+                    }
+                }
 
                 // Store iteration count
                 const iterationCount = (iterations.value || []).length;
@@ -3129,7 +3349,7 @@
                 segments.slice(0, -1).map(s => ADOSearch.normalize(s.trim())).filter(s => s.length > 0)
             );
 
-            const items = type === 'createdBy' ? Array.from(allAuthors) : Array.from(allReviewers);
+            const items = type === 'createdBy' ? Array.from(allAuthors) : type === 'assignedTo' ? Array.from(allReviewers) : Array.from(allCommentAuthors);
             const filtered = items.filter(item =>
                 ADOSearch.normalize(item).includes(currentSegment) &&
                 !alreadySelected.has(ADOSearch.normalize(item))
@@ -3468,6 +3688,7 @@
             document.getElementById('titleFilter').value = '';
             document.getElementById('createdByFilter').value = '';
             document.getElementById('assignedToFilter').value = '';
+            document.getElementById('commentAuthorFilter').value = '';
 
             // Uncheck all status checkboxes (means "show all")
             ['active', 'completed', 'abandoned'].forEach(status => {
@@ -3708,6 +3929,7 @@
             const titleFilter = document.getElementById('titleFilter').value.trim();
             const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
             const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
+            const commentAuthorFilter = document.getElementById('commentAuthorFilter').value.trim().toLowerCase();
             const selectedStatuses = getSelectedStatuses();
 
             // PR ID filter
@@ -3761,6 +3983,22 @@
                     if (!matchesAny) {
                         return false;
                     }
+                }
+            }
+
+            // Comment author filter
+            if (commentAuthorFilter) {
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                const cached = prCommentCounts[prKey];
+                if (cached && cached.authorObjects) {
+                    const hasCommentAuthor = Object.values(cached.authorObjects).some(author =>
+                        author.displayName.toLowerCase().includes(commentAuthorFilter)
+                    );
+                    if (!hasCommentAuthor) {
+                        return false;
+                    }
+                } else {
+                    return false;
                 }
             }
 
@@ -3877,6 +4115,7 @@
         function updateAuthorsAndReviewers() {
             allAuthors = new Set();
             allReviewers = new Set();
+            allCommentAuthors = new Set();
 
             allPRs.forEach(pr => {
                 if (pr.createdBy) {
@@ -3885,6 +4124,16 @@
                 if (pr.reviewers) {
                     pr.reviewers.forEach(reviewer => {
                         allReviewers.add(reviewer.displayName);
+                    });
+                }
+                // Rebuild comment authors from cached data
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                const cached = prCommentCounts[prKey];
+                if (cached && cached.authorObjects) {
+                    Object.values(cached.authorObjects).forEach(author => {
+                        if (author.displayName) {
+                            allCommentAuthors.add(author.displayName);
+                        }
                     });
                 }
             });
