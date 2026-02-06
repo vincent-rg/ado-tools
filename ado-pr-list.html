@@ -2615,6 +2615,32 @@
             const queue = [];
             const now = Date.now();
             const sortedPRs = getSortedPRs();
+            const commentAuthorFilterActive = document.getElementById('commentAuthorFilter')?.value.trim().length > 0;
+
+            // When comment author filter is active, prioritize fetching unfetched PRs
+            // so the filter can progressively reveal matches
+            if (commentAuthorFilterActive) {
+                const queuedKeys = new Set();
+                // Still add visible PRs as priority 1
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = Math.min(startIndex + itemsPerPage, sortedPRs.length);
+                sortedPRs.slice(startIndex, endIndex).forEach(pr => {
+                    const prKey = getPRKey(pr);
+                    queue.push({ pr, priority: 1, reason: 'visible' });
+                    queuedKeys.add(prKey);
+                });
+
+                // Add all unfetched PRs as priority 2 so the filter can resolve
+                allPRs.forEach(pr => {
+                    const prKey = getPRKey(pr);
+                    if (!queuedKeys.has(prKey) && prCommentCounts[prKey] === undefined) {
+                        queue.push({ pr, priority: 2, reason: 'comment-filter' });
+                        queuedKeys.add(prKey);
+                    }
+                });
+
+                return queue;
+            }
 
             if (sortedPRs.length === 0) return queue;
 
