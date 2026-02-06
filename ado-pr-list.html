@@ -1050,7 +1050,7 @@
                 <div class="filter-section">
                     <h4>Created By</h4>
                     <div class="autocomplete-container">
-                        <input type="text" id="createdByFilter" placeholder="Start typing to filter by author" oninput="showAutocomplete('createdBy')">
+                        <input type="text" id="createdByFilter" placeholder="Filter by author (use ; for multiple)" oninput="showAutocomplete('createdBy')">
                         <div id="createdByAutocomplete" class="autocomplete-results"></div>
                     </div>
                 </div>
@@ -1058,7 +1058,7 @@
                 <div class="filter-section">
                     <h4>Assigned To</h4>
                     <div class="autocomplete-container">
-                        <input type="text" id="assignedToFilter" placeholder="Start typing to filter by reviewer" oninput="showAutocomplete('assignedTo')">
+                        <input type="text" id="assignedToFilter" placeholder="Filter by reviewer (use ; for multiple)" oninput="showAutocomplete('assignedTo')">
                         <div id="assignedToAutocomplete" class="autocomplete-results"></div>
                     </div>
                 </div>
@@ -1975,18 +1975,30 @@
                     }
                 }
 
-                // Created by filter
-                if (createdByFilter && !pr.createdBy.displayName.toLowerCase().includes(createdByFilter)) {
-                    return false;
+                // Created by filter (semicolon-separated, match ANY)
+                if (createdByFilter) {
+                    const authors = createdByFilter.split(';').map(a => a.trim()).filter(a => a.length > 0);
+                    if (authors.length > 0) {
+                        const authorName = pr.createdBy.displayName.toLowerCase();
+                        const matchesAny = authors.some(a => authorName.includes(a));
+                        if (!matchesAny) {
+                            return false;
+                        }
+                    }
                 }
 
-                // Assigned to filter
+                // Assigned to filter (semicolon-separated, match ANY)
                 if (assignedToFilter) {
-                    const hasReviewer = pr.reviewers.some(reviewer =>
-                        reviewer.displayName.toLowerCase().includes(assignedToFilter)
-                    );
-                    if (!hasReviewer) {
-                        return false;
+                    const reviewerFilters = assignedToFilter.split(';').map(r => r.trim()).filter(r => r.length > 0);
+                    if (reviewerFilters.length > 0) {
+                        const matchesAny = reviewerFilters.some(rf =>
+                            pr.reviewers.some(reviewer =>
+                                reviewer.displayName.toLowerCase().includes(rf)
+                            )
+                        );
+                        if (!matchesAny) {
+                            return false;
+                        }
                     }
                 }
 
@@ -2023,18 +2035,28 @@
 
             const createdByFilter = document.getElementById('createdByFilter').value.trim();
             if (createdByFilter) {
-                filters.push({ label: `Created by: ${createdByFilter}`, clear: () => {
-                    document.getElementById('createdByFilter').value = '';
-                    applyFilters();
-                }});
+                const authors = createdByFilter.split(';').map(a => a.trim()).filter(a => a.length > 0);
+                authors.forEach(author => {
+                    filters.push({ label: `Created by: ${author}`, clear: () => {
+                        const input = document.getElementById('createdByFilter');
+                        const remaining = input.value.split(';').map(a => a.trim()).filter(a => a.length > 0 && a.toLowerCase() !== author.toLowerCase());
+                        input.value = remaining.join('; ');
+                        applyFilters();
+                    }});
+                });
             }
 
             const assignedToFilter = document.getElementById('assignedToFilter').value.trim();
             if (assignedToFilter) {
-                filters.push({ label: `Assigned to: ${assignedToFilter}`, clear: () => {
-                    document.getElementById('assignedToFilter').value = '';
-                    applyFilters();
-                }});
+                const reviewers = assignedToFilter.split(';').map(r => r.trim()).filter(r => r.length > 0);
+                reviewers.forEach(reviewer => {
+                    filters.push({ label: `Assigned to: ${reviewer}`, clear: () => {
+                        const input = document.getElementById('assignedToFilter');
+                        const remaining = input.value.split(';').map(r => r.trim()).filter(r => r.length > 0 && r.toLowerCase() !== reviewer.toLowerCase());
+                        input.value = remaining.join('; ');
+                        applyFilters();
+                    }});
+                });
             }
 
             if (filters.length === 0) {
@@ -3090,18 +3112,32 @@
         function showAutocomplete(type) {
             const input = document.getElementById(`${type}Filter`);
             const autocompleteDiv = document.getElementById(`${type}Autocomplete`);
-            const query = input.value.trim().toLowerCase();
+            const fullValue = input.value;
 
-            if (query.length === 0) {
+            // Work with the segment after the last semicolon
+            const segments = fullValue.split(';');
+            const currentSegment = segments[segments.length - 1].trim().toLowerCase();
+
+            if (currentSegment.length === 0) {
                 autocompleteDiv.classList.remove('show');
+                applyFilters();
                 return;
             }
 
+            // Get already-selected users to exclude from suggestions
+            const alreadySelected = new Set(
+                segments.slice(0, -1).map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+            );
+
             const items = type === 'createdBy' ? Array.from(allAuthors) : Array.from(allReviewers);
-            const filtered = items.filter(item => item.toLowerCase().includes(query));
+            const filtered = items.filter(item =>
+                item.toLowerCase().includes(currentSegment) &&
+                !alreadySelected.has(item.toLowerCase())
+            );
 
             if (filtered.length === 0) {
                 autocompleteDiv.classList.remove('show');
+                applyFilters();
                 return;
             }
 
@@ -3116,10 +3152,18 @@
 
             autocompleteDiv.innerHTML = html;
             autocompleteDiv.classList.add('show');
+            applyFilters();
         }
 
         function selectAutocomplete(type, value) {
-            document.getElementById(`${type}Filter`).value = value;
+            const input = document.getElementById(`${type}Filter`);
+            const fullValue = input.value;
+            const segments = fullValue.split(';');
+
+            // Replace the current (last) segment with the selected value
+            segments[segments.length - 1] = value;
+            input.value = segments.join('; ');
+
             document.getElementById(`${type}Autocomplete`).classList.remove('show');
             applyFilters();
         }
@@ -3693,18 +3737,30 @@
                 }
             }
 
-            // Created by filter
-            if (createdByFilter && !pr.createdBy.displayName.toLowerCase().includes(createdByFilter)) {
-                return false;
+            // Created by filter (semicolon-separated, match ANY)
+            if (createdByFilter) {
+                const authors = createdByFilter.split(';').map(a => a.trim()).filter(a => a.length > 0);
+                if (authors.length > 0) {
+                    const authorName = pr.createdBy.displayName.toLowerCase();
+                    const matchesAny = authors.some(a => authorName.includes(a));
+                    if (!matchesAny) {
+                        return false;
+                    }
+                }
             }
 
-            // Assigned to filter
+            // Assigned to filter (semicolon-separated, match ANY)
             if (assignedToFilter) {
-                const hasReviewer = pr.reviewers.some(reviewer =>
-                    reviewer.displayName.toLowerCase().includes(assignedToFilter)
-                );
-                if (!hasReviewer) {
-                    return false;
+                const reviewerFilters = assignedToFilter.split(';').map(r => r.trim()).filter(r => r.length > 0);
+                if (reviewerFilters.length > 0) {
+                    const matchesAny = reviewerFilters.some(rf =>
+                        pr.reviewers.some(reviewer =>
+                            reviewer.displayName.toLowerCase().includes(rf)
+                        )
+                    );
+                    if (!matchesAny) {
+                        return false;
+                    }
                 }
             }
 
