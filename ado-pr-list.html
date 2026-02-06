@@ -61,6 +61,37 @@
             border-color: #0078d4;
         }
 
+        /* Filter progress bar */
+        .filter-progress {
+            margin-bottom: 16px;
+            padding: 10px;
+            background: #f3f2f1;
+            border-radius: 0;
+        }
+
+        .filter-progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #605e5c;
+            margin-bottom: 6px;
+        }
+
+        .filter-progress-track {
+            height: 4px;
+            background: #d1d1d1;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .filter-progress-bar {
+            height: 100%;
+            background: #0078d4;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.2s ease;
+        }
+
         /* Bulk action buttons */
         .bulk-actions {
             display: flex;
@@ -1012,6 +1043,16 @@
                 <div class="resize-handle" id="resizeHandle"></div>
 
                 <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
+
+                <div id="filterProgress" class="filter-progress" style="display: none;">
+                    <div class="filter-progress-label">
+                        <span id="filterProgressText">Loading comment data...</span>
+                        <span id="filterProgressPct"></span>
+                    </div>
+                    <div class="filter-progress-track">
+                        <div id="filterProgressBar" class="filter-progress-bar"></div>
+                    </div>
+                </div>
 
                 <div id="selectedFilters" class="selected-filters"></div>
 
@@ -2144,6 +2185,23 @@
             }
         }
 
+        function showFilterProgress(fetched, total) {
+            const el = document.getElementById('filterProgress');
+            el.style.display = '';
+            updateFilterProgress(fetched, total);
+        }
+
+        function updateFilterProgress(fetched, total) {
+            const pct = total > 0 ? Math.round((fetched / total) * 100) : 0;
+            document.getElementById('filterProgressText').textContent = `Loading comment data: ${fetched} / ${total} PRs`;
+            document.getElementById('filterProgressPct').textContent = `${pct}%`;
+            document.getElementById('filterProgressBar').style.width = `${pct}%`;
+        }
+
+        function hideFilterProgress() {
+            document.getElementById('filterProgress').style.display = 'none';
+        }
+
         function sortPRs(column) {
             // Toggle order if clicking same column, otherwise default to desc
             if (currentSort === column) {
@@ -2733,11 +2791,14 @@
                         const COMMENT_FILTER_BATCH_SIZE = 15;
                         const COMMENT_FILTER_BATCH_DELAY = 50;
                         const REFRESH_INTERVAL = 5; // Re-apply filters every N batches
+                        const total = commentFilterItems.length;
 
-                        console.log(`Comment author filter: fetching comment data for ${commentFilterItems.length} PRs`);
+                        console.log(`Comment author filter: fetching comment data for ${total} PRs`);
+                        showFilterProgress(0, total);
 
                         _bulkCommentFetchInProgress = true;
                         let batchCount = 0;
+                        let fetched = 0;
                         let currentBatch = [];
                         for (let i = 0; i < commentFilterItems.length; i++) {
                             currentBatch.push(commentFilterItems[i].pr);
@@ -2748,6 +2809,8 @@
                                 );
                                 await Promise.all(promises);
                                 batchCount++;
+                                fetched += currentBatch.length;
+                                updateFilterProgress(fetched, total);
 
                                 // Periodically refresh the displayed results
                                 if (batchCount % REFRESH_INTERVAL === 0) {
@@ -2761,6 +2824,7 @@
                             }
                         }
                         _bulkCommentFetchInProgress = false;
+                        hideFilterProgress();
 
                         // Final refresh to show all results
                         applyFilters();
