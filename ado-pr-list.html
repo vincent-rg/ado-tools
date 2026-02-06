@@ -945,6 +945,51 @@
             }
         }
 
+        /* Live updates toggle */
+        .live-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #605e5c;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .live-toggle-switch {
+            position: relative;
+            width: 34px;
+            height: 18px;
+            background: #8a8886;
+            border-radius: 9px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .live-toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .live-toggle.active .live-toggle-switch {
+            background: #107c10;
+        }
+
+        .live-toggle.active .live-toggle-switch::after {
+            transform: translateX(16px);
+        }
+
+        .live-toggle-label {
+            white-space: nowrap;
+        }
+
         /* Reviewer status badge */
         .reviewer-status-badge {
             position: absolute;
@@ -1031,7 +1076,11 @@
             <div>
                 <h1 style="font-size: 1.3em; margin: 0;">📋 Pull Request List</h1>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 14px; align-items: center;">
+                <label id="liveUpdatesToggle" class="live-toggle active" onclick="toggleLiveUpdates()">
+                    <span class="live-toggle-switch"></span>
+                    <span class="live-toggle-label">Live Updates</span>
+                </label>
                 <a href="index.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">🏠 Home</a>
                 <a href="ado-settings.html" style="color: #0078d4; text-decoration: none; font-size: 14px;">⚙️ Settings</a>
             </div>
@@ -1197,6 +1246,7 @@
         let lastUserInteraction = Date.now();
         let lastBackgroundPoll = 0; // Timestamp of last background poll
         let isBackgroundPolling = false;
+        let liveUpdatesEnabled = localStorage.getItem('prListLiveUpdates') !== 'false'; // default: true
         let POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
         let USER_INTERACTION_PAUSE = 10 * 1000; // 10 seconds
         let VISIBILITY_POLL_COOLDOWN = 20 * 1000; // 20 seconds cooldown for visibility-triggered polls
@@ -1268,6 +1318,9 @@
 
             // Initialize user interaction tracking
             initializeUserInteractionTracking();
+
+            // Initialize live updates toggle from saved preference
+            initLiveUpdatesToggle();
         });
 
         // URL parameter helpers
@@ -3670,7 +3723,7 @@
 
         // Trigger background poll when tab becomes visible (with cooldown to prevent spam)
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && loadedRepoKeys.size > 0 && backgroundPollInterval) {
+            if (!document.hidden && liveUpdatesEnabled && loadedRepoKeys.size > 0 && backgroundPollInterval) {
                 const timeSinceLastPoll = Date.now() - lastBackgroundPoll;
 
                 // Only trigger poll if at least 20 seconds have passed since last poll
@@ -3705,6 +3758,29 @@
         // Live Update System
         // ============================================
 
+        function toggleLiveUpdates() {
+            liveUpdatesEnabled = !liveUpdatesEnabled;
+            localStorage.setItem('prListLiveUpdates', liveUpdatesEnabled);
+
+            const toggle = document.getElementById('liveUpdatesToggle');
+            if (liveUpdatesEnabled) {
+                toggle.classList.add('active');
+                startBackgroundPolling();
+            } else {
+                toggle.classList.remove('active');
+                stopBackgroundPolling();
+            }
+        }
+
+        function initLiveUpdatesToggle() {
+            const toggle = document.getElementById('liveUpdatesToggle');
+            if (liveUpdatesEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+        }
+
         function initializeUserInteractionTracking() {
             // Track various user interactions
             const interactionEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
@@ -3722,6 +3798,7 @@
         }
 
         function startBackgroundPolling() {
+            if (!liveUpdatesEnabled) return; // Live updates disabled by user
             if (backgroundPollInterval) {
                 return; // Already running
             }
