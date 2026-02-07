@@ -146,7 +146,7 @@ const ADOAPI = {
      * Get PR iterations
      */
     async getPRIterations(config, prId) {
-        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/iterations?api-version=6.0`;
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/iterations?api-version=6.0&includeCommits=true`;
         const response = await this.fetchWithAuth(url, config.pat);
 
         if (!response.ok) {

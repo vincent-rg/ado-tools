@@ -1845,6 +1845,261 @@
             font-size: 14px;
             padding: 20px;
         }
+
+        /* Iteration selector */
+        .iteration-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-bottom: 1px solid #e1dfdd;
+            background: #faf9f8;
+            flex-shrink: 0;
+            font-size: 12px;
+            position: relative;
+        }
+
+        .iteration-selector-label {
+            font-weight: 600;
+            color: #605e5c;
+            margin-right: 2px;
+        }
+
+        .iteration-btn {
+            min-width: 24px;
+            height: 24px;
+            padding: 0 6px;
+            border: 1px solid #c8c6c4;
+            background: #fff;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            color: #323130;
+            line-height: 22px;
+            text-align: center;
+        }
+
+        .iteration-btn:hover {
+            background: #f3f2f1;
+            border-color: #a19f9d;
+        }
+
+        .iteration-btn.active {
+            background: #0078d4;
+            color: #fff;
+            border-color: #0078d4;
+        }
+
+        .iteration-dropdown-trigger {
+            height: 24px;
+            padding: 0 8px;
+            border: 1px solid #c8c6c4;
+            background: #fff;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            color: #323130;
+            line-height: 22px;
+            white-space: nowrap;
+        }
+
+        .iteration-dropdown-trigger:hover {
+            background: #f3f2f1;
+            border-color: #a19f9d;
+        }
+
+        .iteration-dropdown-trigger.has-selection {
+            background: #deecf9;
+            border-color: #0078d4;
+            color: #0078d4;
+        }
+
+        .iteration-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #e1dfdd;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .iteration-dropdown.open {
+            display: block;
+        }
+
+        .iteration-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            gap: 10px;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+        }
+
+        .iteration-row:hover {
+            background: #f3f2f1;
+        }
+
+        .iteration-row.in-range {
+            background: #eff6fc;
+        }
+
+        .iteration-row.in-range:hover {
+            background: #deecf9;
+        }
+
+        .iteration-row.range-edge {
+            background: #deecf9;
+        }
+
+        .iteration-row.range-edge:hover {
+            background: #c7e0f4;
+        }
+
+        .iteration-node-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 16px;
+            flex-shrink: 0;
+            position: relative;
+            align-self: stretch;
+        }
+
+        /* Timeline line segments above and below the node */
+        .iteration-node-col::before,
+        .iteration-node-col::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            background: #c8c6c4;
+        }
+
+        .iteration-node-col::before {
+            top: 0;
+            height: calc(50% - 6px);
+        }
+
+        .iteration-node-col::after {
+            bottom: 0;
+            height: calc(50% - 6px);
+        }
+
+        .iteration-row:first-child .iteration-node-col::before {
+            display: none;
+        }
+
+        .iteration-row:last-child .iteration-node-col::after {
+            display: none;
+        }
+
+        /* In-range timeline line segments are blue and thicker */
+        .iteration-row.in-range .iteration-node-col::before,
+        .iteration-row.in-range .iteration-node-col::after,
+        .iteration-row.range-edge .iteration-node-col::after {
+            background: #0078d4;
+            width: 3px;
+        }
+
+        /* The top edge: line above is normal, line below is blue */
+        .iteration-row.range-edge-start .iteration-node-col::before {
+            background: #c8c6c4;
+            width: 2px;
+        }
+
+        .iteration-row.range-edge-start .iteration-node-col::after {
+            background: #0078d4;
+            width: 3px;
+        }
+
+        /* The bottom edge: line above is blue, line below is normal */
+        .iteration-row.range-edge-end .iteration-node-col::before {
+            background: #0078d4;
+            width: 3px;
+        }
+
+        .iteration-row.range-edge-end .iteration-node-col::after {
+            background: #c8c6c4;
+            width: 2px;
+        }
+
+        /* When start == end (single selection), both lines are normal */
+        .iteration-row.range-edge-start.range-edge-end .iteration-node-col::before,
+        .iteration-row.range-edge-start.range-edge-end .iteration-node-col::after {
+            background: #c8c6c4;
+            width: 2px;
+        }
+
+        .iteration-node {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #c8c6c4;
+            background: #fff;
+            flex-shrink: 0;
+            z-index: 1;
+            box-sizing: border-box;
+        }
+
+        .iteration-row.in-range .iteration-node {
+            border-color: #0078d4;
+            background: #deecf9;
+        }
+
+        .iteration-row.range-edge .iteration-node {
+            width: 16px;
+            height: 16px;
+            border-color: #0078d4;
+            background: #0078d4;
+            cursor: grab;
+        }
+
+        .iteration-row.range-edge .iteration-node:active {
+            cursor: grabbing;
+        }
+
+        .iteration-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .iteration-info-top {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .iteration-number {
+            font-weight: 700;
+            font-size: 12px;
+            color: #323130;
+        }
+
+        .iteration-date {
+            font-size: 11px;
+            color: #605e5c;
+        }
+
+        .iteration-commit {
+            font-size: 11px;
+            color: #605e5c;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -1989,6 +2244,7 @@
                     <div class="files-layout">
                         <div class="file-tree-panel">
                             <div class="file-tree-resize-handle" id="fileTreeResizeHandle"></div>
+                            <div class="iteration-selector" id="iterationSelector" style="display: none;"></div>
                             <div class="file-tree-header" id="fileTreeHeader">Changed Files</div>
                             <div id="fileTreeContainer"></div>
                         </div>
@@ -2024,6 +2280,8 @@
         let fileDiffCache = new Map();
         let fileTreeBuilt = false;
         let currentMergeBase = null;
+        let selectedIterationStart = null; // null = "all"
+        let selectedIterationEnd = null;
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
@@ -2771,6 +3029,7 @@
                             // Rebuild file tree if currently in files view
                             if (currentView === 'files') {
                                 buildFileTree(allChangeEntries);
+                                buildIterationSelector();
                             }
                             // Update files tab count
                             const filesTabBtn = document.querySelector('.view-tab[data-view="files"]');
@@ -5464,6 +5723,7 @@
                 if (filesView) filesView.classList.add('active');
                 if (!fileTreeBuilt) {
                     buildFileTree(allChangeEntries);
+                    buildIterationSelector();
                     fileTreeBuilt = true;
                 }
             }
@@ -5544,6 +5804,7 @@
                 // Lazily build file tree on first switch
                 if (!fileTreeBuilt) {
                     buildFileTree(allChangeEntries);
+                    buildIterationSelector();
                     fileTreeBuilt = true;
                 }
             } else {
@@ -5664,6 +5925,341 @@
             container.innerHTML = renderNode(root, 0);
         }
 
+        function formatIterationDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            if (isNaN(d)) return '';
+            const now = new Date();
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            if (d.getFullYear() === now.getFullYear()) {
+                return `${months[d.getMonth()]} ${d.getDate()}`;
+            }
+            return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+        }
+
+        function getIterationTriggerText() {
+            if (selectedIterationStart === null) return 'All \u25BE';
+            if (selectedIterationStart === selectedIterationEnd) return `Update ${selectedIterationStart} \u25BE`;
+            return `Updates ${selectedIterationStart}-${selectedIterationEnd} \u25BE`;
+        }
+
+        function buildIterationSelector() {
+            const container = document.getElementById('iterationSelector');
+            if (!container) return;
+
+            if (allIterations.length <= 1) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = '';
+            const hasSel = selectedIterationStart !== null;
+            let html = '<span class="iteration-selector-label">Updates:</span>';
+            html += `<button class="iteration-btn${!hasSel ? ' active' : ''}" onclick="selectIterationAll()">All</button>`;
+            html += `<button class="iteration-dropdown-trigger${hasSel ? ' has-selection' : ''}" onclick="toggleIterationDropdown(event)">${getIterationTriggerText()}</button>`;
+
+            html += '<div class="iteration-dropdown" id="iterationDropdown">';
+            const total = allIterations.length;
+            for (let i = 1; i <= total; i++) {
+                const iter = allIterations[i - 1];
+                const inRange = !hasSel || (i >= selectedIterationStart && i <= selectedIterationEnd);
+                const isStart = !hasSel ? i === 1 : i === selectedIterationStart;
+                const isEnd = !hasSel ? i === total : i === selectedIterationEnd;
+                const isEdge = isStart || isEnd;
+                let cls = 'iteration-row';
+                if (isEdge) cls += ' range-edge';
+                else if (inRange) cls += ' in-range';
+                if (isStart) cls += ' range-edge-start';
+                if (isEnd) cls += ' range-edge-end';
+
+                const date = formatIterationDate(iter.createdDate);
+                const commits = iter.commits || [];
+                const lastCommitMsg = commits.length > 0
+                    ? (commits[commits.length - 1].comment || '').split('\n')[0]
+                    : '';
+
+                html += `<div class="${cls}" data-iteration="${i}" onclick="selectIteration(${i})">`;
+                html += `<div class="iteration-node-col"><div class="iteration-node"${isEdge ? ` onmousedown="startIterationDrag(event, ${i})"` : ''}></div></div>`;
+                html += '<div class="iteration-info">';
+                html += `<div class="iteration-info-top"><span class="iteration-number">${i}</span><span class="iteration-date">${date}</span></div>`;
+                if (lastCommitMsg) {
+                    html += `<div class="iteration-commit">${lastCommitMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+                }
+                html += '</div></div>';
+            }
+            html += '</div>';
+
+            container.innerHTML = html;
+        }
+
+        function toggleIterationDropdown(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('iterationDropdown');
+            if (!dropdown) return;
+            dropdown.classList.toggle('open');
+
+            if (dropdown.classList.contains('open')) {
+                // Close on click outside
+                setTimeout(() => {
+                    document.addEventListener('click', closeIterationDropdownOnClickOutside);
+                    document.addEventListener('keydown', closeIterationDropdownOnEscape);
+                }, 0);
+            } else {
+                document.removeEventListener('click', closeIterationDropdownOnClickOutside);
+                document.removeEventListener('keydown', closeIterationDropdownOnEscape);
+            }
+        }
+
+        function closeIterationDropdownOnClickOutside(event) {
+            const selector = document.getElementById('iterationSelector');
+            if (selector && !selector.contains(event.target)) {
+                closeIterationDropdown();
+            }
+        }
+
+        function closeIterationDropdownOnEscape(event) {
+            if (event.key === 'Escape') {
+                closeIterationDropdown();
+            }
+        }
+
+        function closeIterationDropdown() {
+            const dropdown = document.getElementById('iterationDropdown');
+            if (dropdown) dropdown.classList.remove('open');
+            document.removeEventListener('click', closeIterationDropdownOnClickOutside);
+            document.removeEventListener('keydown', closeIterationDropdownOnEscape);
+        }
+
+        function selectIterationAll() {
+            if (selectedIterationStart === null) return;
+            selectedIterationStart = null;
+            selectedIterationEnd = null;
+            buildIterationSelector();
+            // Re-open dropdown
+            const dropdown = document.getElementById('iterationDropdown');
+            if (dropdown) dropdown.classList.add('open');
+            refreshFilesForIterationRange();
+        }
+
+        function selectIteration(num) {
+            selectedIterationStart = num;
+            selectedIterationEnd = num;
+            buildIterationSelector();
+            // Re-open dropdown
+            const dropdown = document.getElementById('iterationDropdown');
+            if (dropdown) dropdown.classList.add('open');
+            refreshFilesForIterationRange();
+        }
+
+        // Drag logic for iteration range handles
+        let iterationDragState = null;
+
+        function startIterationDrag(event, iterNum) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const isStart = iterNum === selectedIterationStart;
+            const isEnd = iterNum === selectedIterationEnd;
+            // Determine which handle: if both (single selection), decide by drag direction later
+            // For now, track both possibilities
+            iterationDragState = {
+                handle: isStart && isEnd ? 'both' : (isStart ? 'start' : 'end'),
+                originalStart: selectedIterationStart,
+                originalEnd: selectedIterationEnd,
+                anchorIteration: isStart && isEnd ? iterNum : (isStart ? selectedIterationEnd : selectedIterationStart),
+                initialY: event.clientY
+            };
+
+            document.addEventListener('mousemove', onIterationDrag);
+            document.addEventListener('mouseup', endIterationDrag);
+        }
+
+        function onIterationDrag(event) {
+            if (!iterationDragState) return;
+
+            // Find which iteration row the mouse is closest to
+            const rows = document.querySelectorAll('.iteration-row');
+            let closestIteration = null;
+            let closestDist = Infinity;
+            rows.forEach(row => {
+                const rect = row.getBoundingClientRect();
+                const rowMid = rect.top + rect.height / 2;
+                const dist = Math.abs(event.clientY - rowMid);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestIteration = parseInt(row.dataset.iteration);
+                }
+            });
+
+            if (closestIteration === null) return;
+
+            const state = iterationDragState;
+            if (state.handle === 'both') {
+                // Decide direction based on initial drag movement
+                if (Math.abs(event.clientY - state.initialY) > 5) {
+                    if (event.clientY < state.initialY) {
+                        state.handle = 'start';
+                        state.anchorIteration = state.originalEnd;
+                    } else {
+                        state.handle = 'end';
+                        state.anchorIteration = state.originalStart;
+                    }
+                } else {
+                    return; // Not enough movement yet
+                }
+            }
+
+            const anchor = state.anchorIteration;
+            const newStart = Math.min(anchor, closestIteration);
+            const newEnd = Math.max(anchor, closestIteration);
+
+            if (newStart !== selectedIterationStart || newEnd !== selectedIterationEnd) {
+                selectedIterationStart = newStart;
+                selectedIterationEnd = newEnd;
+                // Update visuals without re-fetching data
+                updateIterationDropdownVisuals();
+            }
+        }
+
+        function endIterationDrag() {
+            document.removeEventListener('mousemove', onIterationDrag);
+            document.removeEventListener('mouseup', endIterationDrag);
+
+            if (!iterationDragState) return;
+            const state = iterationDragState;
+            iterationDragState = null;
+
+            // Only refresh if the selection actually changed
+            if (selectedIterationStart !== state.originalStart || selectedIterationEnd !== state.originalEnd) {
+                // Update trigger text
+                const trigger = document.querySelector('.iteration-dropdown-trigger');
+                if (trigger) {
+                    trigger.textContent = getIterationTriggerText();
+                    trigger.classList.toggle('has-selection', selectedIterationStart !== null);
+                }
+                refreshFilesForIterationRange();
+            }
+        }
+
+        function updateIterationDropdownVisuals() {
+            const rows = document.querySelectorAll('.iteration-row');
+            const hasSel = selectedIterationStart !== null;
+            const total = allIterations.length;
+            rows.forEach(row => {
+                const num = parseInt(row.dataset.iteration);
+                const inRange = !hasSel || (num >= selectedIterationStart && num <= selectedIterationEnd);
+                const isStart = !hasSel ? num === 1 : num === selectedIterationStart;
+                const isEnd = !hasSel ? num === total : num === selectedIterationEnd;
+                const isEdge = isStart || isEnd;
+
+                row.classList.remove('range-edge', 'in-range', 'range-edge-start', 'range-edge-end');
+                if (isEdge) row.classList.add('range-edge');
+                else if (inRange) row.classList.add('in-range');
+                if (isStart) row.classList.add('range-edge-start');
+                if (isEnd) row.classList.add('range-edge-end');
+
+                // Update node: add/remove drag handler
+                const node = row.querySelector('.iteration-node');
+                if (node) {
+                    if (isEdge) {
+                        node.onmousedown = (e) => startIterationDrag(e, num);
+                        node.style.cursor = 'grab';
+                        node.style.width = '16px';
+                        node.style.height = '16px';
+                    } else {
+                        node.onmousedown = null;
+                        node.style.cursor = '';
+                        node.style.width = '';
+                        node.style.height = '';
+                    }
+                }
+            });
+
+            // Update trigger text
+            const trigger = document.querySelector('.iteration-dropdown-trigger');
+            if (trigger) {
+                trigger.textContent = getIterationTriggerText();
+                trigger.classList.toggle('has-selection', hasSel);
+            }
+
+            // Update All button
+            const allBtn = document.querySelector('.iteration-selector .iteration-btn');
+            if (allBtn) {
+                allBtn.classList.toggle('active', !hasSel);
+            }
+        }
+
+        async function refreshFilesForIterationRange() {
+            fileDiffCache.clear();
+            selectedFilePath = null;
+            fileTreeBuilt = false;
+
+            // Reset diff panel
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (diffPanel) {
+                diffPanel.innerHTML = '<div class="file-diff-empty">Select a file to view changes</div>';
+            }
+
+            try {
+                let compareTo, iterationId;
+                if (selectedIterationStart === null) {
+                    // "All" mode
+                    iterationId = allIterations.length;
+                    compareTo = 0;
+                } else {
+                    iterationId = selectedIterationEnd;
+                    compareTo = selectedIterationStart - 1;
+                }
+
+                const changesData = await ADOAPI.getPRIterationChanges(currentConfig, currentPRId, iterationId, compareTo);
+                allChangeEntries = changesData.changeEntries || [];
+
+                buildFileTree(allChangeEntries);
+                fileTreeBuilt = true;
+
+                // Update header with range info
+                const header = document.getElementById('fileTreeHeader');
+                if (header) {
+                    let label = `Changed Files (${allChangeEntries.filter(e => e.item?.path && e.item.gitObjectType !== 'tree' && !e.item.path.endsWith('/')).length})`;
+                    if (selectedIterationStart !== null) {
+                        if (selectedIterationStart === selectedIterationEnd) {
+                            label += ` — Update ${selectedIterationStart}`;
+                        } else {
+                            label += ` — Updates ${selectedIterationStart}-${selectedIterationEnd}`;
+                        }
+                    }
+                    header.textContent = label;
+                }
+
+                // Update Files tab count
+                const filesTabBtn = document.querySelector('.view-tab[data-view="files"]');
+                if (filesTabBtn) {
+                    const fileCount = allChangeEntries.filter(e => e.item?.path && e.item.gitObjectType !== 'tree' && !e.item.path.endsWith('/')).length;
+                    filesTabBtn.textContent = `Files (${fileCount})`;
+                }
+            } catch (e) {
+                console.error('Failed to refresh files for iteration range:', e);
+            }
+        }
+
+        function getIterationCommits() {
+            let baseCommit, sourceCommit;
+            if (selectedIterationStart === null) {
+                // "All" mode
+                baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
+                sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
+            } else {
+                // Iteration range mode
+                sourceCommit = allIterations[selectedIterationEnd - 1].sourceRefCommit?.commitId;
+                if (selectedIterationStart === 1) {
+                    baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
+                } else {
+                    baseCommit = allIterations[selectedIterationStart - 2].sourceRefCommit?.commitId;
+                }
+            }
+            return { baseCommit, sourceCommit };
+        }
+
         function toggleFileTreeDir(dirId) {
             const dir = document.getElementById(dirId);
             if (!dir) return;
@@ -5702,9 +6298,12 @@
             diffPanel.innerHTML = '<div class="file-diff-loading">Loading diff...</div>';
 
             try {
+                // Cache key includes iteration range
+                const cacheKey = `${filePath}:${selectedIterationStart ?? 'all'}-${selectedIterationEnd ?? 'all'}`;
+
                 // Check cache
-                if (fileDiffCache.has(filePath)) {
-                    const cached = fileDiffCache.get(filePath);
+                if (fileDiffCache.has(cacheKey)) {
+                    const cached = fileDiffCache.get(cacheKey);
                     renderFileDiff(filePath, changeType, cached.diff, cached.addedCount, cached.removedCount, cached.sourceServerItem);
                     return;
                 }
@@ -5715,9 +6314,8 @@
                 const changeEntry = allChangeEntries.find(e => e.item.path === filePath);
                 const sourceServerItem = changeEntry?.sourceServerItem;
 
-                // Determine commits for fetching content
-                const baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
-                const sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
+                // Determine commits based on iteration range
+                const { baseCommit, sourceCommit } = getIterationCommits();
 
                 if (!baseCommit || !sourceCommit) {
                     diffPanel.innerHTML = '<div class="file-diff-error">Cannot determine commits for diff comparison.</div>';
@@ -5758,7 +6356,7 @@
                 }
 
                 // Cache the result
-                fileDiffCache.set(filePath, { diff, addedCount, removedCount, sourceServerItem });
+                fileDiffCache.set(cacheKey, { diff, addedCount, removedCount, sourceServerItem });
 
                 renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem);
             } catch (error) {
