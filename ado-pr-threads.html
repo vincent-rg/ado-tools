@@ -2023,6 +2023,7 @@
         let selectedFilePath = null;
         let fileDiffCache = new Map();
         let fileTreeBuilt = false;
+        let currentMergeBase = null;
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
@@ -2264,6 +2265,33 @@
             return { added: totalAdded, removed: totalRemoved };
         }
 
+        async function resolveMergeBase(config) {
+            const sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
+            const targetBranchCommit = currentPRData.lastMergeTargetCommit?.commitId;
+
+            if (!sourceCommit || !targetBranchCommit) return null;
+
+            // Try iteration commonRefCommit first
+            if (allIterations.length > 0 && allIterations[0].commonRefCommit?.commitId) {
+                return allIterations[0].commonRefCommit.commitId;
+            }
+
+            // Fallback: merge bases API
+            try {
+                const mergeBasesData = await ADOAPI.getMergeBases(config, sourceCommit, targetBranchCommit);
+                const bases = mergeBasesData.value || [];
+                if (bases.length > 0) {
+                    return bases[0].commitId;
+                }
+            } catch (e) {
+                console.warn('Merge bases API failed:', e);
+            }
+
+            // Last resort: target branch HEAD
+            console.warn('Could not resolve merge base, falling back to lastMergeTargetCommit');
+            return targetBranchCommit;
+        }
+
         async function fetchLineStatsAsync(config, prData) {
             const iterationCount = allIterations.length;
             const cacheKey = getLineStatsCacheKey(config, prData.pullRequestId, iterationCount);
@@ -2292,48 +2320,16 @@
             updateLineStatsLoading();
 
             try {
-                const sourceCommit = prData.lastMergeSourceCommit?.commitId;
-                const targetBranchCommit = prData.lastMergeTargetCommit?.commitId;
+                const mergeBaseCommit = currentMergeBase || await resolveMergeBase(config);
 
-                if (!targetBranchCommit || !sourceCommit) {
-                    console.warn('Missing source or target commit, aborting');
+                if (!mergeBaseCommit) {
+                    console.warn('Missing merge base commit, aborting');
                     console.groupEnd();
                     hideLineStatsLoading();
                     return;
                 }
 
-                // Resolve the merge base (common ancestor) — this is what PR diffs should be against.
-                // Using target branch HEAD was the bug: it includes unrelated changes from the target branch.
-                let mergeBaseCommit = null;
-
-                // Try to get merge base from iteration data first (commonRefCommit)
-                if (allIterations.length > 0 && allIterations[0].commonRefCommit?.commitId) {
-                    mergeBaseCommit = allIterations[0].commonRefCommit.commitId;
-                    console.log('Merge base from iteration commonRefCommit:', mergeBaseCommit);
-                }
-
-                // Fallback: call merge bases API
-                if (!mergeBaseCommit) {
-                    try {
-                        console.log('commonRefCommit not available, calling merge bases API...');
-                        const mergeBasesData = await ADOAPI.getMergeBases(config, sourceCommit, targetBranchCommit);
-                        const bases = mergeBasesData.value || [];
-                        if (bases.length > 0) {
-                            mergeBaseCommit = bases[0].commitId;
-                            console.log('Merge base from API:', mergeBaseCommit);
-                        }
-                    } catch (e) {
-                        console.warn('Merge bases API failed:', e);
-                    }
-                }
-
-                // Last resort: fall back to target branch commit (old behavior)
-                if (!mergeBaseCommit) {
-                    mergeBaseCommit = targetBranchCommit;
-                    console.warn('Could not resolve merge base, falling back to lastMergeTargetCommit (old behavior):', mergeBaseCommit);
-                } else {
-                    console.log('Using merge base:', mergeBaseCommit, '(instead of target branch HEAD:', targetBranchCommit + ')');
-                }
+                console.log('Using merge base:', mergeBaseCommit);
 
                 // Get file changes from the latest iteration compared to base (compareTo=0)
                 // This gives cumulative changes across all pushes, not just the first push
@@ -3301,6 +3297,9 @@
                     }
                 }
                 currentFileChangeStats = fileChangeStats;
+
+                // Resolve merge base for file diffs and line stats
+                currentMergeBase = await resolveMergeBase(config);
 
                 // Debug: Log unique status values found in threads
                 const uniqueStatuses = new Set(allThreads.map(t => t.status));
@@ -5717,7 +5716,7 @@
                 const sourceServerItem = changeEntry?.sourceServerItem;
 
                 // Determine commits for fetching content
-                const baseCommit = currentPRData.lastMergeTargetCommit?.commitId;
+                const baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
                 const sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
 
                 if (!baseCommit || !sourceCommit) {
