@@ -222,40 +222,6 @@ const ADOAPI = {
     },
 
     /**
-     * Get file diffs using internal ADO API (undocumented)
-     * Returns line-level diff information for files
-     */
-    async getFileDiffs(config, repositoryId, baseCommit, targetCommit, filePaths) {
-        const url = `${config.serverUrl}/${config.organization}/_apis/Contribution/HierarchyQuery/project/${config.project}?api-version=5.1-preview`;
-
-        const body = {
-            contributionIds: ["ms.vss-code-web.file-diff-data-provider"],
-            dataProviderContext: {
-                properties: {
-                    repositoryId: repositoryId,
-                    diffParameters: {
-                        baseVersionCommit: baseCommit,
-                        targetVersionCommit: targetCommit,
-                        fileDiffParams: filePaths.map(p => ({ path: p, originalPath: p }))
-                    }
-                }
-            }
-        };
-
-        const response = await this.fetchWithAuth(url, config.pat, {
-            method: 'POST',
-            body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data.message || `Failed to fetch file diffs: ${response.status} ${response.statusText}`);
-        }
-
-        return response.json();
-    },
-
-    /**
      * Get file content at a specific version/iteration
      */
     async getFileContent(config, filePath, versionDescriptor) {
