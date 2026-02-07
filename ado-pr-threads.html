@@ -1389,7 +1389,6 @@
         .pr-title-bar {
             background: #f9f8f7;
             padding: 12px 20px;
-            border-bottom: 1px solid #e1dfdd;
         }
 
         .pr-title-bar h2 {
@@ -1571,6 +1570,281 @@
         .live-toggle-label {
             white-space: nowrap;
         }
+
+        /* View tabs */
+        .view-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #e1dfdd;
+            padding: 0 20px;
+            background: #f9f8f7;
+        }
+
+        .view-tab {
+            padding: 6px 16px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #605e5c;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.15s;
+        }
+
+        .view-tab:hover {
+            color: #323130;
+        }
+
+        .view-tab.active {
+            color: #0078d4;
+            border-bottom-color: #0078d4;
+        }
+
+        /* Files view layout */
+        #filesView {
+            display: none;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #filesView.active {
+            display: flex;
+        }
+
+        .files-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        /* File tree panel */
+        .file-tree-panel {
+            width: 300px;
+            min-width: 200px;
+            max-width: 500px;
+            border-right: 1px solid #e1dfdd;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .file-tree-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #323130;
+            border-bottom: 1px solid #e1dfdd;
+            background: #faf9f8;
+            flex-shrink: 0;
+        }
+
+        #fileTreeContainer {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .file-tree-dir {
+            user-select: none;
+        }
+
+        .file-tree-dir-label {
+            display: flex;
+            align-items: center;
+            padding: 3px 8px;
+            padding-left: calc(8px + var(--depth, 0) * 16px);
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+            gap: 4px;
+        }
+
+        .file-tree-dir-label:hover {
+            background: #f3f2f1;
+        }
+
+        .file-tree-toggle {
+            width: 16px;
+            text-align: center;
+            font-size: 10px;
+            color: #a19f9d;
+            flex-shrink: 0;
+        }
+
+        .file-tree-dir-name {
+            font-weight: 600;
+        }
+
+        .file-tree-dir-children {
+            display: none;
+        }
+
+        .file-tree-dir.expanded > .file-tree-dir-children {
+            display: block;
+        }
+
+        .file-tree-file {
+            display: flex;
+            align-items: center;
+            padding: 3px 8px;
+            padding-left: calc(28px + var(--depth, 0) * 16px);
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+            gap: 6px;
+        }
+
+        .file-tree-file:hover {
+            background: #f3f2f1;
+        }
+
+        .file-tree-file.selected {
+            background: #e1dfdd;
+        }
+
+        .file-tree-file-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-change-indicator {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 0 4px;
+            border-radius: 3px;
+            flex-shrink: 0;
+            line-height: 18px;
+        }
+
+        .file-change-indicator.add {
+            color: #1a7f37;
+            background: #dafbe1;
+        }
+
+        .file-change-indicator.edit {
+            color: #0550ae;
+            background: #ddf4ff;
+        }
+
+        .file-change-indicator.delete {
+            color: #cf222e;
+            background: #ffebe9;
+        }
+
+        .file-change-indicator.rename {
+            color: #8250df;
+            background: #fbefff;
+        }
+
+        /* File tree resize handle */
+        .file-tree-resize-handle {
+            position: absolute;
+            top: 0;
+            right: -3px;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 10;
+        }
+
+        .file-tree-resize-handle:hover {
+            background: rgba(0, 120, 212, 0.2);
+        }
+
+        /* File diff panel */
+        .file-diff-panel {
+            flex: 1;
+            overflow-y: auto;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-diff-header {
+            padding: 10px 16px;
+            border-bottom: 1px solid #e1dfdd;
+            background: #faf9f8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .file-diff-path {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .file-diff-stats {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .file-diff-stats .stat-added {
+            color: #1a7f37;
+        }
+
+        .file-diff-stats .stat-removed {
+            color: #cf222e;
+        }
+
+        .file-diff-rename-info {
+            font-size: 12px;
+            color: #8250df;
+            width: 100%;
+        }
+
+        .file-diff-body {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .file-diff-body pre {
+            margin: 0;
+            font-size: 12px;
+        }
+
+        .file-diff-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: #a19f9d;
+            font-size: 14px;
+        }
+
+        .file-diff-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: #605e5c;
+            font-size: 14px;
+            gap: 8px;
+        }
+
+        .file-diff-error {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: #a4262c;
+            font-size: 14px;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -1700,8 +1974,8 @@
                     <div id="configStatus" style="margin-top: 10px; font-size: 12px; color: #605e5c;"></div>
                 </div>
 
-                <div class="results-container">
-                    <div id="pr-title-bar-container"></div>
+                <div id="pr-title-bar-container"></div>
+                <div class="results-container" id="overviewView">
                     <div id="results">
                         <div id="pr-header-container"></div>
                         <div class="new-thread-container" id="newThreadContainer" style="display: none;">
@@ -1709,6 +1983,18 @@
                             <div id="newThreadFormContainer"></div>
                         </div>
                         <div id="thread-list-container"></div>
+                    </div>
+                </div>
+                <div id="filesView">
+                    <div class="files-layout">
+                        <div class="file-tree-panel">
+                            <div class="file-tree-resize-handle" id="fileTreeResizeHandle"></div>
+                            <div class="file-tree-header" id="fileTreeHeader">Changed Files</div>
+                            <div id="fileTreeContainer"></div>
+                        </div>
+                        <div class="file-diff-panel" id="fileDiffPanel">
+                            <div class="file-diff-empty">Select a file to view changes</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1732,6 +2018,11 @@
         let currentPRData = null;
         let currentConfig = null;
         let currentFileChangeStats = null;
+        let allChangeEntries = [];
+        let currentView = 'overview';
+        let selectedFilePath = null;
+        let fileDiffCache = new Map();
+        let fileTreeBuilt = false;
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
@@ -2475,8 +2766,21 @@
                     if (allIterations.length > 0) {
                         try {
                             const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, allIterations.length, 0);
-                            currentFileChangeStats = calculateFileChangeStats(changesData.changeEntries || []);
+                            const entries = changesData.changeEntries || [];
+                            allChangeEntries = entries;
+                            fileDiffCache.clear();
+                            fileTreeBuilt = false;
+                            currentFileChangeStats = calculateFileChangeStats(entries);
                             updateFileStats();
+                            // Rebuild file tree if currently in files view
+                            if (currentView === 'files') {
+                                buildFileTree(allChangeEntries);
+                            }
+                            // Update files tab count
+                            const filesTabBtn = document.querySelector('.view-tab[data-view="files"]');
+                            if (filesTabBtn) {
+                                filesTabBtn.textContent = `Files (${allChangeEntries.length})`;
+                            }
                             // Also refresh line stats
                             fetchLineStatsAsync(config, currentPRData);
                         } catch (e) {
@@ -2857,6 +3161,11 @@
                 params.set('search', search);
             }
 
+            // View (files/overview)
+            if (currentView === 'files') {
+                params.set('view', 'files');
+            }
+
             const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
             history.replaceState(null, '', newURL);
         }
@@ -2982,7 +3291,11 @@
                 if (allIterations.length > 0) {
                     try {
                         const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, allIterations.length, 0);
-                        fileChangeStats = calculateFileChangeStats(changesData.changeEntries || []);
+                        const entries = changesData.changeEntries || [];
+                        allChangeEntries = entries;
+                        fileDiffCache.clear();
+                        fileTreeBuilt = false;
+                        fileChangeStats = calculateFileChangeStats(entries);
                     } catch (e) {
                         console.warn('Failed to fetch file change stats:', e);
                     }
@@ -4710,12 +5023,17 @@
             }
 
             // PR title bar HTML (sticky, rendered outside #results)
+            const fileCount = allChangeEntries.length;
             const titleBarHtml = `
                 <div class="pr-title-bar">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
                         <span style="display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span>PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span></span>
                         <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
                     </h2>
+                </div>
+                <div class="view-tabs">
+                    <button class="view-tab${currentView === 'overview' ? ' active' : ''}" data-view="overview" onclick="switchView('overview')">Overview</button>
+                    <button class="view-tab${currentView === 'files' ? ' active' : ''}" data-view="files" onclick="switchView('files')">Files (${fileCount})</button>
                 </div>
             `;
 
@@ -5109,11 +5427,16 @@
             let threadListContainer = document.getElementById('thread-list-container');
 
             if (!headerContainer || !threadListContainer) {
-                // Recreate the structure (title bar is outside #results, sibling in .results-container)
+                // Recreate the structure (title bar is a sibling of overviewView in .main-content)
                 if (!titleBarContainer) {
                     titleBarContainer = document.createElement('div');
                     titleBarContainer.id = 'pr-title-bar-container';
-                    resultsDiv.parentNode.insertBefore(titleBarContainer, resultsDiv);
+                    const overviewView = document.getElementById('overviewView');
+                    if (overviewView) {
+                        overviewView.parentNode.insertBefore(titleBarContainer, overviewView);
+                    } else {
+                        resultsDiv.parentNode.insertBefore(titleBarContainer, resultsDiv);
+                    }
                 }
                 resultsDiv.innerHTML = `
                     <div id="pr-header-container"></div>
@@ -5133,6 +5456,18 @@
             headerContainer.innerHTML = headerHtml;
             newThreadContainer.style.display = '';
             threadListContainer.innerHTML = threadListHtml;
+
+            // Apply files view if restored from URL
+            if (currentView === 'files') {
+                const overviewView = document.getElementById('overviewView');
+                const filesView = document.getElementById('filesView');
+                if (overviewView) overviewView.style.display = 'none';
+                if (filesView) filesView.classList.add('active');
+                if (!fileTreeBuilt) {
+                    buildFileTree(allChangeEntries);
+                    fileTreeBuilt = true;
+                }
+            }
 
             // Load avatars
             AvatarLoader.loadPending();
@@ -5188,6 +5523,349 @@
                 }
             }, 0);
         }
+
+        // === FILES VIEW FUNCTIONS ===
+
+        function switchView(view) {
+            if (view === currentView) return;
+            currentView = view;
+
+            // Toggle active tab
+            document.querySelectorAll('.view-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.view === view);
+            });
+
+            const overviewView = document.getElementById('overviewView');
+            const filesView = document.getElementById('filesView');
+
+            if (view === 'files') {
+                if (overviewView) overviewView.style.display = 'none';
+                if (filesView) filesView.classList.add('active');
+
+                // Lazily build file tree on first switch
+                if (!fileTreeBuilt) {
+                    buildFileTree(allChangeEntries);
+                    fileTreeBuilt = true;
+                }
+            } else {
+                if (overviewView) overviewView.style.display = '';
+                if (filesView) filesView.classList.remove('active');
+            }
+
+            // Update URL param
+            const url = new URL(window.location);
+            if (view === 'files') {
+                url.searchParams.set('view', 'files');
+            } else {
+                url.searchParams.delete('view');
+            }
+            history.replaceState(null, '', url);
+        }
+
+        function buildFileTree(changeEntries) {
+            const container = document.getElementById('fileTreeContainer');
+            const header = document.getElementById('fileTreeHeader');
+            if (!container) return;
+
+            if (changeEntries.length === 0) {
+                if (header) header.textContent = 'Changed Files (0)';
+                container.innerHTML = '<div style="padding: 16px; color: #a19f9d; font-size: 13px;">No changed files</div>';
+                return;
+            }
+
+            // Build tree structure (filter out folder entries from ADO API)
+            const root = { name: '', path: '', children: new Map(), files: [] };
+            let fileCount = 0;
+
+            for (const entry of changeEntries) {
+                // Skip entries without a path, and folder/tree entries
+                if (!entry.item?.path || entry.item.gitObjectType === 'tree' || entry.item.path.endsWith('/')) continue;
+                const filePath = entry.item.path;
+                const parts = filePath.split('/').filter(p => p);
+
+                // Skip entries with no path segments (shouldn't happen, but guard)
+                if (parts.length === 0) continue;
+
+                let current = root;
+
+                for (let i = 0; i < parts.length - 1; i++) {
+                    const dirName = parts[i];
+                    if (!current.children.has(dirName)) {
+                        const dirPath = '/' + parts.slice(0, i + 1).join('/');
+                        current.children.set(dirName, { name: dirName, path: dirPath, children: new Map(), files: [] });
+                    }
+                    current = current.children.get(dirName);
+                }
+
+                // Add file to its parent directory
+                const fileName = parts[parts.length - 1];
+                current.files.push({
+                    name: fileName,
+                    path: filePath,
+                    changeType: entry.changeType,
+                    sourceServerItem: entry.sourceServerItem
+                });
+                fileCount++;
+            }
+
+            if (header) header.textContent = `Changed Files (${fileCount})`;
+
+            // Collapse single-child directory chains (e.g. src > app > components → src/app/components)
+            function collapseDir(node) {
+                for (const [key, child] of node.children) {
+                    collapseDir(child);
+                }
+                while (node.children.size === 1 && node.files.length === 0) {
+                    const childNode = node.children.values().next().value;
+                    node.name = node.name ? node.name + '/' + childNode.name : childNode.name;
+                    node.path = childNode.path;
+                    node.children = childNode.children;
+                    node.files = childNode.files;
+                }
+            }
+
+            for (const [key, child] of root.children) {
+                collapseDir(child);
+            }
+
+            // Render tree
+            let idCounter = 0;
+            function renderNode(node, depth) {
+                let html = '';
+
+                // Sort: directories first (alphabetical), then files (alphabetical)
+                const sortedDirs = Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name));
+                const sortedFiles = node.files.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+                for (const dir of sortedDirs) {
+                    const dirId = 'ftd_' + (idCounter++);
+                    html += `<div class="file-tree-dir expanded" id="${dirId}">`;
+                    html += `<div class="file-tree-dir-label" style="--depth: ${depth}" onclick="toggleFileTreeDir('${dirId}')">`;
+                    html += `<span class="file-tree-toggle">▼</span>`;
+                    html += `<span class="file-tree-dir-name">${ADOContent.escapeHtml(dir.name)}</span>`;
+                    html += `</div>`;
+                    html += `<div class="file-tree-dir-children">`;
+                    html += renderNode(dir, depth + 1);
+                    html += `</div></div>`;
+                }
+
+                for (const file of sortedFiles) {
+                    const indicator = getChangeIndicator(file.changeType);
+                    const escapedPath = ADOContent.escapeHtml(file.path);
+                    const escapedChangeType = ADOContent.escapeHtml(file.changeType);
+                    html += `<div class="file-tree-file" style="--depth: ${depth}" data-path="${escapedPath}" onclick="selectFileForDiff('${ADOContent.escapeJs(file.path)}', '${ADOContent.escapeJs(file.changeType)}')">`;
+                    html += indicator;
+                    html += `<span class="file-tree-file-name" title="${escapedPath}">${ADOContent.escapeHtml(file.name)}</span>`;
+                    html += `</div>`;
+                }
+
+                return html;
+            }
+
+            container.innerHTML = renderNode(root, 0);
+        }
+
+        function toggleFileTreeDir(dirId) {
+            const dir = document.getElementById(dirId);
+            if (!dir) return;
+            dir.classList.toggle('expanded');
+            const toggle = dir.querySelector('.file-tree-toggle');
+            if (toggle) {
+                toggle.textContent = dir.classList.contains('expanded') ? '▼' : '▶';
+            }
+        }
+
+        function getChangeIndicator(changeType) {
+            const ct = changeType.toLowerCase();
+            if (ct.includes('add')) {
+                return '<span class="file-change-indicator add">A</span>';
+            } else if (ct.includes('delete')) {
+                return '<span class="file-change-indicator delete">D</span>';
+            } else if (ct.includes('rename')) {
+                return '<span class="file-change-indicator rename">R</span>';
+            } else {
+                return '<span class="file-change-indicator edit">M</span>';
+            }
+        }
+
+        async function selectFileForDiff(filePath, changeType) {
+            // Highlight selected file in tree
+            document.querySelectorAll('.file-tree-file.selected').forEach(el => el.classList.remove('selected'));
+            const fileEl = document.querySelector(`.file-tree-file[data-path="${CSS.escape(filePath)}"]`);
+            if (fileEl) fileEl.classList.add('selected');
+
+            selectedFilePath = filePath;
+
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            // Show loading
+            diffPanel.innerHTML = '<div class="file-diff-loading">Loading diff...</div>';
+
+            try {
+                // Check cache
+                if (fileDiffCache.has(filePath)) {
+                    const cached = fileDiffCache.get(filePath);
+                    renderFileDiff(filePath, changeType, cached.diff, cached.addedCount, cached.removedCount, cached.sourceServerItem);
+                    return;
+                }
+
+                const ct = changeType.toLowerCase();
+
+                // Find the change entry for source info
+                const changeEntry = allChangeEntries.find(e => e.item.path === filePath);
+                const sourceServerItem = changeEntry?.sourceServerItem;
+
+                // Determine commits for fetching content
+                const baseCommit = currentPRData.lastMergeTargetCommit?.commitId;
+                const sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
+
+                if (!baseCommit || !sourceCommit) {
+                    diffPanel.innerHTML = '<div class="file-diff-error">Cannot determine commits for diff comparison.</div>';
+                    return;
+                }
+
+                let oldContent = '';
+                let newContent = '';
+
+                if (ct.includes('add')) {
+                    // New file: no old content
+                    newContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
+                } else if (ct.includes('delete')) {
+                    // Deleted file: no new content
+                    oldContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: baseCommit, versionType: 'commit' });
+                } else {
+                    // Edit or rename: fetch both
+                    const oldPath = sourceServerItem || filePath;
+                    const [oldResult, newResult] = await Promise.all([
+                        ADOAPI.getFileContent(currentConfig, oldPath, { version: baseCommit, versionType: 'commit' }),
+                        ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' })
+                    ]);
+                    oldContent = oldResult;
+                    newContent = newResult;
+                }
+
+                // Check if the user navigated away while loading
+                if (selectedFilePath !== filePath) return;
+
+                const diff = HistogramDiff.diff(oldContent, newContent);
+
+                // Count added/removed
+                let addedCount = 0;
+                let removedCount = 0;
+                for (const entry of diff) {
+                    if (entry.type === 'added') addedCount++;
+                    else if (entry.type === 'removed') removedCount++;
+                }
+
+                // Cache the result
+                fileDiffCache.set(filePath, { diff, addedCount, removedCount, sourceServerItem });
+
+                renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem);
+            } catch (error) {
+                console.error('Failed to load file diff:', error);
+                if (selectedFilePath === filePath) {
+                    diffPanel.innerHTML = `<div class="file-diff-error">Failed to load diff: ${ADOContent.escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem) {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            const indicator = getChangeIndicator(changeType);
+            const ct = changeType.toLowerCase();
+
+            let renameInfo = '';
+            if (ct.includes('rename') && sourceServerItem) {
+                renameInfo = `<div class="file-diff-rename-info">Renamed from ${ADOContent.escapeHtml(sourceServerItem)}</div>`;
+            }
+
+            let headerHtml = `
+                <div class="file-diff-header">
+                    ${indicator}
+                    <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
+                    <div class="file-diff-stats">
+                        <span class="stat-added">+${addedCount}</span>
+                        <span class="stat-removed">-${removedCount}</span>
+                    </div>
+                    ${renameInfo}
+                </div>
+            `;
+
+            // Build diff lines
+            let diffHtml = '';
+            let oldLineNum = 1;
+            let newLineNum = 1;
+
+            for (const entry of diff) {
+                const escapedContent = ADOContent.escapeHtml(entry.content);
+                if (entry.type === 'unchanged') {
+                    diffHtml += `<div class="diff-line diff-unchanged"><span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator"> </span><span class="diff-content">${escapedContent}</span></div>`;
+                    oldLineNum++;
+                    newLineNum++;
+                } else if (entry.type === 'removed') {
+                    diffHtml += `<div class="diff-line diff-removed"><span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number"></span><span class="diff-indicator">−</span><span class="diff-content">${escapedContent}</span></div>`;
+                    oldLineNum++;
+                } else if (entry.type === 'added') {
+                    diffHtml += `<div class="diff-line diff-added"><span class="diff-line-number"></span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator">+</span><span class="diff-content">${escapedContent}</span></div>`;
+                    newLineNum++;
+                }
+            }
+
+            diffPanel.innerHTML = `
+                ${headerHtml}
+                <div class="file-diff-body">
+                    <pre>${diffHtml}</pre>
+                </div>
+            `;
+        }
+
+        // File tree panel resize functionality
+        (function initFileTreeResize() {
+            const resizeHandle = document.getElementById('fileTreeResizeHandle');
+            const panel = document.querySelector('.file-tree-panel');
+            if (!resizeHandle || !panel) return;
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = panel.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const diff = e.clientX - startX;
+                const newWidth = startWidth + diff;
+                if (newWidth >= 200 && newWidth <= 500) {
+                    panel.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
+
+        // Restore view from URL on load
+        (function restoreViewFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('view') === 'files') {
+                // Will be applied after PR loads — just set the variable
+                currentView = 'files';
+            }
+        })();
 
         // Left sidebar resize functionality
         (function initLeftSidebarResize() {
