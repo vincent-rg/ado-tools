@@ -2092,6 +2092,169 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+
+        /* File view mode selector */
+        .file-view-mode-bar {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 6px 12px;
+            border-bottom: 1px solid #e1dfdd;
+            background: #faf9f8;
+            flex-shrink: 0;
+        }
+
+        .file-view-mode-btn {
+            padding: 2px 8px;
+            border: 1px solid #c8c6c4;
+            background: #fff;
+            cursor: pointer;
+            font-size: 11px;
+            color: #605e5c;
+            line-height: 18px;
+        }
+
+        .file-view-mode-btn:first-child {
+            border-radius: 3px 0 0 3px;
+        }
+
+        .file-view-mode-btn:last-child {
+            border-radius: 0 3px 3px 0;
+        }
+
+        .file-view-mode-btn:not(:first-child) {
+            border-left: none;
+        }
+
+        .file-view-mode-btn:hover {
+            background: #f3f2f1;
+            color: #323130;
+        }
+
+        .file-view-mode-btn.active {
+            background: #0078d4;
+            color: #fff;
+            border-color: #0078d4;
+        }
+
+        .file-view-mode-btn.active + .file-view-mode-btn {
+            border-left: 1px solid #c8c6c4;
+        }
+
+        /* Thread count badge on files */
+        .file-thread-count {
+            font-size: 10px;
+            font-weight: 700;
+            background: #e1dfdd;
+            color: #605e5c;
+            border-radius: 8px;
+            padding: 0 5px;
+            line-height: 16px;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+
+        .file-thread-count.has-active {
+            background: #fff4ce;
+            color: #835c00;
+        }
+
+        /* Thread sub-list under files */
+        .file-tree-threads {
+            padding-left: calc(28px + var(--depth, 0) * 16px);
+        }
+
+        .file-tree-thread {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            cursor: pointer;
+            font-size: 11px;
+            color: #605e5c;
+        }
+
+        .file-tree-thread:hover {
+            background: #f3f2f1;
+        }
+
+        .thread-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .thread-status-dot.active {
+            background: #0078d4;
+        }
+
+        .thread-status-dot.pending {
+            background: #ffaa44;
+        }
+
+        .thread-status-dot.fixed,
+        .thread-status-dot.closed,
+        .thread-status-dot.wontFix {
+            background: #a19f9d;
+        }
+
+        .thread-status-dot.byDesign {
+            background: #a19f9d;
+        }
+
+        .thread-preview {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        /* Directory indicators */
+        .dir-indicators {
+            display: inline-flex;
+            gap: 3px;
+            margin-left: 6px;
+            align-items: center;
+        }
+
+        .dir-indicator-change {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #0550ae;
+        }
+
+        .dir-indicator-comment {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #bf8700;
+        }
+
+        /* Comment-only file indicator */
+        .file-change-indicator.comment {
+            color: #835c00;
+            background: #fff4ce;
+        }
+
+        /* No-change file (all files mode) */
+        .file-tree-file.no-change {
+            color: #a19f9d;
+        }
+
+        .file-tree-file.no-change .file-tree-file-name {
+            color: #a19f9d;
+        }
+
+        /* Lazy-loading directory indicator */
+        .file-tree-dir-loading {
+            padding: 3px 8px;
+            padding-left: calc(28px + var(--depth, 0) * 16px);
+            font-size: 11px;
+            color: #a19f9d;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -2237,6 +2400,11 @@
                         <div class="file-tree-panel">
                             <div class="file-tree-resize-handle" id="fileTreeResizeHandle"></div>
                             <div class="iteration-selector" id="iterationSelector" style="display: none;"></div>
+                            <div class="file-view-mode-bar" id="fileViewModeBar">
+                                <button class="file-view-mode-btn active" data-mode="changed" onclick="setFileViewMode('changed')">Changed</button>
+                                <button class="file-view-mode-btn" data-mode="commented" onclick="setFileViewMode('commented')">With comments</button>
+                                <button class="file-view-mode-btn" data-mode="all" onclick="setFileViewMode('all')">All files</button>
+                            </div>
                             <div class="file-tree-header" id="fileTreeHeader">Changed Files</div>
                             <div id="fileTreeContainer"></div>
                         </div>
@@ -2274,6 +2442,12 @@
         let currentMergeBase = null;
         let selectedIterationStart = null; // null = "all"
         let selectedIterationEnd = null;
+        let threadsByFilePath = new Map();     // Map<filePath, Thread[]>
+        let fileViewMode = 'changed';          // 'changed' | 'commented' | 'all'
+        let repoTreeCache = new Map();         // Map<dirPath, Array<item>>
+        let repoTreeFullyLoaded = false;
+        let commentedFilePaths = new Set();    // Files with threads but not in changeEntries
+        let changedFilePaths = new Set();      // Files in changeEntries
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
@@ -2385,6 +2559,30 @@
         async function getFilePathAtIteration(filePath, knownIterationId, targetIterationId) {
             const history = await buildFilePathHistory(filePath, knownIterationId);
             return history.get(targetIterationId) || filePath;
+        }
+
+        function buildThreadsByFilePath() {
+            threadsByFilePath.clear();
+            commentedFilePaths.clear();
+            changedFilePaths.clear();
+            for (const thread of allThreads) {
+                if (thread.isDeleted) continue;
+                const fp = thread.threadContext?.filePath;
+                if (!fp) continue;
+                // Skip system threads (no real comments)
+                const hasRealComment = thread.comments?.some(c => c.commentType !== 'system');
+                if (!hasRealComment) continue;
+                if (!threadsByFilePath.has(fp)) threadsByFilePath.set(fp, []);
+                threadsByFilePath.get(fp).push(thread);
+            }
+            for (const entry of allChangeEntries) {
+                if (entry.item?.path && entry.item.gitObjectType !== 'tree' && !entry.item.path.endsWith('/')) {
+                    changedFilePaths.add(entry.item.path);
+                }
+            }
+            for (const fp of threadsByFilePath.keys()) {
+                if (!changedFilePaths.has(fp)) commentedFilePaths.add(fp);
+            }
         }
 
         function calculateFileChangeStats(changeEntries) {
@@ -2956,6 +3154,7 @@
                 }));
                 if (compareThreads(newThreads) !== compareThreads(allThreads)) {
                     allThreads = newThreads;
+                    buildThreadsByFilePath();
                     updateThreadStats();
                     // Re-apply filters to refresh thread display
                     applyThreadFilters();
@@ -3552,6 +3751,9 @@
                 // Resolve merge base for file diffs and line stats
                 currentMergeBase = await resolveMergeBase(config);
 
+                // Build thread-to-file mapping
+                buildThreadsByFilePath();
+
                 // Debug: Log unique status values found in threads
                 const uniqueStatuses = new Set(allThreads.map(t => t.status));
                 console.log('Loaded threads. Unique status values found:', Array.from(uniqueStatuses));
@@ -3568,6 +3770,9 @@
 
                 // Restore filters from URL (if any) and apply
                 restoreFiltersFromURL();
+
+                // Start background repo tree preload
+                preloadRepoTree();
 
             } catch (error) {
                 ADOUI.showError('results', error.message);
@@ -5814,55 +6019,129 @@
             history.replaceState(null, '', url);
         }
 
+        function setFileViewMode(mode) {
+            if (mode === fileViewMode) return;
+            fileViewMode = mode;
+            // Update buttons
+            document.querySelectorAll('.file-view-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            if (mode === 'all') {
+                buildAllFilesTree();
+            } else {
+                buildFileTree(allChangeEntries);
+            }
+        }
+
+        function addFileToTree(root, filePath, changeType, sourceServerItem) {
+            const parts = filePath.split('/').filter(p => p);
+            if (parts.length === 0) return;
+            let current = root;
+            for (let i = 0; i < parts.length - 1; i++) {
+                const dirName = parts[i];
+                if (!current.children.has(dirName)) {
+                    const dirPath = '/' + parts.slice(0, i + 1).join('/');
+                    current.children.set(dirName, { name: dirName, path: dirPath, children: new Map(), files: [] });
+                }
+                current = current.children.get(dirName);
+            }
+            const fileName = parts[parts.length - 1];
+            // Avoid duplicates
+            if (!current.files.some(f => f.path === filePath)) {
+                current.files.push({ name: fileName, path: filePath, changeType, sourceServerItem });
+            }
+        }
+
+        function stripMarkdown(text) {
+            if (!text) return '';
+            return text
+                .replace(/```[\s\S]*?```/g, '[code]')
+                .replace(/`[^`]+`/g, '[code]')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/[*_~#>]/g, '')
+                .trim();
+        }
+
+        function renderThreadSubList(filePath, depth) {
+            const threads = threadsByFilePath.get(filePath);
+            if (!threads || threads.length === 0) return '';
+            let html = `<div class="file-tree-threads" style="--depth: ${depth}">`;
+            for (const thread of threads) {
+                const firstComment = thread.comments?.find(c => c.commentType !== 'system');
+                if (!firstComment) continue;
+                const author = firstComment.author?.displayName || 'Unknown';
+                const content = stripMarkdown(firstComment.content || '');
+                const preview = content.length > 60 ? content.substring(0, 60) + '...' : content;
+                const statusCls = thread.status || 'active';
+                const lineInfo = thread.threadContext?.rightFileStart?.line || thread.threadContext?.leftFileStart?.line;
+                const lineLabel = lineInfo ? `L${lineInfo}: ` : '';
+                html += `<div class="file-tree-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}')">`;
+                html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
+                html += `<span class="thread-preview">${lineLabel}${ADOContent.escapeHtml(author)}: ${ADOContent.escapeHtml(preview)}</span>`;
+                html += '</div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function getThreadCountBadge(filePath) {
+            const threads = threadsByFilePath.get(filePath);
+            if (!threads || threads.length === 0) return '';
+            const hasActive = threads.some(t => t.status === 'active' || t.status === undefined);
+            return `<span class="file-thread-count${hasActive ? ' has-active' : ''}">${threads.length}</span>`;
+        }
+
+        // Propagate hasChanges/hasComments up the tree
+        function propagateIndicators(node) {
+            let hasChanges = false;
+            let hasComments = false;
+            for (const file of node.files) {
+                if (file.changeType && file.changeType !== 'none') hasChanges = true;
+                if (threadsByFilePath.has(file.path)) hasComments = true;
+            }
+            for (const [, child] of node.children) {
+                propagateIndicators(child);
+                if (child.hasChanges) hasChanges = true;
+                if (child.hasComments) hasComments = true;
+            }
+            node.hasChanges = hasChanges;
+            node.hasComments = hasComments;
+        }
+
         function buildFileTree(changeEntries) {
             const container = document.getElementById('fileTreeContainer');
             const header = document.getElementById('fileTreeHeader');
             if (!container) return;
 
-            if (changeEntries.length === 0) {
-                if (header) header.textContent = 'Changed Files (0)';
-                container.innerHTML = '<div style="padding: 16px; color: #a19f9d; font-size: 13px;">No changed files</div>';
-                return;
-            }
-
-            // Build tree structure (filter out folder entries from ADO API)
+            // Build tree structure from change entries
             const root = { name: '', path: '', children: new Map(), files: [] };
             let fileCount = 0;
 
             for (const entry of changeEntries) {
-                // Skip entries without a path, and folder/tree entries
                 if (!entry.item?.path || entry.item.gitObjectType === 'tree' || entry.item.path.endsWith('/')) continue;
-                const filePath = entry.item.path;
-                const parts = filePath.split('/').filter(p => p);
-
-                // Skip entries with no path segments (shouldn't happen, but guard)
-                if (parts.length === 0) continue;
-
-                let current = root;
-
-                for (let i = 0; i < parts.length - 1; i++) {
-                    const dirName = parts[i];
-                    if (!current.children.has(dirName)) {
-                        const dirPath = '/' + parts.slice(0, i + 1).join('/');
-                        current.children.set(dirName, { name: dirName, path: dirPath, children: new Map(), files: [] });
-                    }
-                    current = current.children.get(dirName);
-                }
-
-                // Add file to its parent directory
-                const fileName = parts[parts.length - 1];
-                current.files.push({
-                    name: fileName,
-                    path: filePath,
-                    changeType: entry.changeType,
-                    sourceServerItem: entry.sourceServerItem
-                });
+                addFileToTree(root, entry.item.path, entry.changeType, entry.sourceServerItem);
                 fileCount++;
             }
 
-            if (header) header.textContent = `Changed Files (${fileCount})`;
+            // In 'commented' mode, also add files that have threads but are not changed
+            if (fileViewMode === 'commented') {
+                for (const fp of commentedFilePaths) {
+                    addFileToTree(root, fp, 'none', null);
+                    fileCount++;
+                }
+            }
 
-            // Collapse single-child directory chains (e.g. src > app > components → src/app/components)
+            if (fileCount === 0) {
+                const label = fileViewMode === 'changed' ? 'No changed files' : 'No files';
+                if (header) header.textContent = label;
+                container.innerHTML = `<div style="padding: 16px; color: #a19f9d; font-size: 13px;">${label}</div>`;
+                return;
+            }
+
+            const headerLabel = fileViewMode === 'commented' ? 'Files' : 'Changed Files';
+            if (header) header.textContent = `${headerLabel} (${fileCount})`;
+
+            // Collapse single-child directory chains
             function collapseDir(node) {
                 for (const [key, child] of node.children) {
                     collapseDir(child);
@@ -5880,21 +6159,30 @@
                 collapseDir(child);
             }
 
+            // Propagate indicators
+            propagateIndicators(root);
+
             // Render tree
             let idCounter = 0;
             function renderNode(node, depth) {
                 let html = '';
-
-                // Sort: directories first (alphabetical), then files (alphabetical)
                 const sortedDirs = Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name));
                 const sortedFiles = node.files.slice().sort((a, b) => a.name.localeCompare(b.name));
 
                 for (const dir of sortedDirs) {
                     const dirId = 'ftd_' + (idCounter++);
+                    let indicators = '';
+                    if (dir.hasChanges || dir.hasComments) {
+                        indicators = '<span class="dir-indicators">';
+                        if (dir.hasChanges) indicators += '<span class="dir-indicator-change" title="Contains changes"></span>';
+                        if (dir.hasComments) indicators += '<span class="dir-indicator-comment" title="Contains comments"></span>';
+                        indicators += '</span>';
+                    }
                     html += `<div class="file-tree-dir expanded" id="${dirId}">`;
                     html += `<div class="file-tree-dir-label" style="--depth: ${depth}" onclick="toggleFileTreeDir('${dirId}')">`;
                     html += `<span class="file-tree-toggle">▼</span>`;
                     html += `<span class="file-tree-dir-name">${ADOContent.escapeHtml(dir.name)}</span>`;
+                    html += indicators;
                     html += `</div>`;
                     html += `<div class="file-tree-dir-children">`;
                     html += renderNode(dir, depth + 1);
@@ -5902,19 +6190,176 @@
                 }
 
                 for (const file of sortedFiles) {
-                    const indicator = getChangeIndicator(file.changeType);
+                    const isCommentOnly = file.changeType === 'none';
+                    const indicator = isCommentOnly
+                        ? '<span class="file-change-indicator comment">C</span>'
+                        : getChangeIndicator(file.changeType);
                     const escapedPath = ADOContent.escapeHtml(file.path);
-                    const escapedChangeType = ADOContent.escapeHtml(file.changeType);
-                    html += `<div class="file-tree-file" style="--depth: ${depth}" data-path="${escapedPath}" onclick="selectFileForDiff('${ADOContent.escapeJs(file.path)}', '${ADOContent.escapeJs(file.changeType)}')">`;
+                    const fileCls = isCommentOnly ? 'file-tree-file no-change' : 'file-tree-file';
+                    html += `<div class="${fileCls}" style="--depth: ${depth}" data-path="${escapedPath}" onclick="selectFileForDiff('${ADOContent.escapeJs(file.path)}', '${ADOContent.escapeJs(file.changeType)}')">`;
                     html += indicator;
                     html += `<span class="file-tree-file-name" title="${escapedPath}">${ADOContent.escapeHtml(file.name)}</span>`;
+                    html += getThreadCountBadge(file.path);
                     html += `</div>`;
+                    html += renderThreadSubList(file.path, depth);
                 }
 
                 return html;
             }
 
             container.innerHTML = renderNode(root, 0);
+        }
+
+        function getSourceCommitVersion() {
+            const { sourceCommit } = getIterationCommits();
+            return sourceCommit ? { version: sourceCommit, versionType: 'commit' } : null;
+        }
+
+        async function buildAllFilesTree() {
+            const container = document.getElementById('fileTreeContainer');
+            const header = document.getElementById('fileTreeHeader');
+            if (!container) return;
+            if (header) header.textContent = 'All Files';
+            container.innerHTML = '<div style="padding: 16px; color: #a19f9d; font-size: 13px;">Loading...</div>';
+
+            try {
+                const ver = getSourceCommitVersion();
+                // Try cache first (from background preload)
+                let items;
+                if (repoTreeCache.has('/')) {
+                    items = repoTreeCache.get('/');
+                } else {
+                    const data = await ADOAPI.getRepoItems(currentConfig, '/', ver);
+                    items = (data.value || []).filter(item => item.path !== '/');
+                    repoTreeCache.set('/', items);
+                }
+                renderAllFilesLevel(container, items, 0);
+            } catch (e) {
+                console.error('Failed to load repo tree:', e);
+                container.innerHTML = '<div style="padding: 16px; color: #a4262c; font-size: 13px;">Failed to load files</div>';
+            }
+        }
+
+        function renderAllFilesLevel(container, items, depth) {
+            let html = '';
+            const dirs = items.filter(i => i.isFolder).sort((a, b) => a.path.localeCompare(b.path));
+            const files = items.filter(i => !i.isFolder).sort((a, b) => a.path.localeCompare(b.path));
+
+            for (const dir of dirs) {
+                const dirName = dir.path.split('/').filter(p => p).pop() || dir.path;
+                const dirId = 'ftda_' + dir.path.replace(/[^a-zA-Z0-9]/g, '_');
+                const hasChanges = [...changedFilePaths].some(fp => fp.startsWith(dir.path + '/') || fp.startsWith(dir.path));
+                const hasComments = [...threadsByFilePath.keys()].some(fp => fp.startsWith(dir.path + '/') || fp.startsWith(dir.path));
+                let indicators = '';
+                if (hasChanges || hasComments) {
+                    indicators = '<span class="dir-indicators">';
+                    if (hasChanges) indicators += '<span class="dir-indicator-change" title="Contains changes"></span>';
+                    if (hasComments) indicators += '<span class="dir-indicator-comment" title="Contains comments"></span>';
+                    indicators += '</span>';
+                }
+                html += `<div class="file-tree-dir" id="${dirId}">`;
+                html += `<div class="file-tree-dir-label" style="--depth: ${depth}" onclick="expandRepoDir('${ADOContent.escapeJs(dir.path)}', '${dirId}', ${depth})">`;
+                html += `<span class="file-tree-toggle">▶</span>`;
+                html += `<span class="file-tree-dir-name">${ADOContent.escapeHtml(dirName)}</span>`;
+                html += indicators;
+                html += `</div>`;
+                html += `<div class="file-tree-dir-children"></div>`;
+                html += `</div>`;
+            }
+
+            for (const file of files) {
+                const fileName = file.path.split('/').filter(p => p).pop() || file.path;
+                const filePath = file.path;
+                const isChanged = changedFilePaths.has(filePath);
+                const isCommentedOnly = !isChanged && threadsByFilePath.has(filePath);
+                const changeType = isChanged
+                    ? (allChangeEntries.find(e => e.item?.path === filePath)?.changeType || 'edit')
+                    : (isCommentedOnly ? 'none' : '');
+                let indicator = '';
+                if (isChanged) indicator = getChangeIndicator(changeType);
+                else if (isCommentedOnly) indicator = '<span class="file-change-indicator comment">C</span>';
+                const fileCls = isChanged ? 'file-tree-file' : (isCommentedOnly ? 'file-tree-file no-change' : 'file-tree-file no-change');
+                const escapedPath = ADOContent.escapeHtml(filePath);
+                html += `<div class="${fileCls}" style="--depth: ${depth}" data-path="${escapedPath}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changeType || 'none')}')">`;
+                html += indicator;
+                html += `<span class="file-tree-file-name" title="${escapedPath}">${ADOContent.escapeHtml(fileName)}</span>`;
+                html += getThreadCountBadge(filePath);
+                html += `</div>`;
+                html += renderThreadSubList(filePath, depth);
+            }
+
+            container.innerHTML = html;
+        }
+
+        async function expandRepoDir(dirPath, dirId, depth) {
+            const dirEl = document.getElementById(dirId);
+            if (!dirEl) return;
+
+            // Toggle if already expanded
+            if (dirEl.classList.contains('expanded')) {
+                dirEl.classList.remove('expanded');
+                const toggle = dirEl.querySelector('.file-tree-toggle');
+                if (toggle) toggle.textContent = '▶';
+                const children = dirEl.querySelector('.file-tree-dir-children');
+                if (children) children.style.display = 'none';
+                return;
+            }
+
+            dirEl.classList.add('expanded');
+            const toggle = dirEl.querySelector('.file-tree-toggle');
+            if (toggle) toggle.textContent = '▼';
+            const childrenContainer = dirEl.querySelector('.file-tree-dir-children');
+            if (!childrenContainer) return;
+            childrenContainer.style.display = '';
+
+            // If already loaded, just show
+            if (childrenContainer.children.length > 0) return;
+
+            childrenContainer.innerHTML = `<div class="file-tree-dir-loading" style="--depth: ${depth + 1}">Loading...</div>`;
+
+            try {
+                let items;
+                if (repoTreeCache.has(dirPath)) {
+                    items = repoTreeCache.get(dirPath);
+                } else {
+                    const ver = getSourceCommitVersion();
+                    const data = await ADOAPI.getRepoItems(currentConfig, dirPath, ver);
+                    // Filter out the directory itself (API returns it as first item)
+                    items = (data.value || []).filter(item => item.path !== dirPath);
+                    repoTreeCache.set(dirPath, items);
+                }
+                renderAllFilesLevel(childrenContainer, items, depth + 1);
+            } catch (e) {
+                childrenContainer.innerHTML = `<div class="file-tree-dir-loading" style="--depth: ${depth + 1}">Failed to load</div>`;
+                console.error('Failed to expand directory:', e);
+            }
+        }
+
+        async function preloadRepoTree() {
+            if (repoTreeFullyLoaded) return;
+            try {
+                const ver = getSourceCommitVersion();
+                const data = await ADOAPI.getRepoTree(currentConfig, ver);
+                const allItems = data.value || [];
+                // Group items by parent directory
+                const byParent = new Map();
+                for (const item of allItems) {
+                    const parts = item.path.split('/');
+                    const parentPath = parts.length <= 2 ? '/' : parts.slice(0, -1).join('/');
+                    if (item.path === '/') continue;
+                    if (!byParent.has(parentPath)) byParent.set(parentPath, []);
+                    byParent.get(parentPath).push(item);
+                }
+                // Merge into cache (don't overwrite manually fetched entries)
+                for (const [dir, items] of byParent) {
+                    if (!repoTreeCache.has(dir)) {
+                        repoTreeCache.set(dir, items);
+                    }
+                }
+                repoTreeFullyLoaded = true;
+            } catch (e) {
+                console.warn('Background repo tree preload failed:', e);
+            }
         }
 
         function formatIterationDate(dateStr) {
@@ -6177,6 +6622,7 @@
 
                 const changesData = await ADOAPI.getPRIterationChanges(currentConfig, currentPRId, iterationId, compareTo);
                 allChangeEntries = changesData.changeEntries || [];
+                buildThreadsByFilePath(); // Rebuild changed/commented sets
 
                 buildFileTree(allChangeEntries);
                 fileTreeBuilt = true;
@@ -6277,14 +6723,37 @@
                 const ct = changeType.toLowerCase();
 
                 // Find the change entry for source info
-                const changeEntry = allChangeEntries.find(e => e.item.path === filePath);
+                const changeEntry = allChangeEntries.find(e => e.item?.path === filePath);
                 const sourceServerItem = changeEntry?.sourceServerItem;
 
                 // Determine commits based on iteration range
                 const { baseCommit, sourceCommit } = getIterationCommits();
 
-                if (!baseCommit || !sourceCommit) {
+                if (!sourceCommit) {
                     diffPanel.innerHTML = '<div class="file-diff-error">Cannot determine commits for diff comparison.</div>';
+                    return;
+                }
+
+                // Non-changed file: show as read-only content (no diff)
+                if (ct === 'none' || ct === '') {
+                    const content = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
+                    if (selectedFilePath !== filePath) return;
+                    const lines = content.split('\n');
+                    let bodyHtml = '';
+                    for (let i = 0; i < lines.length; i++) {
+                        bodyHtml += `<tr><td style="padding: 0 8px; color: #a19f9d; text-align: right; user-select: none; min-width: 40px;">${i + 1}</td><td style="padding: 0 8px; white-space: pre-wrap; word-break: break-all;">${ADOContent.escapeHtml(lines[i])}</td></tr>`;
+                    }
+                    diffPanel.innerHTML = `
+                        <div class="file-diff-header">
+                            <span class="file-diff-path">${ADOContent.escapeHtml(filePath.split('/').pop())}</span>
+                            <span style="font-size: 12px; color: #a19f9d;">(read-only view)</span>
+                        </div>
+                        <div class="file-diff-body"><table style="border-collapse: collapse; width: 100%; font-family: monospace; font-size: 12px;">${bodyHtml}</table></div>`;
+                    return;
+                }
+
+                if (!baseCommit) {
+                    diffPanel.innerHTML = '<div class="file-diff-error">Cannot determine base commit for diff comparison.</div>';
                     return;
                 }
 
@@ -6292,13 +6761,10 @@
                 let newContent = '';
 
                 if (ct.includes('add')) {
-                    // New file: no old content
                     newContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
                 } else if (ct.includes('delete')) {
-                    // Deleted file: no new content
                     oldContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: baseCommit, versionType: 'commit' });
                 } else {
-                    // Edit or rename: fetch both
                     const oldPath = sourceServerItem || filePath;
                     const [oldResult, newResult] = await Promise.all([
                         ADOAPI.getFileContent(currentConfig, oldPath, { version: baseCommit, versionType: 'commit' }),
@@ -6308,12 +6774,10 @@
                     newContent = newResult;
                 }
 
-                // Check if the user navigated away while loading
                 if (selectedFilePath !== filePath) return;
 
                 const diff = HistogramDiff.diff(oldContent, newContent);
 
-                // Count added/removed
                 let addedCount = 0;
                 let removedCount = 0;
                 for (const entry of diff) {
@@ -6321,7 +6785,6 @@
                     else if (entry.type === 'removed') removedCount++;
                 }
 
-                // Cache the result
                 fileDiffCache.set(cacheKey, { diff, addedCount, removedCount, sourceServerItem });
 
                 renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem);
