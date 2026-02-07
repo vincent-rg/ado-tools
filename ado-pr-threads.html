@@ -6208,17 +6208,19 @@
 
         function getIterationCommits() {
             let baseCommit, sourceCommit;
-            if (selectedIterationStart === null) {
+            if (selectedIterationStart === null || selectedIterationEnd === null) {
                 // "All" mode
                 baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
                 sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
             } else {
-                // Iteration range mode
-                sourceCommit = allIterations[selectedIterationEnd - 1].sourceRefCommit?.commitId;
-                if (selectedIterationStart === 1) {
+                // Iteration range mode — clamp to valid bounds
+                const endIdx = Math.min(selectedIterationEnd, allIterations.length) - 1;
+                const startIdx = selectedIterationStart - 2;
+                sourceCommit = allIterations[endIdx]?.sourceRefCommit?.commitId;
+                if (selectedIterationStart <= 1 || startIdx < 0) {
                     baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
                 } else {
-                    baseCommit = allIterations[selectedIterationStart - 2].sourceRefCommit?.commitId;
+                    baseCommit = allIterations[startIdx]?.sourceRefCommit?.commitId;
                 }
             }
             return { baseCommit, sourceCommit };
