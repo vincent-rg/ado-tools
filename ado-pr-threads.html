@@ -1848,15 +1848,17 @@
 
         /* Iteration selector */
         .iteration-selector {
+            flex-shrink: 0;
+            font-size: 12px;
+            border-bottom: 1px solid #e1dfdd;
+            background: #faf9f8;
+        }
+
+        .iteration-selector-bar {
             display: flex;
             align-items: center;
             gap: 6px;
             padding: 6px 12px;
-            border-bottom: 1px solid #e1dfdd;
-            background: #faf9f8;
-            flex-shrink: 0;
-            font-size: 12px;
-            position: relative;
         }
 
         .iteration-selector-label {
@@ -1891,47 +1893,37 @@
             border-color: #0078d4;
         }
 
-        .iteration-dropdown-trigger {
-            height: 24px;
-            padding: 0 8px;
-            border: 1px solid #c8c6c4;
-            background: #fff;
-            border-radius: 3px;
+        .iteration-collapse-toggle {
+            background: none;
+            border: none;
             cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            color: #605e5c;
+            padding: 2px 4px;
+            line-height: 1;
+        }
+
+        .iteration-collapse-toggle:hover {
             color: #323130;
-            line-height: 22px;
-            white-space: nowrap;
         }
 
-        .iteration-dropdown-trigger:hover {
-            background: #f3f2f1;
-            border-color: #a19f9d;
+        .iteration-selection-text {
+            font-size: 12px;
+            color: #605e5c;
         }
 
-        .iteration-dropdown-trigger.has-selection {
-            background: #deecf9;
-            border-color: #0078d4;
-            color: #0078d4;
-        }
-
-        .iteration-dropdown {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
+        .iteration-panel {
+            max-height: 0;
+            overflow: hidden;
             background: #fff;
-            border: 1px solid #e1dfdd;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 100;
-            max-height: 400px;
-            overflow-y: auto;
+            border-top: none;
+            transition: max-height 0.15s ease;
         }
 
-        .iteration-dropdown.open {
-            display: block;
+        .iteration-panel.open {
+            max-height: 220px;
+            overflow-y: auto;
+            border-top: 1px solid #e1dfdd;
         }
 
         .iteration-row {
@@ -5937,12 +5929,6 @@
             return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
         }
 
-        function getIterationTriggerText() {
-            if (selectedIterationStart === null) return 'All \u25BE';
-            if (selectedIterationStart === selectedIterationEnd) return `Update ${selectedIterationStart} \u25BE`;
-            return `Updates ${selectedIterationStart}-${selectedIterationEnd} \u25BE`;
-        }
-
         function buildIterationSelector() {
             const container = document.getElementById('iterationSelector');
             if (!container) return;
@@ -5954,11 +5940,20 @@
 
             container.style.display = '';
             const hasSel = selectedIterationStart !== null;
-            let html = '<span class="iteration-selector-label">Updates:</span>';
-            html += `<button class="iteration-btn${!hasSel ? ' active' : ''}" onclick="selectIterationAll()">All</button>`;
-            html += `<button class="iteration-dropdown-trigger${hasSel ? ' has-selection' : ''}" onclick="toggleIterationDropdown(event)">${getIterationTriggerText()}</button>`;
+            const panelWasOpen = document.getElementById('iterationPanel')?.classList.contains('open') ?? true;
+            const chevron = panelWasOpen ? '\u25BE' : '\u25B8';
+            const selText = hasSel
+                ? (selectedIterationStart === selectedIterationEnd ? `Update ${selectedIterationStart}` : `Updates ${selectedIterationStart}-${selectedIterationEnd}`)
+                : 'All';
 
-            html += '<div class="iteration-dropdown" id="iterationDropdown">';
+            let html = '<div class="iteration-selector-bar">';
+            html += `<button class="iteration-collapse-toggle" onclick="toggleIterationPanel()">${chevron}</button>`;
+            html += '<span class="iteration-selector-label">Updates:</span>';
+            html += `<button class="iteration-btn${!hasSel ? ' active' : ''}" onclick="selectIterationAll()">All</button>`;
+            html += `<span class="iteration-selection-text">${selText}</span>`;
+            html += '</div>';
+
+            html += `<div class="iteration-panel${panelWasOpen ? ' open' : ''}" id="iterationPanel">`;
             const total = allIterations.length;
             for (let i = 1; i <= total; i++) {
                 const iter = allIterations[i - 1];
@@ -5992,42 +5987,14 @@
             container.innerHTML = html;
         }
 
-        function toggleIterationDropdown(event) {
-            event.stopPropagation();
-            const dropdown = document.getElementById('iterationDropdown');
-            if (!dropdown) return;
-            dropdown.classList.toggle('open');
-
-            if (dropdown.classList.contains('open')) {
-                // Close on click outside
-                setTimeout(() => {
-                    document.addEventListener('click', closeIterationDropdownOnClickOutside);
-                    document.addEventListener('keydown', closeIterationDropdownOnEscape);
-                }, 0);
-            } else {
-                document.removeEventListener('click', closeIterationDropdownOnClickOutside);
-                document.removeEventListener('keydown', closeIterationDropdownOnEscape);
+        function toggleIterationPanel() {
+            const panel = document.getElementById('iterationPanel');
+            if (!panel) return;
+            panel.classList.toggle('open');
+            const toggle = document.querySelector('.iteration-collapse-toggle');
+            if (toggle) {
+                toggle.textContent = panel.classList.contains('open') ? '\u25BE' : '\u25B8';
             }
-        }
-
-        function closeIterationDropdownOnClickOutside(event) {
-            const selector = document.getElementById('iterationSelector');
-            if (selector && !selector.contains(event.target)) {
-                closeIterationDropdown();
-            }
-        }
-
-        function closeIterationDropdownOnEscape(event) {
-            if (event.key === 'Escape') {
-                closeIterationDropdown();
-            }
-        }
-
-        function closeIterationDropdown() {
-            const dropdown = document.getElementById('iterationDropdown');
-            if (dropdown) dropdown.classList.remove('open');
-            document.removeEventListener('click', closeIterationDropdownOnClickOutside);
-            document.removeEventListener('keydown', closeIterationDropdownOnEscape);
         }
 
         function selectIterationAll() {
@@ -6035,9 +6002,6 @@
             selectedIterationStart = null;
             selectedIterationEnd = null;
             buildIterationSelector();
-            // Re-open dropdown
-            const dropdown = document.getElementById('iterationDropdown');
-            if (dropdown) dropdown.classList.add('open');
             refreshFilesForIterationRange();
         }
 
@@ -6045,9 +6009,6 @@
             selectedIterationStart = num;
             selectedIterationEnd = num;
             buildIterationSelector();
-            // Re-open dropdown
-            const dropdown = document.getElementById('iterationDropdown');
-            if (dropdown) dropdown.classList.add('open');
             refreshFilesForIterationRange();
         }
 
@@ -6131,11 +6092,13 @@
 
             // Only refresh if the selection actually changed
             if (selectedIterationStart !== state.originalStart || selectedIterationEnd !== state.originalEnd) {
-                // Update trigger text
-                const trigger = document.querySelector('.iteration-dropdown-trigger');
-                if (trigger) {
-                    trigger.textContent = getIterationTriggerText();
-                    trigger.classList.toggle('has-selection', selectedIterationStart !== null);
+                // Update selection text
+                const selText = document.querySelector('.iteration-selection-text');
+                if (selText) {
+                    const hasSel = selectedIterationStart !== null;
+                    selText.textContent = hasSel
+                        ? (selectedIterationStart === selectedIterationEnd ? `Update ${selectedIterationStart}` : `Updates ${selectedIterationStart}-${selectedIterationEnd}`)
+                        : 'All';
                 }
                 refreshFilesForIterationRange();
             }
@@ -6175,11 +6138,12 @@
                 }
             });
 
-            // Update trigger text
-            const trigger = document.querySelector('.iteration-dropdown-trigger');
-            if (trigger) {
-                trigger.textContent = getIterationTriggerText();
-                trigger.classList.toggle('has-selection', hasSel);
+            // Update selection text
+            const selText = document.querySelector('.iteration-selection-text');
+            if (selText) {
+                selText.textContent = hasSel
+                    ? (selectedIterationStart === selectedIterationEnd ? `Update ${selectedIterationStart}` : `Updates ${selectedIterationStart}-${selectedIterationEnd}`)
+                    : 'All';
             }
 
             // Update All button
