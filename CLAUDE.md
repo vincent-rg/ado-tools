@@ -72,7 +72,7 @@ All exposed on `window.*`:
 ### Major Function Groups
 - **Project/repo loading** (~250 lines): `loadProjects()`, `buildProjectTree()`, modal management
 - **PR loading** (~230 lines): `loadPRsFromSelection()`, `refreshPRs()`, tracks loaded repos with timestamps
-- **Filtering** (~190 lines): `applyFilters()`, accent-insensitive text search, selected filters display
+- **Filtering** (~120 lines): `getCurrentFilters()` reads DOM → filters object, `prMatchesFilters(pr, filters)` is the single source of truth used by `applyFilters()`, `applyFiltersWithoutReset()`, and live-update change detection
 - **Display** (~310 lines): `displayPRs()` renders table + pagination + columns dropdown
 - **Comment fetching** (~250 lines): Priority queue (visible PRs first), rate-limited batches, 2-phase fetch
 - **Check fetching** (~190 lines): Build policies, status checks, merge conflicts per PR
@@ -179,7 +179,7 @@ Markdown:
 
 ### High Impact
 
-1. **Duplicate filter logic** (`ado-pr-list.html`): `applyFilters()` and `prMatchesFilters()` have near-identical ~80-line filter matching blocks. Extract to shared function.
+1. ~~**Duplicate filter logic** (`ado-pr-list.html`)~~: DONE - extracted `getCurrentFilters()` + `prMatchesFilters(pr, filters)`.
 
 2. **Duplicate thread CRUD** (`ado-pr-threads.html`): Overview thread CRUD (~8 funcs) and inline thread CRUD (~8 funcs) are nearly identical. Unify into single parameterized module.
 
