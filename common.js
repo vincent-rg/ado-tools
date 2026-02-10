@@ -105,19 +105,11 @@ const ADOAPI = {
 
     /**
      * Get PR threads
+     * @param {object} config - ADO configuration
+     * @param {string} [project] - Project name (defaults to config.project)
+     * @param {string} [repoId] - Repository name/ID (defaults to config.repository)
+     * @param {number} prId - Pull request ID
      */
-    async getPRThreads(config, prId) {
-        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads?api-version=6.0`;
-        const response = await this.fetchWithAuth(url, config.pat);
-
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data.message || `Failed to fetch PR threads: ${response.status} ${response.statusText}`);
-        }
-
-        return response.json();
-    },
-
     async getThreads(config, project, repoId, prId) {
         const url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/threads?api-version=6.0`;
         const response = await this.fetchWithAuth(url, config.pat);
@@ -130,8 +122,22 @@ const ADOAPI = {
         return response.json();
     },
 
-    async getIterations(config, project, repoId, prId) {
-        const url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/iterations?api-version=6.0`;
+    /** Convenience: getThreads using config.project and config.repository */
+    async getPRThreads(config, prId) {
+        return this.getThreads(config, config.project, config.repository, prId);
+    },
+
+    /**
+     * Get PR iterations
+     * @param {object} config - ADO configuration
+     * @param {string} [project] - Project name (defaults to config.project)
+     * @param {string} [repoId] - Repository name/ID (defaults to config.repository)
+     * @param {number} prId - Pull request ID
+     * @param {boolean} [includeCommits=false] - Include commits in response
+     */
+    async getIterations(config, project, repoId, prId, includeCommits = false) {
+        let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/iterations?api-version=6.0`;
+        if (includeCommits) url += '&includeCommits=true';
         const response = await this.fetchWithAuth(url, config.pat);
 
         if (!response.ok) {
@@ -142,19 +148,9 @@ const ADOAPI = {
         return response.json();
     },
 
-    /**
-     * Get PR iterations
-     */
+    /** Convenience: getIterations using config.project and config.repository, with includeCommits=true */
     async getPRIterations(config, prId) {
-        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/iterations?api-version=6.0&includeCommits=true`;
-        const response = await this.fetchWithAuth(url, config.pat);
-
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data.message || `Failed to fetch PR iterations: ${response.status} ${response.statusText}`);
-        }
-
-        return response.json();
+        return this.getIterations(config, config.project, config.repository, prId, true);
     },
 
     /**
@@ -528,18 +524,14 @@ const ADOAPI = {
     async setDraft(config, prId, isDraft) {
         const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
 
-        const response = await fetch(url, {
+        const response = await this.fetchWithAuth(url, config.pat, {
             method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${btoa(':' + config.pat)}`
-            },
             body: JSON.stringify({ isDraft })
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Failed to ${isDraft ? 'set draft' : 'publish'}: ${response.status} - ${errorText}`);
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to ${isDraft ? 'set draft' : 'publish'}: ${response.status} ${response.statusText}`);
         }
 
         return response.json();
