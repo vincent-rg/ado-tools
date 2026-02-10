@@ -1003,6 +1003,11 @@ const ADOContent = {
             return restored;
         }
 
+        // 0. Handle backslash escapes — protect \* \_ \+ \# etc.
+        result = result.replace(/\\([\\`*_\[\]()#+\-.!])/g, (match, char) => {
+            return createPlaceholder(char);
+        });
+
         // 1. Parse code blocks first
         result = result.replace(/```(\w+)?\n?([^`]+)```/g, (match, language, code) => {
             const html = `<pre><code>${code.trim()}</code></pre>`;
@@ -1027,6 +1032,35 @@ const ADOContent = {
             const level = hashes.length;
             const html = `<h${level} style="margin: 0.5em 0; font-size: ${1.5 - (level - 1) * 0.15}em;">${text}</h${level}>`;
             return createPlaceholder(html);
+        });
+
+        // 4b. Parse task lists (checkboxes): - [ ] unchecked, - [x] checked
+        result = result.replace(/(?:^[ \t]*- \[([ xX])\] .+(?:\n|$))+/gm, (block) => {
+            const items = block.replace(/\n$/, '').split('\n').map(line => {
+                const m = line.match(/^[ \t]*- \[([ xX])\] (.+)/);
+                if (!m) return '';
+                const checked = m[1] !== ' ' ? ' checked disabled' : ' disabled';
+                return `<li style="list-style:none;"><input type="checkbox"${checked}> ${m[2]}</li>`;
+            }).join('');
+            return createPlaceholder(`<ul style="margin:0.3em 0;padding-left:1.5em;">${items}</ul>\n`);
+        });
+
+        // 4c. Parse bullet lists (- item, + item, * item)
+        result = result.replace(/(?:^[ \t]*[-+*] (?!\[[ xX]\]).+(?:\n|$))+/gm, (block) => {
+            const items = block.replace(/\n$/, '').split('\n').map(line => {
+                const m = line.match(/^[ \t]*[-+*] (.+)/);
+                return m ? `<li>${m[1]}</li>` : '';
+            }).join('');
+            return createPlaceholder(`<ul style="margin:0.3em 0;padding-left:1.5em;">${items}</ul>\n`);
+        });
+
+        // 4d. Parse numbered lists (1. item, 2. item)
+        result = result.replace(/(?:^[ \t]*\d+\. .+(?:\n|$))+/gm, (block) => {
+            const items = block.replace(/\n$/, '').split('\n').map(line => {
+                const m = line.match(/^[ \t]*\d+\. (.+)/);
+                return m ? `<li>${m[1]}</li>` : '';
+            }).join('');
+            return createPlaceholder(`<ol style="margin:0.3em 0;padding-left:1.5em;">${items}</ol>\n`);
         });
 
         // 5. Parse bold

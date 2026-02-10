@@ -707,3 +707,9 @@ summary:hover {
     background-color: #e1f3ff;
     color: #0078d4;
 }
+
+/* Markdown lists in comments */
+.comment-content ul,
+.comment-content ol {
+    white-space: normal;
+}

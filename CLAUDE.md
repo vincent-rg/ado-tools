@@ -170,9 +170,9 @@ Global:
 - Add global option to disable live updates
 
 Markdown:
-- Checkbox support
-- Escaping (like \+)
-- Bullet support (- + numbered lists)
+- ~~Checkbox support~~: DONE
+- ~~Escaping (like \+)~~: DONE
+- ~~Bullet support (- + numbered lists)~~: DONE
 
 ## Refactoring Opportunities
 
