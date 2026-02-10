@@ -176,37 +176,16 @@ Markdown:
 
 ## Refactoring Opportunities
 
-### High Impact
-
-1. ~~**Duplicate filter logic** (`ado-pr-list.html`)~~: DONE - extracted `getCurrentFilters()` + `prMatchesFilters(pr, filters)`.
-
-2. ~~**Duplicate thread CRUD** (`ado-pr-threads.html`)~~: DONE - unified with `prefix` param + `refreshThreadsFromAPI()`. Inline aliases kept for onclick compat.
-
-3. ~~**Thread re-fetch pattern** (`ado-pr-threads.html`)~~: DONE (covered by #2) - `refreshThreadsFromAPI()` replaces all CRUD refresh duplicates.
-
 ### Medium Impact
 
-4. **Monolithic HTML files**: Both big pages have CSS + HTML + JS in one file. Consider extracting:
-   - `ado-pr-list.css` / `ado-pr-list.js`
-   - `ado-pr-threads.css` / `ado-pr-threads.js`
-
-5. **`displayPRs()` function** (266 lines): Combines table HTML, pagination, columns dropdown. Split into `renderTable()`, `renderInfoBar()`, `renderPagination()`.
-
-6. **`displayResults()` function** (540 lines): Similarly too large. Break into focused renderers.
-
-7. **Global state pollution**: 50+ globals in pr-list, 25+ in pr-threads. Could organize into state objects:
-   ```js
-   const State = { prs: [], filters: {}, sort: {}, pagination: {}, cache: {} }
-   ```
-
-8. **Magic numbers**: Timeouts, thresholds, and limits scattered throughout. Consolidate to config objects at file top.
-
-9. **Inconsistent error handling**: Mix of `alert()`, console.warn, and try/catch patterns. Standardize.
+- [ ] Extract inline CSS/JS from monolithic HTML files into separate `.css`/`.js` files
+- [ ] Break up `displayPRs()` (266 lines) in `ado-pr-list.html` into smaller functions
+- [ ] Break up `displayResults()` (540 lines) in `ado-pr-threads.html` into smaller functions
+- [ ] Organize global state into state objects instead of 50+/25+ loose globals
+- [ ] Fix inconsistent API methods: `setDraft()` uses raw `fetch()` instead of `fetchWithAuth()`; deduplicate `getPRThreads`/`getThreads` and `getPRIterations`/`getIterations` pairs
+- [ ] Consolidate magic numbers (timeouts, thresholds) into config constants objects
 
 ### Low Impact
 
-10. **Inline `onclick` handlers**: Many template literals with `onclick="func()"`. Could use event delegation with `data-*` attributes.
-
-11. **`ADOAPI.setDraft()`** uses raw `fetch()` instead of `this.fetchWithAuth()` like every other method - inconsistency.
-
-12. **`ADOAPI.getPRThreads()` vs `ADOAPI.getThreads()`**: Two methods that do the same thing with slightly different signatures. The first uses `config.project`/`config.repository`, the second takes explicit `project`/`repoId` params. Same for `getPRIterations` vs `getIterations`.
+- [ ] Replace inline `onclick` handlers with event delegation + `data-*` attributes
+- [ ] Standardize error handling (mix of `alert()`, `console.warn`, `try/catch`)
