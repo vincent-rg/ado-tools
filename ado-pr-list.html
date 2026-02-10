@@ -2063,91 +2063,104 @@
             return selected;
         }
 
+        /**
+         * Read current filter values from the DOM and return a filters object.
+         */
+        function getCurrentFilters() {
+            return {
+                prId: document.getElementById('prIdFilter').value.trim(),
+                title: document.getElementById('titleFilter').value.trim(),
+                createdBy: ADOSearch.normalize(document.getElementById('createdByFilter').value.trim()),
+                assignedTo: ADOSearch.normalize(document.getElementById('assignedToFilter').value.trim()),
+                commentAuthor: ADOSearch.normalize(document.getElementById('commentAuthorFilter').value.trim()),
+                statuses: getSelectedStatuses()
+            };
+        }
+
+        /**
+         * Test whether a single PR matches the given filters object.
+         */
+        function prMatchesFilters(pr, filters) {
+            // PR ID filter
+            if (filters.prId && pr.pullRequestId.toString() !== filters.prId) {
+                return false;
+            }
+
+            // Title filter - subsequence matching
+            if (filters.title) {
+                const titleNorm = ADOSearch.normalize(pr.title);
+                const pieces = ADOSearch.normalize(filters.title).split(/\s+/).filter(p => p.length > 0);
+
+                let lastIndex = -1;
+                for (const piece of pieces) {
+                    const index = titleNorm.indexOf(piece, lastIndex + 1);
+                    if (index === -1) {
+                        return false;
+                    }
+                    lastIndex = index;
+                }
+            }
+
+            // Status filter (if no statuses selected, show all)
+            if (filters.statuses.length > 0) {
+                if (!filters.statuses.includes(pr.status.toLowerCase())) {
+                    return false;
+                }
+            }
+
+            // Created by filter (semicolon-separated, match ANY)
+            if (filters.createdBy) {
+                const authors = filters.createdBy.split(';').map(a => a.trim()).filter(a => a.length > 0);
+                if (authors.length > 0) {
+                    const authorName = ADOSearch.normalize(pr.createdBy.displayName);
+                    const matchesAny = authors.some(a => authorName.includes(a));
+                    if (!matchesAny) {
+                        return false;
+                    }
+                }
+            }
+
+            // Assigned to filter (semicolon-separated, match ANY)
+            if (filters.assignedTo) {
+                const reviewerFilters = filters.assignedTo.split(';').map(r => r.trim()).filter(r => r.length > 0);
+                if (reviewerFilters.length > 0) {
+                    const matchesAny = reviewerFilters.some(rf =>
+                        pr.reviewers.some(reviewer =>
+                            ADOSearch.normalize(reviewer.displayName).includes(rf)
+                        )
+                    );
+                    if (!matchesAny) {
+                        return false;
+                    }
+                }
+            }
+
+            // Comment author filter
+            if (filters.commentAuthor) {
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                const cached = prCommentCounts[prKey];
+                if (cached && cached.authorObjects) {
+                    const hasCommentAuthor = Object.values(cached.authorObjects).some(author =>
+                        ADOSearch.normalize(author.displayName).includes(filters.commentAuthor)
+                    );
+                    if (!hasCommentAuthor) {
+                        return false;
+                    }
+                } else {
+                    // Comment data not loaded yet - hide until data arrives
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         function applyFilters() {
             // Clear grayed out PRs when filters change
             grayedOutPRKeys.clear();
 
-            const prIdFilter = document.getElementById('prIdFilter').value.trim();
-            const titleFilter = document.getElementById('titleFilter').value.trim();
-            const createdByFilter = ADOSearch.normalize(document.getElementById('createdByFilter').value.trim());
-            const assignedToFilter = ADOSearch.normalize(document.getElementById('assignedToFilter').value.trim());
-            const commentAuthorFilter = document.getElementById('commentAuthorFilter').value.trim().toLowerCase();
-            const selectedStatuses = getSelectedStatuses();
-
-            filteredPRs = allPRs.filter(pr => {
-                // PR ID filter
-                if (prIdFilter && pr.pullRequestId.toString() !== prIdFilter) {
-                    return false;
-                }
-
-                // Title filter - subsequence matching
-                if (titleFilter) {
-                    const titleNorm = ADOSearch.normalize(pr.title);
-                    const pieces = ADOSearch.normalize(titleFilter).split(/\s+/).filter(p => p.length > 0);
-
-                    let lastIndex = -1;
-                    for (const piece of pieces) {
-                        const index = titleNorm.indexOf(piece, lastIndex + 1);
-                        if (index === -1) {
-                            return false;
-                        }
-                        lastIndex = index;
-                    }
-                }
-
-                // Status filter (if no statuses selected, show all)
-                if (selectedStatuses.length > 0) {
-                    if (!selectedStatuses.includes(pr.status.toLowerCase())) {
-                        return false;
-                    }
-                }
-
-                // Created by filter (semicolon-separated, match ANY)
-                if (createdByFilter) {
-                    const authors = createdByFilter.split(';').map(a => a.trim()).filter(a => a.length > 0);
-                    if (authors.length > 0) {
-                        const authorName = ADOSearch.normalize(pr.createdBy.displayName);
-                        const matchesAny = authors.some(a => authorName.includes(a));
-                        if (!matchesAny) {
-                            return false;
-                        }
-                    }
-                }
-
-                // Assigned to filter (semicolon-separated, match ANY)
-                if (assignedToFilter) {
-                    const reviewerFilters = assignedToFilter.split(';').map(r => r.trim()).filter(r => r.length > 0);
-                    if (reviewerFilters.length > 0) {
-                        const matchesAny = reviewerFilters.some(rf =>
-                            pr.reviewers.some(reviewer =>
-                                ADOSearch.normalize(reviewer.displayName).includes(rf)
-                            )
-                        );
-                        if (!matchesAny) {
-                            return false;
-                        }
-                    }
-                }
-
-                // Comment author filter
-                if (commentAuthorFilter) {
-                    const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
-                    const cached = prCommentCounts[prKey];
-                    if (cached && cached.authorObjects) {
-                        const hasCommentAuthor = Object.values(cached.authorObjects).some(author =>
-                            author.displayName.toLowerCase().includes(commentAuthorFilter)
-                        );
-                        if (!hasCommentAuthor) {
-                            return false;
-                        }
-                    } else {
-                        // Comment data not loaded yet - hide until data arrives
-                        return false;
-                    }
-                }
-
-                return true;
-            });
+            const filters = getCurrentFilters();
+            filteredPRs = allPRs.filter(pr => prMatchesFilters(pr, filters));
 
             // Reset to page 1 when filters change
             currentPage = 1;
@@ -3962,7 +3975,7 @@
                     changes.hasChanges = true;
 
                     // Check if it matches current filters
-                    if (prMatchesFilters(freshPR)) {
+                    if (prMatchesFilters(freshPR, getCurrentFilters())) {
                         changes.newFilterMatches.push(freshPR);
                     }
                 } else {
@@ -4001,87 +4014,6 @@
             );
         }
 
-        function prMatchesFilters(pr) {
-            const prIdFilter = document.getElementById('prIdFilter').value.trim();
-            const titleFilter = document.getElementById('titleFilter').value.trim();
-            const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
-            const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
-            const commentAuthorFilter = document.getElementById('commentAuthorFilter').value.trim().toLowerCase();
-            const selectedStatuses = getSelectedStatuses();
-
-            // PR ID filter
-            if (prIdFilter && pr.pullRequestId.toString() !== prIdFilter) {
-                return false;
-            }
-
-            // Title filter
-            if (titleFilter) {
-                const titleLower = pr.title.toLowerCase();
-                const pieces = titleFilter.toLowerCase().split(/\s+/).filter(p => p.length > 0);
-
-                let lastIndex = -1;
-                for (const piece of pieces) {
-                    const index = titleLower.indexOf(piece, lastIndex + 1);
-                    if (index === -1) {
-                        return false;
-                    }
-                    lastIndex = index;
-                }
-            }
-
-            // Status filter
-            if (selectedStatuses.length > 0) {
-                if (!selectedStatuses.includes(pr.status.toLowerCase())) {
-                    return false;
-                }
-            }
-
-            // Created by filter (semicolon-separated, match ANY)
-            if (createdByFilter) {
-                const authors = createdByFilter.split(';').map(a => a.trim()).filter(a => a.length > 0);
-                if (authors.length > 0) {
-                    const authorName = pr.createdBy.displayName.toLowerCase();
-                    const matchesAny = authors.some(a => authorName.includes(a));
-                    if (!matchesAny) {
-                        return false;
-                    }
-                }
-            }
-
-            // Assigned to filter (semicolon-separated, match ANY)
-            if (assignedToFilter) {
-                const reviewerFilters = assignedToFilter.split(';').map(r => r.trim()).filter(r => r.length > 0);
-                if (reviewerFilters.length > 0) {
-                    const matchesAny = reviewerFilters.some(rf =>
-                        pr.reviewers.some(reviewer =>
-                            reviewer.displayName.toLowerCase().includes(rf)
-                        )
-                    );
-                    if (!matchesAny) {
-                        return false;
-                    }
-                }
-            }
-
-            // Comment author filter
-            if (commentAuthorFilter) {
-                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
-                const cached = prCommentCounts[prKey];
-                if (cached && cached.authorObjects) {
-                    const hasCommentAuthor = Object.values(cached.authorObjects).some(author =>
-                        author.displayName.toLowerCase().includes(commentAuthorFilter)
-                    );
-                    if (!hasCommentAuthor) {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
         async function handleDetectedChanges(changes, freshPRs) {
             // Handle updated PRs (in-place updates)
             if (changes.updatedPRs.length > 0) {
@@ -4093,7 +4025,7 @@
                     }
 
                     // Check if PR still matches filters
-                    const stillMatches = prMatchesFilters(update.fresh);
+                    const stillMatches = prMatchesFilters(update.fresh, getCurrentFilters());
                     const wasVisible = filteredPRs.some(pr => getPRKey(pr) === update.prKey);
 
                     if (wasVisible && !stillMatches) {
@@ -4174,15 +4106,8 @@
 
         function applyFiltersWithoutReset() {
             // Same as applyFilters but doesn't reset page or clear grayed out set
-            const prIdFilter = document.getElementById('prIdFilter').value.trim();
-            const titleFilter = document.getElementById('titleFilter').value.trim();
-            const createdByFilter = document.getElementById('createdByFilter').value.trim().toLowerCase();
-            const assignedToFilter = document.getElementById('assignedToFilter').value.trim().toLowerCase();
-            const selectedStatuses = getSelectedStatuses();
-
-            filteredPRs = allPRs.filter(pr => {
-                return prMatchesFilters(pr);
-            });
+            const filters = getCurrentFilters();
+            filteredPRs = allPRs.filter(pr => prMatchesFilters(pr, filters));
 
             displayPRs();
             updateSelectedFilters();
