@@ -110,8 +110,7 @@ All exposed on `window.*`:
 - **Data loading & polling** (~8 funcs): `loadPRThreads()`, `fetchAndUpdate*()`, `pollPRData()`, `startPRPolling()`
 - **Iteration management** (~11 funcs): iteration selector UI, drag-to-select range, file path tracking across renames
 - **File tree operations** (~8 funcs): `buildFileTree()`, lazy-load repo dirs, change type indicators, thread count badges
-- **Thread CRUD** (~8 funcs): create, reply, edit, delete comments in Overview view
-- **Inline thread CRUD** (~8 funcs): same operations but inside the Files diff view
+- **Thread CRUD** (unified): `showReplyForm/hideReplyForm/submitReply/startEditComment/cancelEditComment/saveEditComment/deleteComment` take a `prefix` param ('' for Overview, 'inline-' for Files). `refreshThreadsFromAPI()` is the single refresh-after-mutation path. Inline aliases (`showInlineReplyForm`, etc.) kept for onclick compat.
 - **Diff rendering** (~6 funcs): `renderFileDiff()`, inline threads between diff lines, highlighted commented lines
 - **PR actions** (~8 funcs): status changes, draft toggle, abandon/reactivate, complete with merge strategy, auto-complete
 - **Reviewer management** (~7 funcs): add/remove/toggle required, identity search dropdown
@@ -181,9 +180,9 @@ Markdown:
 
 1. ~~**Duplicate filter logic** (`ado-pr-list.html`)~~: DONE - extracted `getCurrentFilters()` + `prMatchesFilters(pr, filters)`.
 
-2. **Duplicate thread CRUD** (`ado-pr-threads.html`): Overview thread CRUD (~8 funcs) and inline thread CRUD (~8 funcs) are nearly identical. Unify into single parameterized module.
+2. ~~**Duplicate thread CRUD** (`ado-pr-threads.html`)~~: DONE - unified with `prefix` param + `refreshThreadsFromAPI()`. Inline aliases kept for onclick compat.
 
-3. **Thread re-fetch pattern** (`ado-pr-threads.html`): Same "fetch threads → update local → re-render" pattern repeated ~5 times. Extract to `refreshThreads()`.
+3. ~~**Thread re-fetch pattern** (`ado-pr-threads.html`)~~: DONE (covered by #2) - `refreshThreadsFromAPI()` replaces all CRUD refresh duplicates.
 
 ### Medium Impact
 
