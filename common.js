@@ -241,6 +241,38 @@ const ADOAPI = {
     },
 
     /**
+     * List items in a repository directory (one level)
+     */
+    async getRepoItems(config, scopePath, versionDescriptor) {
+        let url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/items?scopePath=${encodeURIComponent(scopePath)}&recursionLevel=OneLevel&includeContentMetadata=true&api-version=6.0`;
+        if (versionDescriptor) {
+            url += `&versionDescriptor.version=${versionDescriptor.version}&versionDescriptor.versionType=${versionDescriptor.versionType}`;
+        }
+        const response = await this.fetchWithAuth(url, config.pat);
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch repo items: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    },
+
+    /**
+     * List all items in a repository (full tree)
+     */
+    async getRepoTree(config, versionDescriptor) {
+        let url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/items?scopePath=/&recursionLevel=Full&includeContentMetadata=true&api-version=6.0`;
+        if (versionDescriptor) {
+            url += `&versionDescriptor.version=${versionDescriptor.version}&versionDescriptor.versionType=${versionDescriptor.versionType}`;
+        }
+        const response = await this.fetchWithAuth(url, config.pat);
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch repo tree: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    },
+
+    /**
      * Update thread status
      */
     async updateThreadStatus(config, prId, threadId, status) {
