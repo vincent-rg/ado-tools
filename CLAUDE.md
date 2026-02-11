@@ -6,17 +6,17 @@ Browser-based tools for Azure DevOps Server 2022.1+. Pure HTML/CSS/JS frontend +
 
 **Run:** `python ado-server.py [port]` (default 8000)
 
-## File Map (15,089 lines total)
+## File Map (14,890 lines total)
 
 ```
 ado-server.py          (197 lines)  Python HTTP server + avatar/identity proxy
-common.css             (709 lines)  Shared styles (badges, modals, avatars, forms, layout)
-common.js             (1721 lines)  Shared JS modules (API, config, UI, content, avatars, checks)
+common.css             (715 lines)  Shared styles (badges, modals, avatars, forms, layout)
+common.js             (1747 lines)  Shared JS modules (API, config, UI, content, avatars, checks)
 diff.js                (219 lines)  Histogram diff algorithm (line-by-line diff)
 index.html             (206 lines)  Landing page with tool cards
 ado-settings.html      (219 lines)  Settings form (serverUrl, org, project, repo, PAT)
-ado-pr-list.html      (4276 lines)  PR list browser (CSS: 1-1057, HTML: 1059-1221, JS: 1224-4274)
-ado-pr-threads.html   (7542 lines)  PR thread viewer + Files diff (CSS: 8-2358, HTML: 2360-2527, JS: 2530-7528)
+ado-pr-list.html      (4201 lines)  PR list browser (CSS: 1-1057, HTML: 1059-1221, JS: 1224-4199)
+ado-pr-threads.html   (7386 lines)  PR thread viewer + Files diff (CSS: 8-2358, HTML: 2360-2527, JS: 2530-7372)
 ```
 
 ## Architecture
@@ -111,7 +111,7 @@ All exposed on `window.*`:
 - **Iteration management** (~11 funcs): iteration selector UI, drag-to-select range, file path tracking across renames
 - **File tree operations** (~8 funcs): `buildFileTree()`, lazy-load repo dirs, change type indicators, thread count badges
 - **Thread CRUD** (unified): `showReplyForm/hideReplyForm/submitReply/startEditComment/cancelEditComment/saveEditComment/deleteComment` take a `prefix` param ('' for Overview, 'inline-' for Files). `refreshThreadsFromAPI()` is the single refresh-after-mutation path. Inline aliases (`showInlineReplyForm`, etc.) kept for onclick compat.
-- **Diff rendering** (~6 funcs): `renderFileDiff()`, inline threads between diff lines, highlighted commented lines
+- **Diff rendering** (~7 funcs): shared utilities (`applyThreadHighlight`, `getHighlightedContent`, `buildThreadRange`, `renderDiffLines`) used by both overview diff preview and files view; `renderDiffLines` accepts `getLinePrefix`/`getLineSuffix` callbacks for files view gutter avatars and inline threads
 - **PR actions** (~8 funcs): status changes, draft toggle, abandon/reactivate, complete with merge strategy, auto-complete
 - **Reviewer management** (~7 funcs): add/remove/toggle required, identity search dropdown
 - **Line stats** (~8 funcs): async line count computation via local diff (fetch both versions, diff with HistogramDiff)
@@ -125,11 +125,13 @@ All exposed on `window.*`:
 - Diffs computed: merge base → selected iteration range
 - File paths tracked across iterations (handles renames via `buildFilePathHistory`)
 
-### Files View Diff System
+### Diff Rendering (shared between Overview and Files)
 - Uses `HistogramDiff.diff()` from diff.js
+- Shared `renderDiffLines()` builds side-by-side HTML for both overview diff previews and files view diffs
+- `buildThreadRange()` resolves thread positions across iteration ranges; `getHighlightedContent()` applies comment highlights
+- Files view injects gutter avatars and inline thread panels via `getLinePrefix`/`getLineSuffix` callbacks
 - Fetches file content at two versions (merge base commit + iteration commit)
 - Results cached in `fileDiffCache` (Map keyed by `filePath:iterStart-iterEnd`)
-- Inline threads rendered between diff lines where comments exist
 - Threads show collapsed (gutter avatar) or expanded (full comment list)
 
 ## ado-server.py - HTTP Server
@@ -182,7 +184,7 @@ Markdown:
 - [ ] Break up `displayPRs()` (266 lines) in `ado-pr-list.html` into smaller functions
 - [ ] Break up `displayResults()` (540 lines) in `ado-pr-threads.html` into smaller functions
 - [ ] Organize global state into state objects instead of 50+/25+ loose globals
-- [ ] Fix inconsistent API methods: `setDraft()` uses raw `fetch()` instead of `fetchWithAuth()`; deduplicate `getPRThreads`/`getThreads` and `getPRIterations`/`getIterations` pairs
+- [x] Fix inconsistent API methods: `setDraft()` uses raw `fetch()` instead of `fetchWithAuth()`; deduplicate `getPRThreads`/`getThreads` and `getPRIterations`/`getIterations` pairs
 - [ ] Consolidate magic numbers (timeouts, thresholds) into config constants objects
 
 ### Low Impact
