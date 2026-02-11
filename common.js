@@ -1083,6 +1083,10 @@ const ADOContent = {
         // 8. Restore placeholders
         result = restorePlaceholders(result);
 
+        // 9. Strip newlines adjacent to block elements (they cause extra whitespace with pre-wrap)
+        result = result.replace(/\n+(<(?:ul|ol|h[1-6]|pre|blockquote)[ >])/gi, '$1');
+        result = result.replace(/(<\/(?:ul|ol|h[1-6]|pre|blockquote)>)\n+/gi, '$1');
+
         return result;
     },
 
