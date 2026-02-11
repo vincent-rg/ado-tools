@@ -5633,13 +5633,13 @@
                     throw new Error('Could not determine commit versions');
                 }
 
-                // For oldIterationId === 0, use base commit (merge target)
+                // For oldIterationId === 0, use merge base (consistent with files view)
                 let oldCommitId;
                 let oldFilePath;
 
                 if (oldIterationId === 0) {
-                    // Compare against base branch
-                    oldCommitId = currentPRData.lastMergeTargetCommit?.commitId;
+                    // Compare against merge base
+                    oldCommitId = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
                     if (!oldCommitId) {
                         throw new Error('Could not determine base commit');
                     }
