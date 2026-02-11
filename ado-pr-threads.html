@@ -787,7 +787,7 @@
             padding: 12px;
             background: #f8f8f8;
             color: #323130;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-family: monospace;
             font-size: 12px;
             line-height: 1.5;
             overflow-x: auto;
@@ -812,7 +812,7 @@
         /* Diff styles */
         .diff-line {
             display: flex;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-family: monospace;
             font-size: 12px;
             line-height: 1.5;
             position: relative;
@@ -1879,7 +1879,7 @@
         }
 
         .file-diff-path {
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-family: monospace;
             font-weight: 600;
             word-break: break-all;
         }
@@ -5426,7 +5426,7 @@
                 }
 
                 // Build the diff view (light theme) with full line context
-                let html = '<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 0; border: 1px solid #d1d1d1; font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px;">';
+                let html = '<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 0; border: 1px solid #d1d1d1; font-family: monospace; font-size: 12px;">';
                 html += '<div style="color: #8a6d3b; font-weight: 600; margin-bottom: 8px;">💡 Code change suggestion</div>';
                 html += '<div style="border: 1px solid #d1d1d1; border-radius: 0; overflow: hidden; background: white;">';
 
@@ -5454,7 +5454,7 @@
                 return html;
             } catch (error) {
                 console.error('Failed to render code suggestion:', error);
-                return `<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 0; border: 1px solid #d1d1d1; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px;">
+                return `<div style="background: #f8f8f8; color: #323130; padding: 12px; margin-top: 8px; border-radius: 0; border: 1px solid #d1d1d1; font-family: monospace; font-size: 12px;">
                     <div style="color: #8a6d3b; font-weight: 600; margin-bottom: 8px;">💡 Code change suggestion</div>
                     <div style="color: #605e5c; font-size: 11px;">Could not load suggestion details. Click the iteration links above or "View in ADO" to see the code diff.</div>
                 </div>`;
