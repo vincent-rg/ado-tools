@@ -4469,12 +4469,28 @@
         function refreshInlineThreadsIfNeeded() {
             if (currentView !== 'files' || !selectedFilePath) return;
             buildThreadsByFilePath();
-            const cacheKey = `${selectedFilePath}:${selectedIterationStart ?? 'all'}-${selectedIterationEnd ?? 'all'}`;
+
+            const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
+            const ct = (changeEntry?.changeType || 'edit').toLowerCase();
+            const { baseCommit, sourceCommit } = getIterationCommits();
+
+            let oldCommitId, newCommitId;
+            if (ct.includes('add')) {
+                oldCommitId = null;
+                newCommitId = sourceCommit;
+            } else if (ct.includes('delete')) {
+                oldCommitId = baseCommit;
+                newCommitId = null;
+            } else {
+                oldCommitId = baseCommit;
+                newCommitId = sourceCommit;
+            }
+
+            const cacheKey = `${selectedFilePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}`;
             const cached = fileDiffCache.get(cacheKey);
             if (cached) {
-                const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
-                const changeType = changeEntry?.changeType || 'edit';
-                renderFileDiff(selectedFilePath, changeType, cached.diff, cached.addedCount, cached.removedCount, cached.sourceServerItem);
+                const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
+                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem);
             }
         }
 
@@ -5145,9 +5161,58 @@
             }
         }
 
-        // Use histogram diff for region diffs
-        function computeRegionDiff(oldLines, newLines) {
-            return HistogramDiff.diffLines(oldLines, newLines);
+        async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath) {
+            const cacheKey = `${filePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}`;
+            if (fileDiffCache.has(cacheKey)) {
+                return fileDiffCache.get(cacheKey);
+            }
+
+            const [oldContent, newContent] = await Promise.all([
+                oldCommitId
+                    ? ADOAPI.getFileContent(currentConfig, oldFilePath || filePath, { version: oldCommitId, versionType: 'commit' }).catch(() => '')
+                    : Promise.resolve(''),
+                newCommitId
+                    ? ADOAPI.getFileContent(currentConfig, filePath, { version: newCommitId, versionType: 'commit' }).catch(() => '')
+                    : Promise.resolve('')
+            ]);
+
+            const diff = HistogramDiff.diff(oldContent, newContent);
+
+            let addedCount = 0, removedCount = 0;
+            for (const entry of diff) {
+                if (entry.type === 'added') addedCount++;
+                else if (entry.type === 'removed') removedCount++;
+            }
+
+            const result = { diff, addedCount, removedCount };
+            fileDiffCache.set(cacheKey, result);
+            return result;
+        }
+
+        function cropDiffToRegion(diff, startLine, endLine, useRight, contextLines = 5) {
+            const regionStart = Math.max(1, startLine - contextLines);
+            const regionEnd = endLine + contextLines;
+
+            let firstIdx = -1, lastIdx = -1;
+            let lastNewLine = 0, lastOldLine = 0;
+
+            for (let i = 0; i < diff.length; i++) {
+                const entry = diff[i];
+                if (entry.newLine !== undefined) lastNewLine = entry.newLine;
+                if (entry.oldLine !== undefined) lastOldLine = entry.oldLine;
+
+                const line = useRight
+                    ? (entry.newLine ?? lastNewLine)
+                    : (entry.oldLine ?? lastOldLine);
+
+                if (line >= regionStart && line <= regionEnd) {
+                    if (firstIdx === -1) firstIdx = i;
+                    lastIdx = i;
+                }
+            }
+
+            if (firstIdx === -1) return [];
+            return diff.slice(firstIdx, lastIdx + 1);
         }
 
         // Shared diff rendering utilities
@@ -5591,26 +5656,17 @@
                     oldFilePath = await getFilePathAtIteration(filePath, newIterationId, oldIterationId);
                 }
 
-                const newFilePath = filePath;
+                const result = await getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath);
+                const cropped = cropDiffToRegion(result.diff, startLine, endLine, useRight);
 
-                // Fetch both file versions in parallel
-                const [oldContent, newContent] = await Promise.all([
-                    ADOAPI.getFileContent(currentConfig, oldFilePath, { version: oldCommitId, versionType: 'commit' }).catch(() => ''),
-                    ADOAPI.getFileContent(currentConfig, newFilePath, { version: newCommitId, versionType: 'commit' })
-                ]);
-
-                const oldLines = oldContent.split('\n');
-                const newLines = newContent.split('\n');
-
-                // Compute diff for the region around the comment
-                const contextLines = 5;
-                const regionStart = Math.max(0, startLine - contextLines - 1);
-                const regionEnd = Math.min(Math.max(oldLines.length, newLines.length), endLine + contextLines);
-
-                const oldRegion = oldLines.slice(regionStart, Math.min(oldLines.length, regionEnd));
-                const newRegion = newLines.slice(regionStart, Math.min(newLines.length, regionEnd));
-
-                const diff = computeRegionDiff(oldRegion, newRegion);
+                // Derive start line numbers from the cropped diff entries
+                let startOldLine = 1, startNewLine = 1;
+                for (const entry of cropped) {
+                    if (entry.oldLine !== undefined) { startOldLine = entry.oldLine; break; }
+                }
+                for (const entry of cropped) {
+                    if (entry.newLine !== undefined) { startNewLine = entry.newLine; break; }
+                }
 
                 // Build thread range for highlighting
                 const threadRanges = [{
@@ -5619,9 +5675,9 @@
                     useRight, appliesToView: true, inserted: false
                 }];
 
-                const diffHtml = renderDiffLines(diff, threadRanges, {
-                    startOldLine: regionStart + 1,
-                    startNewLine: regionStart + 1
+                const diffHtml = renderDiffLines(cropped, threadRanges, {
+                    startOldLine,
+                    startNewLine
                 });
 
                 previewDiv.innerHTML = `<pre>${diffHtml}</pre>`;
@@ -6922,16 +6978,6 @@
             diffPanel.innerHTML = '<div class="file-diff-loading">Loading diff...</div>';
 
             try {
-                // Cache key includes iteration range
-                const cacheKey = `${filePath}:${selectedIterationStart ?? 'all'}-${selectedIterationEnd ?? 'all'}`;
-
-                // Check cache
-                if (fileDiffCache.has(cacheKey)) {
-                    const cached = fileDiffCache.get(cacheKey);
-                    renderFileDiff(filePath, changeType, cached.diff, cached.addedCount, cached.removedCount, cached.sourceServerItem);
-                    return;
-                }
-
                 const ct = changeType.toLowerCase();
 
                 // Find the change entry for source info
@@ -6969,37 +7015,25 @@
                     return;
                 }
 
-                let oldContent = '';
-                let newContent = '';
-
+                let oldCommitId, newCommitId, oldFilePath;
                 if (ct.includes('add')) {
-                    newContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
+                    oldCommitId = null;
+                    newCommitId = sourceCommit;
+                    oldFilePath = null;
                 } else if (ct.includes('delete')) {
-                    oldContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: baseCommit, versionType: 'commit' });
+                    oldCommitId = baseCommit;
+                    newCommitId = null;
+                    oldFilePath = null;
                 } else {
-                    const oldPath = sourceServerItem || filePath;
-                    const [oldResult, newResult] = await Promise.all([
-                        ADOAPI.getFileContent(currentConfig, oldPath, { version: baseCommit, versionType: 'commit' }),
-                        ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' })
-                    ]);
-                    oldContent = oldResult;
-                    newContent = newResult;
+                    oldCommitId = baseCommit;
+                    newCommitId = sourceCommit;
+                    oldFilePath = sourceServerItem || filePath;
                 }
 
+                const result = await getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath);
                 if (selectedFilePath !== filePath) return;
 
-                const diff = HistogramDiff.diff(oldContent, newContent);
-
-                let addedCount = 0;
-                let removedCount = 0;
-                for (const entry of diff) {
-                    if (entry.type === 'added') addedCount++;
-                    else if (entry.type === 'removed') removedCount++;
-                }
-
-                fileDiffCache.set(cacheKey, { diff, addedCount, removedCount, sourceServerItem });
-
-                renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem);
+                renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem);
             } catch (error) {
                 console.error('Failed to load file diff:', error);
                 if (selectedFilePath === filePath) {
