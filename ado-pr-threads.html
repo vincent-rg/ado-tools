@@ -7468,20 +7468,37 @@
             // Helper: get inline thread widgets to insert after this line
             function getLineSuffix(newLineNum, oldLineNum) {
                 let html = '';
-                for (const tr of threadRanges) {
-                    if (tr.inserted) continue;
-                    const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                    if (lineNum != null && lineNum >= tr.endLine) {
-                        tr.inserted = true;
-                        const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
-                        if (fileDiffDisplayMode === 'side-by-side') {
-                            if (tr.useRight) {
-                                html += `<div class="sbs-thread-row"><div class="sbs-thread-spacer sbs-thread-left"></div><div class="sbs-thread-side">${threadHtml}</div></div>`;
-                            } else {
-                                html += `<div class="sbs-thread-row"><div class="sbs-thread-side sbs-thread-left">${threadHtml}</div><div class="sbs-thread-spacer"></div></div>`;
-                            }
-                        } else {
-                            html += threadHtml;
+                if (fileDiffDisplayMode === 'side-by-side') {
+                    const leftThreads = [];
+                    const rightThreads = [];
+                    for (const tr of threadRanges) {
+                        if (tr.inserted) continue;
+                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                        if (lineNum != null && lineNum >= tr.endLine) {
+                            tr.inserted = true;
+                            const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
+                            if (tr.useRight) rightThreads.push(threadHtml);
+                            else leftThreads.push(threadHtml);
+                        }
+                    }
+                    // Pair left and right threads into shared rows
+                    const maxLen = Math.max(leftThreads.length, rightThreads.length);
+                    for (let j = 0; j < maxLen; j++) {
+                        const left = j < leftThreads.length
+                            ? `<div class="sbs-thread-side sbs-thread-left">${leftThreads[j]}</div>`
+                            : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
+                        const right = j < rightThreads.length
+                            ? `<div class="sbs-thread-side">${rightThreads[j]}</div>`
+                            : `<div class="sbs-thread-spacer"></div>`;
+                        html += `<div class="sbs-thread-row">${left}${right}</div>`;
+                    }
+                } else {
+                    for (const tr of threadRanges) {
+                        if (tr.inserted) continue;
+                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                        if (lineNum != null && lineNum >= tr.endLine) {
+                            tr.inserted = true;
+                            html += renderInlineThread(tr.thread, tr.appliesToView);
                         }
                     }
                 }
@@ -7497,17 +7514,29 @@
             }
 
             // Insert any remaining threads that weren't placed (e.g. beyond end of diff)
-            for (const tr of threadRanges) {
-                if (!tr.inserted) {
+            if (fileDiffDisplayMode === 'side-by-side') {
+                const leftRemaining = [];
+                const rightRemaining = [];
+                for (const tr of threadRanges) {
+                    if (tr.inserted) continue;
                     const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
-                    if (fileDiffDisplayMode === 'side-by-side') {
-                        if (tr.useRight) {
-                            diffHtml += `<div class="sbs-thread-row"><div class="sbs-thread-spacer sbs-thread-left"></div><div class="sbs-thread-side">${threadHtml}</div></div>`;
-                        } else {
-                            diffHtml += `<div class="sbs-thread-row"><div class="sbs-thread-side sbs-thread-left">${threadHtml}</div><div class="sbs-thread-spacer"></div></div>`;
-                        }
-                    } else {
-                        diffHtml += threadHtml;
+                    if (tr.useRight) rightRemaining.push(threadHtml);
+                    else leftRemaining.push(threadHtml);
+                }
+                const maxLen = Math.max(leftRemaining.length, rightRemaining.length);
+                for (let j = 0; j < maxLen; j++) {
+                    const left = j < leftRemaining.length
+                        ? `<div class="sbs-thread-side sbs-thread-left">${leftRemaining[j]}</div>`
+                        : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
+                    const right = j < rightRemaining.length
+                        ? `<div class="sbs-thread-side">${rightRemaining[j]}</div>`
+                        : `<div class="sbs-thread-spacer"></div>`;
+                    diffHtml += `<div class="sbs-thread-row">${left}${right}</div>`;
+                }
+            } else {
+                for (const tr of threadRanges) {
+                    if (!tr.inserted) {
+                        diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
                     }
                 }
             }
