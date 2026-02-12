@@ -5918,19 +5918,22 @@
 
                         // If we have line information, make the file path a collapsible preview header
                         if (ctx.filePath && fileStart) {
+                            const firstIterationId = thread.pullRequestThreadContext?.iterationContext?.firstComparingIteration;
                             const secondIterationId = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
                             const startLine = fileStart.line;
                             const endLine = fileEnd ? fileEnd.line : startLine;
 
-                            // First file preview: always show diff from base (0) to secondIterationId
+                            // Determine base iteration: if first !== second, compare between iterations; otherwise from base (0)
+                            const isIterationRange = firstIterationId != null && secondIterationId != null && firstIterationId !== secondIterationId;
+                            const oldIterationId = isIterationRange ? firstIterationId : 0;
+
                             const showDiff = secondIterationId && secondIterationId >= 1;
                             const iterationLabel = showDiff
-                                ? ` <span style="color: #605e5c; font-size: 11px;">(base → iteration ${secondIterationId})</span>`
+                                ? ` <span style="color: #605e5c; font-size: 11px;">(${isIterationRange ? `iteration ${firstIterationId}` : 'base'} → iteration ${secondIterationId})</span>`
                                 : '';
 
-                            // Always compare from base (0) to the thread's iteration context
                             const onclickHandler = showDiff
-                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', 0, ${secondIterationId}, ${startLine}, ${endLine}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`
+                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${oldIterationId}, ${secondIterationId}, ${startLine}, ${endLine}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`
                                 : `toggleFilePreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${startLine}, ${endLine}, null, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`;
 
                             threadListHtml += `
