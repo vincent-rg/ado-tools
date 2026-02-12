@@ -2614,10 +2614,11 @@
 
                 // Check if file was renamed TO currentPath in this iteration
                 for (const change of changes) {
-                    const changeType = change.changeType || '';
-                    if (changeType.includes('rename') && change.item?.path === currentPath && change.sourceServerItem) {
-                        // Before this iteration, file was at sourceServerItem
-                        currentPath = change.sourceServerItem;
+                    const changeType = (change.changeType || '').toLowerCase();
+                    const oldPath = change.sourceServerItem || change.originalPath;
+                    if (changeType.includes('rename') && change.item?.path === currentPath && oldPath) {
+                        // Before this iteration, file was at oldPath
+                        currentPath = oldPath;
                         break;
                     }
                 }
@@ -2632,8 +2633,9 @@
 
                 // Check if file was renamed FROM currentPath in this iteration
                 for (const change of changes) {
-                    const changeType = change.changeType || '';
-                    if (changeType.includes('rename') && change.sourceServerItem === currentPath && change.item?.path) {
+                    const changeType = (change.changeType || '').toLowerCase();
+                    const oldPath = change.sourceServerItem || change.originalPath;
+                    if (changeType.includes('rename') && oldPath === currentPath && change.item?.path) {
                         // After this iteration, file is at item.path
                         currentPath = change.item.path;
                         break;
@@ -5646,8 +5648,18 @@
                     if (!oldCommitId) {
                         throw new Error('Could not determine base commit');
                     }
-                    // Resolve old path - file may have been renamed across iterations
-                    oldFilePath = await getFilePathAtIteration(filePath, newIterationId, 1);
+                    // Resolve old path via cumulative changes (same approach as files view)
+                    oldFilePath = filePath;
+                    try {
+                        const changesData = await ADOAPI.getPRIterationChanges(currentConfig, currentPRId, newIterationId, 0);
+                        const changeEntry = (changesData.changeEntries || []).find(e => e.item?.path === filePath);
+                        const ct = (changeEntry?.changeType || '').toLowerCase();
+                        if (ct.includes('rename') && (changeEntry.sourceServerItem || changeEntry.originalPath)) {
+                            oldFilePath = changeEntry.sourceServerItem || changeEntry.originalPath;
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch cumulative changes for path resolution:', e);
+                    }
                 } else {
                     const oldIteration = allIterations.find(it => it.id === oldIterationId);
                     if (!oldIteration) {
