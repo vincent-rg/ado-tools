@@ -985,27 +985,6 @@
             background: #d4f0b4 !important;
             box-shadow: inset 3px 0 0 #6a9e3a;
         }
-        /* SBS thread positioning */
-        .sbs-thread-row {
-            display: flex;
-        }
-        .sbs-thread-side {
-            flex: 1;
-            min-width: 0;
-        }
-        .sbs-thread-side.sbs-thread-left {
-            border-right: 1px solid #d8dee4;
-        }
-        .sbs-thread-spacer {
-            flex: 1;
-            min-width: 0;
-        }
-        .sbs-thread-row .sbs-thread-spacer.sbs-thread-left {
-            border-right: 1px solid #d8dee4;
-        }
-        .sbs-thread-side .inline-thread {
-            border-right: none;
-        }
         /* SBS gutter avatar positioning */
         .diff-lines-sbs .diff-gutter-avatar.gutter-left {
             left: 10px;
@@ -7473,16 +7452,7 @@
                     const lineNum = tr.useRight ? newLineNum : oldLineNum;
                     if (lineNum != null && lineNum >= tr.endLine) {
                         tr.inserted = true;
-                        const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
-                        if (fileDiffDisplayMode === 'side-by-side') {
-                            if (tr.useRight) {
-                                html += `<div class="sbs-thread-row"><div class="sbs-thread-spacer sbs-thread-left"></div><div class="sbs-thread-side">${threadHtml}</div></div>`;
-                            } else {
-                                html += `<div class="sbs-thread-row"><div class="sbs-thread-side sbs-thread-left">${threadHtml}</div><div class="sbs-thread-spacer"></div></div>`;
-                            }
-                        } else {
-                            html += threadHtml;
-                        }
+                        html += renderInlineThread(tr.thread, tr.appliesToView);
                     }
                 }
                 return html;
@@ -7499,16 +7469,7 @@
             // Insert any remaining threads that weren't placed (e.g. beyond end of diff)
             for (const tr of threadRanges) {
                 if (!tr.inserted) {
-                    const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
-                    if (fileDiffDisplayMode === 'side-by-side') {
-                        if (tr.useRight) {
-                            diffHtml += `<div class="sbs-thread-row"><div class="sbs-thread-spacer sbs-thread-left"></div><div class="sbs-thread-side">${threadHtml}</div></div>`;
-                        } else {
-                            diffHtml += `<div class="sbs-thread-row"><div class="sbs-thread-side sbs-thread-left">${threadHtml}</div><div class="sbs-thread-spacer"></div></div>`;
-                        }
-                    } else {
-                        diffHtml += threadHtml;
-                    }
+                    diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
                 }
             }
 
