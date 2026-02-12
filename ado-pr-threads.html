@@ -5167,12 +5167,13 @@
                 return fileDiffCache.get(cacheKey);
             }
 
+            let oldFetchFailed = false, newFetchFailed = false;
             const [oldContent, newContent] = await Promise.all([
                 oldCommitId
-                    ? ADOAPI.getFileContent(currentConfig, oldFilePath || filePath, { version: oldCommitId, versionType: 'commit' }).catch(() => '')
+                    ? ADOAPI.getFileContent(currentConfig, oldFilePath || filePath, { version: oldCommitId, versionType: 'commit' }).catch(() => { oldFetchFailed = true; return ''; })
                     : Promise.resolve(''),
                 newCommitId
-                    ? ADOAPI.getFileContent(currentConfig, filePath, { version: newCommitId, versionType: 'commit' }).catch(() => '')
+                    ? ADOAPI.getFileContent(currentConfig, filePath, { version: newCommitId, versionType: 'commit' }).catch(() => { newFetchFailed = true; return ''; })
                     : Promise.resolve('')
             ]);
 
@@ -5184,8 +5185,10 @@
                 else if (entry.type === 'removed') removedCount++;
             }
 
-            const result = { diff, addedCount, removedCount };
-            fileDiffCache.set(cacheKey, result);
+            const result = { diff, addedCount, removedCount, oldFetchFailed, newFetchFailed };
+            if (!oldFetchFailed && !newFetchFailed) {
+                fileDiffCache.set(cacheKey, result);
+            }
             return result;
         }
 
@@ -5643,7 +5646,8 @@
                     if (!oldCommitId) {
                         throw new Error('Could not determine base commit');
                     }
-                    oldFilePath = filePath;
+                    // Resolve old path - file may have been renamed across iterations
+                    oldFilePath = await getFilePathAtIteration(filePath, newIterationId, 1);
                 } else {
                     const oldIteration = allIterations.find(it => it.id === oldIterationId);
                     if (!oldIteration) {
@@ -5657,6 +5661,10 @@
                 }
 
                 const result = await getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath);
+                if (result.oldFetchFailed || result.newFetchFailed) {
+                    const side = result.oldFetchFailed ? 'base' : 'new';
+                    throw new Error(`Could not load ${side} file content (${result.oldFetchFailed ? oldFilePath : filePath})`);
+                }
                 const cropped = cropDiffToRegion(result.diff, startLine, endLine, useRight);
 
                 // Derive start line numbers from the cropped diff entries
