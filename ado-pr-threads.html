@@ -933,6 +933,7 @@
             display: flex;
             min-width: 0;
             flex-basis: 50%;
+            overflow-x: hidden;
         }
         .sbs-left {
             border-right: 1px solid #d8dee4;
@@ -1020,6 +1021,15 @@
         }
         .diff-lines-sbs .diff-gutter-avatar.gutter-right {
             left: calc(50% + 10px);
+        }
+        .sbs-scroll-track {
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-shrink: 0;
+            border-top: 1px solid #e1dfdd;
+        }
+        .sbs-scroll-track-inner {
+            height: 1px;
         }
         .diff-display-mode-bar {
             display: flex;
@@ -2028,6 +2038,8 @@
         .file-diff-body .diff-lines {
             margin: 0;
             font-size: 12px;
+        }
+        .file-diff-body .diff-lines:not(.diff-lines-sbs) {
             width: fit-content;
             min-width: 100%;
         }
@@ -7395,6 +7407,39 @@
             return html;
         }
 
+        function setupSbsScrollSync(diffPanel) {
+            const body = diffPanel.querySelector('.file-diff-body');
+            if (!body) return;
+            const panes = body.querySelectorAll('.sbs-left, .sbs-right');
+            if (panes.length === 0) return;
+
+            // Measure the max content overflow across all panes
+            let maxScrollWidth = 0;
+            let paneClientWidth = 0;
+            for (const pane of panes) {
+                if (pane.scrollWidth > maxScrollWidth) maxScrollWidth = pane.scrollWidth;
+                if (pane.clientWidth > paneClientWidth) paneClientWidth = pane.clientWidth;
+            }
+
+            // No overflow — no scrollbar needed
+            if (maxScrollWidth <= paneClientWidth) return;
+
+            // Create scroll track at the bottom of the body
+            const track = document.createElement('div');
+            track.className = 'sbs-scroll-track';
+            const inner = document.createElement('div');
+            inner.className = 'sbs-scroll-track-inner';
+            inner.style.width = maxScrollWidth + 'px';
+            track.appendChild(inner);
+            body.appendChild(track);
+
+            track.addEventListener('scroll', () => {
+                for (const pane of panes) {
+                    pane.scrollLeft = track.scrollLeft;
+                }
+            });
+        }
+
         function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem) {
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
@@ -7561,6 +7606,11 @@
 
             // Trigger avatar loading for inline threads
             AvatarLoader.loadPending();
+
+            // Set up horizontal scroll sync for SBS mode
+            if (fileDiffDisplayMode === 'side-by-side') {
+                setupSbsScrollSync(diffPanel);
+            }
         }
 
         // File tree panel resize functionality
