@@ -2805,9 +2805,9 @@
                 const newPath = change.item?.path;
                 if (!newPath) continue;
 
-                const changeType = change.changeType || '';
-                // For renames, sourceServerItem contains the old path
-                const oldPath = change.sourceServerItem || newPath;
+                const changeType = (change.changeType || '').toLowerCase();
+                // For renames, sourceServerItem or originalPath contains the old path
+                const oldPath = change.sourceServerItem || change.originalPath || newPath;
 
                 console.group(`  File: ${newPath} (changeType: ${changeType})`);
 
