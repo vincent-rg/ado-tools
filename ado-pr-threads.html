@@ -2034,6 +2034,15 @@
             flex: 1;
             overflow: auto;
         }
+        .file-diff-body:has(.sbs-scroll-track) {
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+        .file-diff-body .diff-scroll-area {
+            flex: 1;
+            overflow: auto;
+        }
 
         .file-diff-body .diff-lines {
             margin: 0;
@@ -7600,7 +7609,9 @@
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
-                    <div class="diff-lines${sbsClass}">${diffHtml}</div>
+                    <div class="diff-scroll-area">
+                        <div class="diff-lines${sbsClass}">${diffHtml}</div>
+                    </div>
                 </div>
             `;
 
