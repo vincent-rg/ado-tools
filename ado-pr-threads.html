@@ -914,6 +914,86 @@
             box-shadow: inset 3px 0 0 #c44f4f;
         }
 
+        /* Side-by-side diff mode */
+        .sbs-row {
+            display: flex;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            position: relative;
+        }
+        .sbs-row.diff-unchanged .sbs-left,
+        .sbs-row.diff-unchanged .sbs-right {
+            background: #f6f8fa;
+            color: #24292f;
+        }
+        .sbs-left, .sbs-right {
+            flex: 1;
+            display: flex;
+            min-width: 0;
+        }
+        .sbs-left {
+            border-right: 1px solid #d8dee4;
+        }
+        .sbs-left .diff-content, .sbs-right .diff-content {
+            flex: 1;
+            padding-left: 8px;
+            white-space: pre;
+            overflow: hidden;
+        }
+        .sbs-left .diff-line-number, .sbs-right .diff-line-number {
+            color: #6e7681;
+            text-align: right;
+            width: 40px;
+            min-width: 40px;
+            padding: 0 4px;
+            user-select: none;
+            background: rgba(0, 0, 0, 0.05);
+            box-sizing: border-box;
+        }
+        .sbs-left.diff-removed {
+            background: #ffebe9;
+            color: #cf222e;
+        }
+        .sbs-right.diff-added {
+            background: #e6ffec;
+            color: #1a7f37;
+        }
+        .sbs-empty {
+            background: repeating-linear-gradient(
+                -45deg,
+                #f6f8fa,
+                #f6f8fa 4px,
+                #eef0f2 4px,
+                #eef0f2 8px
+            );
+        }
+        .sbs-empty .diff-line-number {
+            visibility: hidden;
+        }
+        /* Commented-line highlights for SBS */
+        .sbs-left.diff-line-commented,
+        .sbs-right.diff-line-commented {
+            background: #fff3cd !important;
+            box-shadow: inset 3px 0 0 #e8a517;
+        }
+        .sbs-left.diff-line-commented.diff-removed {
+            background: #f5c2c0 !important;
+            box-shadow: inset 3px 0 0 #c44f4f;
+        }
+        .sbs-right.diff-line-commented.diff-added {
+            background: #d4f0b4 !important;
+            box-shadow: inset 3px 0 0 #6a9e3a;
+        }
+        .diff-display-mode-bar {
+            display: flex;
+            gap: 0;
+            margin-left: 12px;
+        }
+        .diff-lines-sbs .diff-gutter-avatar {
+            left: 10px;
+        }
+
         /* Inline thread block inserted between diff lines */
         .inline-thread {
             border: 1px solid #d1d5db;
@@ -2554,6 +2634,7 @@
         let urlProject = null;  // Saved from initial URL
         let urlRepo = null;     // Saved from initial URL
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
+        let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -5332,6 +5413,80 @@
             return html;
         }
 
+        function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
+            const startOld = options.startOldLine ?? 1;
+            const startNew = options.startNewLine ?? 1;
+            const getLinePrefix = options.getLinePrefix || null;
+            const getLineSuffix = options.getLineSuffix || null;
+
+            let html = '';
+            let oldLineNum = startOld;
+            let newLineNum = startNew;
+            let i = 0;
+
+            while (i < diff.length) {
+                const entry = diff[i];
+
+                if (entry.type === 'unchanged') {
+                    const { html: contentHtmlR, commented: commentedR } = getHighlightedContent(entry.content, newLineNum, true, threadRanges);
+                    const { html: contentHtmlL, commented: commentedL } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges);
+                    const commented = commentedR || commentedL;
+                    const commentedClassL = (commentedL ? ' diff-line-commented' : '');
+                    const commentedClassR = (commentedR ? ' diff-line-commented' : '');
+                    const prefix = getLinePrefix ? getLinePrefix(newLineNum, oldLineNum) : '';
+                    html += `<div class="sbs-row diff-unchanged">${prefix}<div class="sbs-left${commentedClassL}"><span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${contentHtmlL}</span></div><div class="sbs-right${commentedClassR}"><span class="diff-line-number">${newLineNum}</span><span class="diff-content">${contentHtmlR}</span></div></div>`;
+                    if (getLineSuffix) html += getLineSuffix(newLineNum, oldLineNum);
+                    oldLineNum++;
+                    newLineNum++;
+                    i++;
+                } else {
+                    // Collect consecutive removed then added entries into a hunk
+                    const removed = [];
+                    while (i < diff.length && diff[i].type === 'removed') {
+                        removed.push(diff[i]);
+                        i++;
+                    }
+                    const added = [];
+                    while (i < diff.length && diff[i].type === 'added') {
+                        added.push(diff[i]);
+                        i++;
+                    }
+                    const maxLen = Math.max(removed.length, added.length);
+                    for (let j = 0; j < maxLen; j++) {
+                        let leftHtml, rightHtml;
+                        let curOld = null, curNew = null;
+
+                        if (j < removed.length) {
+                            curOld = oldLineNum;
+                            const { html: cHtml, commented } = getHighlightedContent(removed[j].content, oldLineNum, false, threadRanges);
+                            const commentedClass = commented ? ' diff-line-commented' : '';
+                            leftHtml = `<div class="sbs-left diff-removed${commentedClass}"><span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
+                            oldLineNum++;
+                        } else {
+                            leftHtml = `<div class="sbs-left sbs-empty"><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
+                        }
+
+                        if (j < added.length) {
+                            curNew = newLineNum;
+                            const { html: cHtml, commented } = getHighlightedContent(added[j].content, newLineNum, true, threadRanges);
+                            const commentedClass = commented ? ' diff-line-commented' : '';
+                            rightHtml = `<div class="sbs-right diff-added${commentedClass}"><span class="diff-line-number">${newLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
+                            newLineNum++;
+                        } else {
+                            rightHtml = `<div class="sbs-right sbs-empty"><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
+                        }
+
+                        const prefix = getLinePrefix ? getLinePrefix(curNew, curOld) : '';
+                        html += `<div class="sbs-row">${prefix}${leftHtml}${rightHtml}</div>`;
+                        if (getLineSuffix) html += getLineSuffix(curNew, curOld);
+                    }
+                    continue;
+                }
+            }
+
+            return html;
+        }
+
         function getLastIterationBeforeTime(sortedIterations, time) {
             for (let i = sortedIterations.length - 1; i >= 0; i--) {
                 if (new Date(sortedIterations[i].createdDate) < time) {
@@ -6324,6 +6479,13 @@
             }
         }
 
+        function setDiffDisplayMode(mode) {
+            if (mode === fileDiffDisplayMode) return;
+            fileDiffDisplayMode = mode;
+            localStorage.setItem('fileDiffDisplayMode', mode);
+            if (selectedFilePath) refreshInlineThreadsIfNeeded();
+        }
+
         function addFileToTree(root, filePath, changeType, sourceServerItem) {
             const parts = filePath.split('/').filter(p => p);
             if (parts.length === 0) return;
@@ -7210,10 +7372,17 @@
                 renameInfo = `<div class="file-diff-rename-info">Renamed from ${ADOContent.escapeHtml(sourceServerItem)}</div>`;
             }
 
+            const inlineActive = fileDiffDisplayMode === 'inline' ? ' active' : '';
+            const sbsActive = fileDiffDisplayMode === 'side-by-side' ? ' active' : '';
+
             let headerHtml = `
                 <div class="file-diff-header">
                     ${indicator}
                     <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
+                    <div class="diff-display-mode-bar">
+                        <button class="file-view-mode-btn${inlineActive}" onclick="setDiffDisplayMode('inline')">Inline</button>
+                        <button class="file-view-mode-btn${sbsActive}" onclick="setDiffDisplayMode('side-by-side')">Side by Side</button>
+                    </div>
                     <div class="file-diff-stats">
                         <span class="stat-added">+${addedCount}</span>
                         <span class="stat-removed">-${removedCount}</span>
@@ -7285,7 +7454,12 @@
             }
 
             // Render diff lines with highlighting and inline threads
-            let diffHtml = renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
+            let diffHtml;
+            if (fileDiffDisplayMode === 'side-by-side') {
+                diffHtml = renderDiffLinesSideBySide(diff, threadRanges, { getLinePrefix, getLineSuffix });
+            } else {
+                diffHtml = renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
+            }
 
             // Insert any remaining threads that weren't placed (e.g. beyond end of diff)
             for (const tr of threadRanges) {
@@ -7294,10 +7468,11 @@
                 }
             }
 
+            const sbsClass = fileDiffDisplayMode === 'side-by-side' ? ' diff-lines-sbs' : '';
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
-                    <div class="diff-lines">${diffHtml}</div>
+                    <div class="diff-lines${sbsClass}">${diffHtml}</div>
                 </div>
             `;
 
