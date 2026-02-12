@@ -875,6 +875,7 @@
             flex: 1;
             padding-left: 8px;
             white-space: pre;
+            min-width: 0;
         }
 
         .diff-unchanged {
@@ -931,6 +932,7 @@
             flex: 1;
             display: flex;
             min-width: 0;
+            flex-basis: 50%;
         }
         .sbs-left {
             border-right: 1px solid #d8dee4;
@@ -939,7 +941,6 @@
             flex: 1;
             padding-left: 8px;
             white-space: pre;
-            overflow: hidden;
         }
         .sbs-left .diff-line-number, .sbs-right .diff-line-number {
             color: #6e7681;
@@ -2021,12 +2022,14 @@
 
         .file-diff-body {
             flex: 1;
-            overflow-y: auto;
+            overflow: auto;
         }
 
         .file-diff-body .diff-lines {
             margin: 0;
             font-size: 12px;
+            width: fit-content;
+            min-width: 100%;
         }
 
         .file-diff-empty {
