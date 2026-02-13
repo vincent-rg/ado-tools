@@ -875,6 +875,7 @@
             flex: 1;
             padding-left: 8px;
             white-space: pre;
+            min-width: 0;
         }
 
         .diff-unchanged {
@@ -912,6 +913,161 @@
         .diff-line-commented.diff-removed {
             background: #f5c2c0 !important;
             box-shadow: inset 3px 0 0 #c44f4f;
+        }
+
+        /* Side-by-side diff mode */
+        .sbs-row {
+            display: flex;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            position: relative;
+        }
+        .sbs-row.diff-unchanged .sbs-left,
+        .sbs-row.diff-unchanged .sbs-right {
+            background: #f6f8fa;
+            color: #24292f;
+        }
+        .sbs-left, .sbs-right {
+            flex: 1;
+            display: flex;
+            min-width: 0;
+            flex-basis: 50%;
+            overflow-x: hidden;
+        }
+        .sbs-left {
+            border-right: 1px solid #d8dee4;
+        }
+        .sbs-left .diff-content, .sbs-right .diff-content {
+            flex: 1;
+            padding-left: 8px;
+            white-space: pre;
+        }
+        .sbs-left .diff-line-number, .sbs-right .diff-line-number {
+            color: #6e7681;
+            text-align: right;
+            width: 40px;
+            min-width: 40px;
+            padding: 0 4px;
+            user-select: none;
+            background: #f0f0f0;
+            box-sizing: border-box;
+            position: relative;
+            z-index: 1;
+        }
+        .sbs-left.diff-removed {
+            background: #ffebe9;
+            color: #cf222e;
+        }
+        .sbs-left.diff-removed .diff-line-number {
+            background: #ffd7d5;
+        }
+        .sbs-right.diff-added {
+            background: #e6ffec;
+            color: #1a7f37;
+        }
+        .sbs-right.diff-added .diff-line-number {
+            background: #ccffd8;
+        }
+        .sbs-empty {
+            background: repeating-linear-gradient(
+                -45deg,
+                #f6f8fa,
+                #f6f8fa 4px,
+                #eef0f2 4px,
+                #eef0f2 8px
+            );
+        }
+        .sbs-empty .diff-line-number {
+            visibility: hidden;
+        }
+        /* Commented-line highlights for SBS */
+        .sbs-left.diff-line-commented,
+        .sbs-right.diff-line-commented {
+            background: #fff3cd !important;
+            box-shadow: inset 3px 0 0 #e8a517;
+        }
+        .sbs-left.diff-line-commented .diff-line-number,
+        .sbs-right.diff-line-commented .diff-line-number {
+            background: #ffe9a0;
+        }
+        .sbs-left.diff-line-commented.diff-removed {
+            background: #f5c2c0 !important;
+            box-shadow: inset 3px 0 0 #c44f4f;
+        }
+        .sbs-left.diff-line-commented.diff-removed .diff-line-number {
+            background: #eaacaa;
+        }
+        .sbs-right.diff-line-commented.diff-added {
+            background: #d4f0b4 !important;
+            box-shadow: inset 3px 0 0 #6a9e3a;
+        }
+        .sbs-right.diff-line-commented.diff-added .diff-line-number {
+            background: #b8e098;
+        }
+        /* SBS thread positioning */
+        .sbs-thread-row {
+            display: flex;
+        }
+        .sbs-thread-side {
+            flex: 1;
+            min-width: 0;
+        }
+        .sbs-thread-side.sbs-thread-left {
+            border-right: 1px solid #d8dee4;
+        }
+        .sbs-thread-spacer {
+            flex: 1;
+            min-width: 0;
+            background: repeating-linear-gradient(
+                -45deg,
+                #f6f8fa,
+                #f6f8fa 4px,
+                #eef0f2 4px,
+                #eef0f2 8px
+            );
+        }
+        .sbs-thread-row .sbs-thread-spacer.sbs-thread-left {
+            border-right: 1px solid #d8dee4;
+        }
+        .sbs-thread-side .inline-thread {
+            border-right: none;
+        }
+        /* SBS gutter avatar positioning */
+        .diff-lines-sbs .diff-gutter-avatar.gutter-left {
+            left: 10px;
+        }
+        .diff-lines-sbs .diff-gutter-avatar.gutter-right {
+            left: calc(50% + 10px);
+        }
+        .sbs-scroll-track {
+            flex-shrink: 0;
+            height: 14px;
+            background: #f0f0f0;
+            border-top: 1px solid #e1dfdd;
+            position: relative;
+            cursor: pointer;
+        }
+        .sbs-scroll-thumb {
+            position: absolute;
+            top: 2px;
+            height: 10px;
+            min-width: 30px;
+            background: #a0a0a0;
+            border-radius: 5px;
+            cursor: grab;
+        }
+        .sbs-scroll-thumb:hover {
+            background: #888;
+        }
+        .sbs-scroll-thumb.dragging {
+            background: #666;
+            cursor: grabbing;
+        }
+        .diff-display-mode-bar {
+            display: flex;
+            gap: 0;
+            margin-left: 12px;
         }
 
         /* Inline thread block inserted between diff lines */
@@ -1909,12 +2065,25 @@
 
         .file-diff-body {
             flex: 1;
-            overflow-y: auto;
+            overflow: auto;
+        }
+        .file-diff-body:has(.sbs-scroll-track) {
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+        .file-diff-body .diff-scroll-area {
+            flex: 1;
+            overflow: auto;
         }
 
         .file-diff-body .diff-lines {
             margin: 0;
             font-size: 12px;
+        }
+        .file-diff-body .diff-lines:not(.diff-lines-sbs) {
+            width: fit-content;
+            min-width: 100%;
         }
 
         .file-diff-empty {
@@ -2554,6 +2723,7 @@
         let urlProject = null;  // Saved from initial URL
         let urlRepo = null;     // Saved from initial URL
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
+        let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -5332,6 +5502,80 @@
             return html;
         }
 
+        function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
+            const startOld = options.startOldLine ?? 1;
+            const startNew = options.startNewLine ?? 1;
+            const getLinePrefix = options.getLinePrefix || null;
+            const getLineSuffix = options.getLineSuffix || null;
+
+            let html = '';
+            let oldLineNum = startOld;
+            let newLineNum = startNew;
+            let i = 0;
+
+            while (i < diff.length) {
+                const entry = diff[i];
+
+                if (entry.type === 'unchanged') {
+                    const { html: contentHtmlR, commented: commentedR } = getHighlightedContent(entry.content, newLineNum, true, threadRanges);
+                    const { html: contentHtmlL, commented: commentedL } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges);
+                    const commented = commentedR || commentedL;
+                    const commentedClassL = (commentedL ? ' diff-line-commented' : '');
+                    const commentedClassR = (commentedR ? ' diff-line-commented' : '');
+                    const prefix = getLinePrefix ? getLinePrefix(newLineNum, oldLineNum) : '';
+                    html += `<div class="sbs-row diff-unchanged">${prefix}<div class="sbs-left${commentedClassL}"><span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${contentHtmlL}</span></div><div class="sbs-right${commentedClassR}"><span class="diff-line-number">${newLineNum}</span><span class="diff-content">${contentHtmlR}</span></div></div>`;
+                    if (getLineSuffix) html += getLineSuffix(newLineNum, oldLineNum);
+                    oldLineNum++;
+                    newLineNum++;
+                    i++;
+                } else {
+                    // Collect consecutive removed then added entries into a hunk
+                    const removed = [];
+                    while (i < diff.length && diff[i].type === 'removed') {
+                        removed.push(diff[i]);
+                        i++;
+                    }
+                    const added = [];
+                    while (i < diff.length && diff[i].type === 'added') {
+                        added.push(diff[i]);
+                        i++;
+                    }
+                    const maxLen = Math.max(removed.length, added.length);
+                    for (let j = 0; j < maxLen; j++) {
+                        let leftHtml, rightHtml;
+                        let curOld = null, curNew = null;
+
+                        if (j < removed.length) {
+                            curOld = oldLineNum;
+                            const { html: cHtml, commented } = getHighlightedContent(removed[j].content, oldLineNum, false, threadRanges);
+                            const commentedClass = commented ? ' diff-line-commented' : '';
+                            leftHtml = `<div class="sbs-left diff-removed${commentedClass}"><span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
+                            oldLineNum++;
+                        } else {
+                            leftHtml = `<div class="sbs-left sbs-empty"><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
+                        }
+
+                        if (j < added.length) {
+                            curNew = newLineNum;
+                            const { html: cHtml, commented } = getHighlightedContent(added[j].content, newLineNum, true, threadRanges);
+                            const commentedClass = commented ? ' diff-line-commented' : '';
+                            rightHtml = `<div class="sbs-right diff-added${commentedClass}"><span class="diff-line-number">${newLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
+                            newLineNum++;
+                        } else {
+                            rightHtml = `<div class="sbs-right sbs-empty"><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
+                        }
+
+                        const prefix = getLinePrefix ? getLinePrefix(curNew, curOld) : '';
+                        html += `<div class="sbs-row">${prefix}${leftHtml}${rightHtml}</div>`;
+                        if (getLineSuffix) html += getLineSuffix(curNew, curOld);
+                    }
+                    continue;
+                }
+            }
+
+            return html;
+        }
+
         function getLastIterationBeforeTime(sortedIterations, time) {
             for (let i = sortedIterations.length - 1; i >= 0; i--) {
                 if (new Date(sortedIterations[i].createdDate) < time) {
@@ -6324,6 +6568,13 @@
             }
         }
 
+        function setDiffDisplayMode(mode) {
+            if (mode === fileDiffDisplayMode) return;
+            fileDiffDisplayMode = mode;
+            localStorage.setItem('fileDiffDisplayMode', mode);
+            if (selectedFilePath) refreshInlineThreadsIfNeeded();
+        }
+
         function addFileToTree(root, filePath, changeType, sourceServerItem) {
             const parts = filePath.split('/').filter(p => p);
             if (parts.length === 0) return;
@@ -7198,6 +7449,92 @@
             return html;
         }
 
+        function setupSbsScrollSync(diffPanel) {
+            const body = diffPanel.querySelector('.file-diff-body');
+            if (!body) return;
+            const panes = body.querySelectorAll('.sbs-left, .sbs-right');
+            if (panes.length === 0) return;
+
+            // Measure the max content overflow across all panes
+            let maxScrollWidth = 0;
+            let paneClientWidth = 0;
+            for (const pane of panes) {
+                if (pane.scrollWidth > maxScrollWidth) maxScrollWidth = pane.scrollWidth;
+                if (pane.clientWidth > paneClientWidth) paneClientWidth = pane.clientWidth;
+            }
+
+            // No overflow — no scrollbar needed
+            if (maxScrollWidth <= paneClientWidth) return;
+
+            // Build custom scrollbar (no native overlay issues)
+            const track = document.createElement('div');
+            track.className = 'sbs-scroll-track';
+            const thumb = document.createElement('div');
+            thumb.className = 'sbs-scroll-thumb';
+            track.appendChild(thumb);
+            body.appendChild(track);
+
+            const scrollRange = maxScrollWidth - paneClientWidth;
+            const trackWidth = track.clientWidth;
+            const thumbWidth = Math.max(30, trackWidth * (paneClientWidth / maxScrollWidth));
+            thumb.style.width = thumbWidth + 'px';
+            const maxThumbLeft = trackWidth - thumbWidth;
+
+            let currentOffset = 0;
+            const contents = body.querySelectorAll('.diff-lines-sbs .diff-content');
+
+            function applyScroll(ratio) {
+                ratio = Math.max(0, Math.min(1, ratio));
+                currentOffset = ratio * scrollRange;
+                thumb.style.left = (ratio * maxThumbLeft) + 'px';
+                for (const el of contents) {
+                    el.style.transform = `translateX(-${currentOffset}px)`;
+                }
+            }
+
+            // Drag thumb
+            let dragging = false, dragStartX = 0, dragStartLeft = 0;
+            thumb.addEventListener('mousedown', (e) => {
+                dragging = true;
+                dragStartX = e.clientX;
+                dragStartLeft = parseFloat(thumb.style.left) || 0;
+                thumb.classList.add('dragging');
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const dx = e.clientX - dragStartX;
+                const newLeft = Math.max(0, Math.min(maxThumbLeft, dragStartLeft + dx));
+                applyScroll(maxThumbLeft > 0 ? newLeft / maxThumbLeft : 0);
+            });
+            document.addEventListener('mouseup', () => {
+                if (dragging) {
+                    dragging = false;
+                    thumb.classList.remove('dragging');
+                }
+            });
+
+            // Click on track to jump
+            track.addEventListener('mousedown', (e) => {
+                if (e.target === thumb) return;
+                const rect = track.getBoundingClientRect();
+                const clickX = e.clientX - rect.left - thumbWidth / 2;
+                applyScroll(maxThumbLeft > 0 ? clickX / maxThumbLeft : 0);
+            });
+
+            // Shift+wheel to scroll horizontally
+            const scrollArea = body.querySelector('.diff-scroll-area');
+            if (scrollArea) {
+                scrollArea.addEventListener('wheel', (e) => {
+                    if (!e.shiftKey) return;
+                    e.preventDefault();
+                    const delta = e.deltaY || e.deltaX;
+                    const newOffset = currentOffset + delta;
+                    applyScroll(scrollRange > 0 ? newOffset / scrollRange : 0);
+                }, { passive: false });
+            }
+        }
+
         function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem) {
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
@@ -7210,10 +7547,17 @@
                 renameInfo = `<div class="file-diff-rename-info">Renamed from ${ADOContent.escapeHtml(sourceServerItem)}</div>`;
             }
 
+            const inlineActive = fileDiffDisplayMode === 'inline' ? ' active' : '';
+            const sbsActive = fileDiffDisplayMode === 'side-by-side' ? ' active' : '';
+
             let headerHtml = `
                 <div class="file-diff-header">
                     ${indicator}
                     <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
+                    <div class="diff-display-mode-bar">
+                        <button class="file-view-mode-btn${inlineActive}" onclick="setDiffDisplayMode('inline')">Inline</button>
+                        <button class="file-view-mode-btn${sbsActive}" onclick="setDiffDisplayMode('side-by-side')">Side by Side</button>
+                    </div>
                     <div class="file-diff-stats">
                         <span class="stat-added">+${addedCount}</span>
                         <span class="stat-removed">-${removedCount}</span>
@@ -7265,7 +7609,8 @@
 
                     // Visible when collapsed, hidden when expanded
                     const displayStyle = isCollapsed ? '' : ' style="display:none"';
-                    html += `<div class="diff-gutter-avatar" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})"${displayStyle}>${avatarInner}</div>`;
+                    const sideClass = fileDiffDisplayMode === 'side-by-side' ? (tr.useRight ? ' gutter-right' : ' gutter-left') : '';
+                    html += `<div class="diff-gutter-avatar${sideClass}" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})"${displayStyle}>${avatarInner}</div>`;
                 }
                 return html;
             }
@@ -7273,36 +7618,96 @@
             // Helper: get inline thread widgets to insert after this line
             function getLineSuffix(newLineNum, oldLineNum) {
                 let html = '';
-                for (const tr of threadRanges) {
-                    if (tr.inserted) continue;
-                    const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                    if (lineNum != null && lineNum >= tr.endLine) {
-                        tr.inserted = true;
-                        html += renderInlineThread(tr.thread, tr.appliesToView);
+                if (fileDiffDisplayMode === 'side-by-side') {
+                    const leftThreads = [];
+                    const rightThreads = [];
+                    for (const tr of threadRanges) {
+                        if (tr.inserted) continue;
+                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                        if (lineNum != null && lineNum >= tr.endLine) {
+                            tr.inserted = true;
+                            const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
+                            if (tr.useRight) rightThreads.push(threadHtml);
+                            else leftThreads.push(threadHtml);
+                        }
+                    }
+                    // Pair left and right threads into shared rows
+                    const maxLen = Math.max(leftThreads.length, rightThreads.length);
+                    for (let j = 0; j < maxLen; j++) {
+                        const left = j < leftThreads.length
+                            ? `<div class="sbs-thread-side sbs-thread-left">${leftThreads[j]}</div>`
+                            : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
+                        const right = j < rightThreads.length
+                            ? `<div class="sbs-thread-side">${rightThreads[j]}</div>`
+                            : `<div class="sbs-thread-spacer"></div>`;
+                        html += `<div class="sbs-thread-row">${left}${right}</div>`;
+                    }
+                } else {
+                    for (const tr of threadRanges) {
+                        if (tr.inserted) continue;
+                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                        if (lineNum != null && lineNum >= tr.endLine) {
+                            tr.inserted = true;
+                            html += renderInlineThread(tr.thread, tr.appliesToView);
+                        }
                     }
                 }
                 return html;
             }
 
             // Render diff lines with highlighting and inline threads
-            let diffHtml = renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
+            let diffHtml;
+            if (fileDiffDisplayMode === 'side-by-side') {
+                diffHtml = renderDiffLinesSideBySide(diff, threadRanges, { getLinePrefix, getLineSuffix });
+            } else {
+                diffHtml = renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
+            }
 
             // Insert any remaining threads that weren't placed (e.g. beyond end of diff)
-            for (const tr of threadRanges) {
-                if (!tr.inserted) {
-                    diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
+            if (fileDiffDisplayMode === 'side-by-side') {
+                const leftRemaining = [];
+                const rightRemaining = [];
+                for (const tr of threadRanges) {
+                    if (tr.inserted) continue;
+                    const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
+                    if (tr.useRight) rightRemaining.push(threadHtml);
+                    else leftRemaining.push(threadHtml);
+                }
+                const maxLen = Math.max(leftRemaining.length, rightRemaining.length);
+                for (let j = 0; j < maxLen; j++) {
+                    const left = j < leftRemaining.length
+                        ? `<div class="sbs-thread-side sbs-thread-left">${leftRemaining[j]}</div>`
+                        : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
+                    const right = j < rightRemaining.length
+                        ? `<div class="sbs-thread-side">${rightRemaining[j]}</div>`
+                        : `<div class="sbs-thread-spacer"></div>`;
+                    diffHtml += `<div class="sbs-thread-row">${left}${right}</div>`;
+                }
+            } else {
+                for (const tr of threadRanges) {
+                    if (!tr.inserted) {
+                        diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
+                    }
                 }
             }
 
+            const sbsClass = fileDiffDisplayMode === 'side-by-side' ? ' diff-lines-sbs' : '';
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
-                    <div class="diff-lines">${diffHtml}</div>
+                    <div class="diff-scroll-area">
+                        <div class="diff-lines${sbsClass}">${diffHtml}</div>
+                    </div>
                 </div>
             `;
 
             // Trigger avatar loading for inline threads
             AvatarLoader.loadPending();
+
+            // Set up horizontal scroll sync for SBS mode
+            if (fileDiffDisplayMode === 'side-by-side') {
+                setupSbsScrollSync(diffPanel);
+            }
         }
 
         // File tree panel resize functionality
