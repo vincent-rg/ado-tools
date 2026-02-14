@@ -2118,6 +2118,33 @@
             color: #cf222e;
         }
 
+        /* Thread jump navigation */
+        .thread-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+        .thread-nav-btn {
+            background: none;
+            border: 1px solid #d1d5db;
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 2px 6px;
+            font-size: 14px;
+            color: #605e5c;
+            line-height: 1;
+        }
+        .thread-nav-btn:hover { background: #f3f2f1; }
+        .thread-nav-btn:disabled { opacity: 0.3; cursor: default; }
+        .thread-nav-btn:disabled:hover { background: none; }
+        .thread-nav-label {
+            font-size: 11px;
+            color: #8a8886;
+            white-space: nowrap;
+        }
+
         .file-diff-rename-info {
             font-size: 12px;
             color: #8250df;
@@ -3835,6 +3862,11 @@
                 if (e.key === 'Escape' && document.getElementById('prActionModal')?.classList.contains('show')) {
                     closePRActionModal();
                 }
+                // Thread jump navigation in files view (Alt+Up/Down)
+                if (currentView === 'files' && e.altKey && !e.ctrlKey && !e.metaKey) {
+                    if (e.key === 'ArrowDown') { e.preventDefault(); jumpToNextThread(); }
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); jumpToPrevThread(); }
+                }
             });
 
             // Load saved configuration from localStorage
@@ -4687,6 +4719,65 @@
 
         function clearThreadFocus() {
             document.querySelectorAll('.inline-thread.focused, .file-tree-thread.focused').forEach(el => el.classList.remove('focused'));
+        }
+
+        // Thread jump navigation — sorted thread IDs for the current file
+        let currentFileThreadIds = [];
+        let currentThreadNavIndex = -1;
+
+        function getSortedFileThreadIds() {
+            if (!selectedFilePath) return [];
+            const threads = threadsByFilePath.get(selectedFilePath);
+            if (!threads || threads.length === 0) return [];
+            return [...threads]
+                .filter(t => !t.isDeleted && t.threadContext)
+                .sort((a, b) => {
+                    const lineA = a.threadContext?.rightFileStart?.line || a.threadContext?.leftFileStart?.line || 0;
+                    const lineB = b.threadContext?.rightFileStart?.line || b.threadContext?.leftFileStart?.line || 0;
+                    if (lineA !== lineB) return lineA - lineB;
+                    const offsetA = a.threadContext?.rightFileStart?.offset || a.threadContext?.leftFileStart?.offset || 0;
+                    const offsetB = b.threadContext?.rightFileStart?.offset || b.threadContext?.leftFileStart?.offset || 0;
+                    return offsetA - offsetB;
+                })
+                .map(t => t.id);
+        }
+
+        function updateThreadNav(jumpedToId) {
+            currentFileThreadIds = getSortedFileThreadIds();
+            const nav = document.getElementById('threadNav');
+            if (!nav) return;
+            if (currentFileThreadIds.length === 0) {
+                nav.style.display = 'none';
+                return;
+            }
+            nav.style.display = 'flex';
+            if (jumpedToId !== undefined) {
+                currentThreadNavIndex = currentFileThreadIds.indexOf(jumpedToId);
+            }
+            const label = document.getElementById('threadNavLabel');
+            const prevBtn = document.getElementById('threadNavPrev');
+            const nextBtn = document.getElementById('threadNavNext');
+            if (label) label.textContent = currentThreadNavIndex >= 0
+                ? `${currentThreadNavIndex + 1}/${currentFileThreadIds.length}`
+                : `${currentFileThreadIds.length} threads`;
+            if (prevBtn) prevBtn.disabled = currentThreadNavIndex <= 0;
+            if (nextBtn) nextBtn.disabled = currentThreadNavIndex >= currentFileThreadIds.length - 1;
+        }
+
+        function jumpToNextThread() {
+            if (currentFileThreadIds.length === 0) return;
+            const nextIndex = currentThreadNavIndex < 0 ? 0 : Math.min(currentThreadNavIndex + 1, currentFileThreadIds.length - 1);
+            currentThreadNavIndex = nextIndex;
+            scrollToThread(currentFileThreadIds[nextIndex]);
+            updateThreadNav(currentFileThreadIds[nextIndex]);
+        }
+
+        function jumpToPrevThread() {
+            if (currentFileThreadIds.length === 0) return;
+            const prevIndex = currentThreadNavIndex < 0 ? 0 : Math.max(currentThreadNavIndex - 1, 0);
+            currentThreadNavIndex = prevIndex;
+            scrollToThread(currentFileThreadIds[prevIndex]);
+            updateThreadNav(currentFileThreadIds[prevIndex]);
         }
 
         function refreshInlineThreadsIfNeeded() {
@@ -7044,6 +7135,7 @@
             // If same file already displayed and we just need to scroll to a thread, skip re-render
             if (scrollToThreadId && selectedFilePath === filePath && document.querySelector(`.inline-thread[data-thread-id="${scrollToThreadId}"]`)) {
                 scrollToThread(scrollToThreadId);
+                updateThreadNav(scrollToThreadId);
                 return;
             }
 
@@ -7120,6 +7212,7 @@
                 if (selectedFilePath !== filePath) return;
 
                 renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem);
+                updateThreadNav(scrollToThreadId);
                 if (scrollToThreadId) scrollToThread(scrollToThreadId);
             } catch (error) {
                 console.error('Failed to load file diff:', error);
@@ -7374,6 +7467,11 @@
                     <div class="file-diff-stats">
                         <span class="stat-added">+${addedCount}</span>
                         <span class="stat-removed">-${removedCount}</span>
+                    </div>
+                    <div class="thread-nav" id="threadNav" style="display:none;">
+                        <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
+                        <span class="thread-nav-label" id="threadNavLabel"></span>
+                        <button class="thread-nav-btn" id="threadNavNext" onclick="jumpToNextThread()" title="Next thread (Alt+Down)">&#9660;</button>
                     </div>
                     ${renameInfo}
                 </div>
