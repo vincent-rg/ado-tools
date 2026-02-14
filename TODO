@@ -29,14 +29,14 @@ global:
 
 Unit tests (extract from HTML files + test):
 High priority:
-- ChecksFormatter: getLatestStatuses, countStatuses, countPolicies, countBuildPolicies, formatPolicy, buildTooltip
-- prMatchesFilters (ado-pr-list.html) - core filtering logic
-- hasPRChanged (ado-pr-list.html) - change detection for live updates
-- getTimeAgo (ado-pr-list.html) - relative time formatting
-- calculateFileChangeStats (ado-pr-threads.html) - file change statistics
-- getActiveThreadCounts (ado-pr-threads.html) - active threads by author
-- getCompletionBlockers (ado-pr-threads.html) - PR completion validation
-- stripMarkdown (ado-pr-threads.html) - markdown stripping
+- DONE ChecksFormatter: getLatestStatuses, countStatuses, countPolicies, countBuildPolicies, formatPolicy, buildTooltip
+- DONE prMatchesFilters (ado-pr-list.html → pr-list-utils.js) - core filtering logic
+- DONE hasPRChanged (ado-pr-list.html → pr-list-utils.js) - change detection for live updates
+- DONE getTimeAgo (ado-pr-list.html → pr-list-utils.js) - relative time formatting
+- DONE calculateFileChangeStats (ado-pr-threads.html → pr-threads-utils.js) - file change statistics
+- DONE getActiveThreadCounts (ado-pr-threads.html → pr-threads-utils.js) - active threads by author
+- DONE getCompletionBlockers (ado-pr-threads.html → pr-threads-utils.js) - PR completion validation
+- DONE stripMarkdown (ado-pr-threads.html → pr-threads-utils.js) - markdown stripping
 
 Medium priority:
-- ADOUI: formatDate, getStatusBadgeClass, getStatusText, renderStatusBadge
+- DONE ADOUI: formatDate, getStatusBadgeClass, getStatusText, renderStatusBadge

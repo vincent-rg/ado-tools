@@ -13,6 +13,9 @@ ado-server.py          (197 lines)  Python HTTP server + avatar/identity proxy
 common.css             (715 lines)  Shared styles (badges, modals, avatars, forms, layout)
 common.js             (1747 lines)  Shared JS modules (API, config, UI, content, avatars, checks)
 diff.js                (219 lines)  Histogram diff algorithm (line-by-line diff)
+diff-utils.js                       Extracted diff/thread utilities from ado-pr-threads.html
+pr-list-utils.js                    Extracted pure functions from ado-pr-list.html (filters, time, change detection)
+pr-threads-utils.js                 Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
 index.html             (206 lines)  Landing page with tool cards
 ado-settings.html      (219 lines)  Settings form (serverUrl, org, project, repo, PAT)
 ado-pr-list.html      (4201 lines)  PR list browser (CSS: 1-1057, HTML: 1059-1221, JS: 1224-4199)
