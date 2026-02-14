@@ -14,7 +14,6 @@ PR threads
 - work item status indicator (proposed, accepted, closed, resolved, completed, etc)
 
 pr threads file view
-- focusing on a thread (eg by clicking on it in file list) should highlight it
 - jump from comment to comment
 - jump from modification to modification
 - "modified version" view

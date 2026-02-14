@@ -1108,6 +1108,18 @@
             margin-top: 4px;
         }
 
+        /* Focused: highlight when navigated to from file tree, fades out */
+        .inline-thread.focused {
+            outline: 2px solid #0078d4;
+            outline-offset: -2px;
+            box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.15);
+            animation: thread-focus-fade 5s ease-out forwards;
+        }
+        @keyframes thread-focus-fade {
+            0%, 40% { outline-color: #0078d4; box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.15); }
+            100% { outline-color: transparent; box-shadow: 0 0 0 4px transparent; }
+        }
+
         /* Collapsed: thread block is fully hidden, avatar in gutter shows instead */
         .inline-thread.collapsed {
             display: none;
@@ -2494,6 +2506,17 @@
 
         .file-tree-thread:hover {
             background: #f3f2f1;
+        }
+
+        .file-tree-thread.focused {
+            animation: tree-thread-focus-fade 5s ease-out forwards;
+            background: #e8f0fe;
+            color: #0078d4;
+            font-weight: 600;
+        }
+        @keyframes tree-thread-focus-fade {
+            0%, 40% { background: #e8f0fe; color: #0078d4; font-weight: 600; }
+            100% { background: transparent; color: #605e5c; font-weight: normal; }
         }
 
         .thread-status-dot {
@@ -4650,9 +4673,20 @@
                 if (avatarEl) avatarEl.style.display = 'none';
             }
             threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Brief highlight to draw attention
-            threadEl.style.outline = '2px solid #0078d4';
-            setTimeout(() => { threadEl.style.outline = ''; }, 2000);
+            // Highlight focused thread (clear previous, apply fresh)
+            clearThreadFocus();
+            threadEl.classList.add('focused');
+            threadEl.addEventListener('animationend', () => threadEl.classList.remove('focused'), { once: true });
+            // Also highlight corresponding file tree entry
+            const treeEntry = document.querySelector(`.file-tree-thread[data-thread-id="${threadId}"]`);
+            if (treeEntry) {
+                treeEntry.classList.add('focused');
+                treeEntry.addEventListener('animationend', () => treeEntry.classList.remove('focused'), { once: true });
+            }
+        }
+
+        function clearThreadFocus() {
+            document.querySelectorAll('.inline-thread.focused, .file-tree-thread.focused').forEach(el => el.classList.remove('focused'));
         }
 
         function refreshInlineThreadsIfNeeded() {
@@ -6386,7 +6420,7 @@
                 const statusCls = thread.status || 'active';
                 const lineInfo = thread.threadContext?.rightFileStart?.line || thread.threadContext?.leftFileStart?.line;
                 const lineLabel = lineInfo ? `L${lineInfo}: ` : '';
-                html += `<div class="file-tree-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
+                html += `<div class="file-tree-thread" data-thread-id="${thread.id}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
                 html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
                 html += `<span class="thread-preview">${lineLabel}${ADOContent.escapeHtml(author)}: ${ADOContent.escapeHtml(preview)}</span>`;
                 html += '</div>';
@@ -7012,6 +7046,9 @@
                 scrollToThread(scrollToThreadId);
                 return;
             }
+
+            // Clear any thread focus from previous selection
+            clearThreadFocus();
 
             // Highlight selected file in tree
             document.querySelectorAll('.file-tree-file.selected').forEach(el => el.classList.remove('selected'));
