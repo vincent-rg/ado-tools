@@ -102,12 +102,16 @@ function renderDiffLines(diff, threadRanges, options = {}) {
     let html = '';
     let oldLineNum = startOld;
     let newLineNum = startNew;
+    let hunkIndex = 0;
+    let inChange = false;
 
     for (const entry of diff) {
         let curOld = null, curNew = null;
         let contentHtml, commented;
+        let hunkAttr = '';
 
         if (entry.type === 'unchanged') {
+            inChange = false;
             curOld = oldLineNum; curNew = newLineNum;
             const r = getHighlightedContent(entry.content, newLineNum, true, threadRanges);
             if (!r.commented) {
@@ -122,21 +126,24 @@ function renderDiffLines(diff, threadRanges, options = {}) {
             oldLineNum++;
             newLineNum++;
         } else if (entry.type === 'removed') {
+            if (!inChange) { hunkAttr = ` data-hunk="${hunkIndex++}"`; inChange = true; }
             curOld = oldLineNum;
             ({ html: contentHtml, commented } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges));
             const commentedClass = commented ? ' diff-line-commented' : '';
             const prefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
-            html += `<div class="diff-line diff-removed${commentedClass}">${prefix}<span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number"></span><span class="diff-indicator">−</span><span class="diff-content">${contentHtml}</span></div>`;
+            html += `<div class="diff-line diff-removed${commentedClass}"${hunkAttr}>${prefix}<span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number"></span><span class="diff-indicator">−</span><span class="diff-content">${contentHtml}</span></div>`;
             oldLineNum++;
         } else if (entry.type === 'added') {
+            if (!inChange) { hunkAttr = ` data-hunk="${hunkIndex++}"`; inChange = true; }
             curNew = newLineNum;
             ({ html: contentHtml, commented } = getHighlightedContent(entry.content, newLineNum, true, threadRanges));
             const commentedClass = commented ? ' diff-line-commented' : '';
             const prefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
-            html += `<div class="diff-line diff-added${commentedClass}">${prefix}<span class="diff-line-number"></span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator">+</span><span class="diff-content">${contentHtml}</span></div>`;
+            html += `<div class="diff-line diff-added${commentedClass}"${hunkAttr}>${prefix}<span class="diff-line-number"></span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator">+</span><span class="diff-content">${contentHtml}</span></div>`;
             newLineNum++;
         }
 
+        hunkAttr = '';
         if (getLineSuffix) {
             html += getLineSuffix(curNew, curOld);
         }
@@ -155,6 +162,7 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
     let oldLineNum = startOld;
     let newLineNum = startNew;
     let i = 0;
+    let hunkIndex = 0;
 
     while (i < diff.length) {
         const entry = diff[i];
@@ -183,6 +191,7 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
                 added.push(diff[i]);
                 i++;
             }
+            const hunkAttr = ` data-hunk="${hunkIndex++}"`;
             const maxLen = Math.max(removed.length, added.length);
             for (let j = 0; j < maxLen; j++) {
                 let leftHtml, rightHtml;
@@ -209,7 +218,7 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
                 }
 
                 const prefix = getLinePrefix ? getLinePrefix(curNew, curOld) : '';
-                html += `<div class="sbs-row">${prefix}${leftHtml}${rightHtml}</div>`;
+                html += `<div class="sbs-row"${j === 0 ? hunkAttr : ''}>${prefix}${leftHtml}${rightHtml}</div>`;
                 if (getLineSuffix) html += getLineSuffix(curNew, curOld);
             }
             continue;

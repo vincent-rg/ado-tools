@@ -2118,15 +2118,15 @@
             color: #cf222e;
         }
 
-        /* Thread jump navigation */
-        .thread-nav {
+        /* Hunk/thread jump navigation (shared styles) */
+        .hunk-nav, .thread-nav {
             display: flex;
             align-items: center;
             gap: 4px;
             margin-left: 8px;
             flex-shrink: 0;
         }
-        .thread-nav-btn {
+        .hunk-nav-btn, .thread-nav-btn {
             background: none;
             border: 1px solid #d1d5db;
             border-radius: 3px;
@@ -2136,10 +2136,10 @@
             color: #605e5c;
             line-height: 1;
         }
-        .thread-nav-btn:hover { background: #f3f2f1; }
-        .thread-nav-btn:disabled { opacity: 0.3; cursor: default; }
-        .thread-nav-btn:disabled:hover { background: none; }
-        .thread-nav-label {
+        .hunk-nav-btn:hover, .thread-nav-btn:hover { background: #f3f2f1; }
+        .hunk-nav-btn:disabled, .thread-nav-btn:disabled { opacity: 0.3; cursor: default; }
+        .hunk-nav-btn:disabled:hover, .thread-nav-btn:disabled:hover { background: none; }
+        .hunk-nav-label, .thread-nav-label {
             font-size: 11px;
             color: #8a8886;
             white-space: nowrap;
@@ -3862,10 +3862,14 @@
                 if (e.key === 'Escape' && document.getElementById('prActionModal')?.classList.contains('show')) {
                     closePRActionModal();
                 }
-                // Thread jump navigation in files view (Alt+Up/Down)
+                // Jump navigation in files view
                 if (currentView === 'files' && e.altKey && !e.ctrlKey && !e.metaKey) {
+                    // Alt+Up/Down: thread navigation
                     if (e.key === 'ArrowDown') { e.preventDefault(); jumpToNextThread(); }
                     else if (e.key === 'ArrowUp') { e.preventDefault(); jumpToPrevThread(); }
+                    // Alt+Left/Right: hunk (modification) navigation
+                    else if (e.key === 'ArrowRight') { e.preventDefault(); jumpToNextHunk(); }
+                    else if (e.key === 'ArrowLeft') { e.preventDefault(); jumpToPrevHunk(); }
                 }
             });
 
@@ -4778,6 +4782,55 @@
             currentThreadNavIndex = prevIndex;
             scrollToThread(currentFileThreadIds[prevIndex]);
             updateThreadNav(currentFileThreadIds[prevIndex]);
+        }
+
+        // Hunk (modification) jump navigation
+        let currentHunkIndex = -1;
+
+        function getHunkElements() {
+            return document.querySelectorAll('#fileDiffPanel [data-hunk]');
+        }
+
+        function updateHunkNav(index) {
+            const nav = document.getElementById('hunkNav');
+            if (!nav) return;
+            const hunks = getHunkElements();
+            if (hunks.length === 0) { nav.style.display = 'none'; return; }
+            nav.style.display = 'flex';
+            currentHunkIndex = index ?? -1;
+            const label = document.getElementById('hunkNavLabel');
+            const prevBtn = document.getElementById('hunkNavPrev');
+            const nextBtn = document.getElementById('hunkNavNext');
+            if (label) label.textContent = currentHunkIndex >= 0
+                ? `${currentHunkIndex + 1}/${hunks.length}`
+                : `${hunks.length} changes`;
+            if (prevBtn) prevBtn.disabled = currentHunkIndex <= 0;
+            if (nextBtn) nextBtn.disabled = currentHunkIndex >= hunks.length - 1;
+        }
+
+        function scrollToHunk(index) {
+            const hunks = getHunkElements();
+            if (index < 0 || index >= hunks.length) return;
+            const el = hunks[index];
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function jumpToNextHunk() {
+            const hunks = getHunkElements();
+            if (hunks.length === 0) return;
+            const nextIndex = currentHunkIndex < 0 ? 0 : Math.min(currentHunkIndex + 1, hunks.length - 1);
+            currentHunkIndex = nextIndex;
+            scrollToHunk(nextIndex);
+            updateHunkNav(nextIndex);
+        }
+
+        function jumpToPrevHunk() {
+            const hunks = getHunkElements();
+            if (hunks.length === 0) return;
+            const prevIndex = currentHunkIndex < 0 ? 0 : Math.max(currentHunkIndex - 1, 0);
+            currentHunkIndex = prevIndex;
+            scrollToHunk(prevIndex);
+            updateHunkNav(prevIndex);
         }
 
         function refreshInlineThreadsIfNeeded() {
@@ -7139,8 +7192,9 @@
                 return;
             }
 
-            // Clear any thread focus from previous selection
+            // Clear any thread/hunk focus from previous selection
             clearThreadFocus();
+            currentHunkIndex = -1;
 
             // Highlight selected file in tree
             document.querySelectorAll('.file-tree-file.selected').forEach(el => el.classList.remove('selected'));
@@ -7212,6 +7266,7 @@
                 if (selectedFilePath !== filePath) return;
 
                 renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem);
+                updateHunkNav();
                 updateThreadNav(scrollToThreadId);
                 if (scrollToThreadId) scrollToThread(scrollToThreadId);
             } catch (error) {
@@ -7467,6 +7522,11 @@
                     <div class="file-diff-stats">
                         <span class="stat-added">+${addedCount}</span>
                         <span class="stat-removed">-${removedCount}</span>
+                    </div>
+                    <div class="hunk-nav" id="hunkNav" style="display:none;">
+                        <button class="hunk-nav-btn" id="hunkNavPrev" onclick="jumpToPrevHunk()" title="Previous change (Alt+Left)">&#9650;</button>
+                        <span class="hunk-nav-label" id="hunkNavLabel"></span>
+                        <button class="hunk-nav-btn" id="hunkNavNext" onclick="jumpToNextHunk()" title="Next change (Alt+Right)">&#9660;</button>
                     </div>
                     <div class="thread-nav" id="threadNav" style="display:none;">
                         <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
