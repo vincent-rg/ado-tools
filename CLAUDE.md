@@ -182,5 +182,5 @@ look at TODO file
 - **Always work in a branch**: Create a feature branch before making changes. Never commit directly to `main`.
 - **Commit frequently**: Make small, focused commits as you go rather than one large commit at the end. Each commit should represent a logical unit of work (e.g., extract a module, add tests for it, fix a bug found during testing).
 - **Branch naming**: Use descriptive names like `add-vitest-unit-tests`, `extract-pr-list-utils`, `fix-diff-rendering`.
-- **Validation**: Add unit-test whenever possible and relevant, run unit-test suite
+- **Validation**: Add unit-test whenever possible and relevant, run unit-test suite. Load Node.js 20 before running tests (`nvm use 20`).
 - **Clean TODO list**: when a TODO entry is done, remove it from the TODO file

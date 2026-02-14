@@ -4640,6 +4640,21 @@
             if (avatarEl) avatarEl.style.display = isCollapsed ? 'none' : '';
         }
 
+        function scrollToThread(threadId) {
+            const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+            if (!threadEl) return;
+            // Expand if collapsed
+            if (threadEl.classList.contains('collapsed')) {
+                threadEl.classList.remove('collapsed');
+                const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
+                if (avatarEl) avatarEl.style.display = 'none';
+            }
+            threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Brief highlight to draw attention
+            threadEl.style.outline = '2px solid #0078d4';
+            setTimeout(() => { threadEl.style.outline = ''; }, 2000);
+        }
+
         function refreshInlineThreadsIfNeeded() {
             if (currentView !== 'files' || !selectedFilePath) return;
             buildThreadsByFilePath();
@@ -6362,7 +6377,7 @@
                 const statusCls = thread.status || 'active';
                 const lineInfo = thread.threadContext?.rightFileStart?.line || thread.threadContext?.leftFileStart?.line;
                 const lineLabel = lineInfo ? `L${lineInfo}: ` : '';
-                html += `<div class="file-tree-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}')">`;
+                html += `<div class="file-tree-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
                 html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
                 html += `<span class="thread-preview">${lineLabel}${ADOContent.escapeHtml(author)}: ${ADOContent.escapeHtml(preview)}</span>`;
                 html += '</div>';
@@ -6982,7 +6997,13 @@
             }
         }
 
-        async function selectFileForDiff(filePath, changeType) {
+        async function selectFileForDiff(filePath, changeType, scrollToThreadId) {
+            // If same file already displayed and we just need to scroll to a thread, skip re-render
+            if (scrollToThreadId && selectedFilePath === filePath && document.querySelector(`.inline-thread[data-thread-id="${scrollToThreadId}"]`)) {
+                scrollToThread(scrollToThreadId);
+                return;
+            }
+
             // Highlight selected file in tree
             document.querySelectorAll('.file-tree-file.selected').forEach(el => el.classList.remove('selected'));
             const fileEl = document.querySelector(`.file-tree-file[data-path="${CSS.escape(filePath)}"]`);
@@ -7053,6 +7074,7 @@
                 if (selectedFilePath !== filePath) return;
 
                 renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem);
+                if (scrollToThreadId) scrollToThread(scrollToThreadId);
             } catch (error) {
                 console.error('Failed to load file diff:', error);
                 if (selectedFilePath === filePath) {
