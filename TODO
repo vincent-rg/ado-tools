@@ -26,17 +26,3 @@ global:
 - refactor avatar indicators display (maybe also some other stuff on avatars?)
 - make toad icon
 
-
-Unit tests (extract from HTML files + test):
-High priority:
-- DONE ChecksFormatter: getLatestStatuses, countStatuses, countPolicies, countBuildPolicies, formatPolicy, buildTooltip
-- DONE prMatchesFilters (ado-pr-list.html → pr-list-utils.js) - core filtering logic
-- DONE hasPRChanged (ado-pr-list.html → pr-list-utils.js) - change detection for live updates
-- DONE getTimeAgo (ado-pr-list.html → pr-list-utils.js) - relative time formatting
-- DONE calculateFileChangeStats (ado-pr-threads.html → pr-threads-utils.js) - file change statistics
-- DONE getActiveThreadCounts (ado-pr-threads.html → pr-threads-utils.js) - active threads by author
-- DONE getCompletionBlockers (ado-pr-threads.html → pr-threads-utils.js) - PR completion validation
-- DONE stripMarkdown (ado-pr-threads.html → pr-threads-utils.js) - markdown stripping
-
-Medium priority:
-- DONE ADOUI: formatDate, getStatusBadgeClass, getStatusText, renderStatusBadge

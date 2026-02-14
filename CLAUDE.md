@@ -154,30 +154,9 @@ All exposed on `window.*`:
 - Falls back to simple LCS for small regions (≤10 lines)
 - `HistogramDiff.stats(old, new)` → `{added, removed}` counts
 
-## Known TODOs (from TODO file)
+## Known TODOs
 
-PR Threads:
-- Add linked work items
-- "Ready to complete!" badge when all requirements met
-- Scroll in diff file preview
-- Description editing (markdown editor)
-- "@" support in markdown
-- Fix "unknown build" names (fetch pipeline name from buildDefinitionId)
-- "requires merge strategy" policy display
-
-PR List:
-- Sort by update count
-- Sort by open comment count
-- Click reviewer/author to see their open comments
-
-Global:
-- Refactor avatar indicator display
-- Add global option to disable live updates
-
-Markdown:
-- ~~Checkbox support~~: DONE
-- ~~Escaping (like \+)~~: DONE
-- ~~Bullet support (- + numbered lists)~~: DONE
+look at TODO file
 
 ## Refactoring Opportunities
 
@@ -200,3 +179,4 @@ Markdown:
 - **Always work in a branch**: Create a feature branch before making changes. Never commit directly to `main`.
 - **Commit frequently**: Make small, focused commits as you go rather than one large commit at the end. Each commit should represent a logical unit of work (e.g., extract a module, add tests for it, fix a bug found during testing).
 - **Branch naming**: Use descriptive names like `add-vitest-unit-tests`, `extract-pr-list-utils`, `fix-diff-rendering`.
+- **Validation**: Add unit-test whenever possible, run unit-test suite
