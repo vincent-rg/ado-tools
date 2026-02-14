@@ -1,0 +1,42 @@
+pr threads
+- add linked work items
+- add a "Ready to complete!" badge when all requirements are met
+
+PR list
+Tri sur nombre d'update
+Tri sur nombre de commentaires ouverts
+Clic sur un reviewer/autre auteur pour voir ses commentaires ouverts
+
+
+PR threads
+Défilement dans diff file preview
+Edition description (création d'un contrôle d'édition markdown)
+add "@" support in markdown
+des builds qui apparaissent "unknown build" (peut-être récupérer le nom de la pipeline depuis le builddefinitionid?)
+
+pr threads file view
+- jump from comment to comment
+- click on comment to show it
+- jump from modification to modification
+- side by side view
+- modified version view
+
+
+global:
+- refactor avatar indicators display (maybe also some other stuff on avatars?)
+- make toad icon
+
+
+Unit tests (extract from HTML files + test):
+High priority:
+- ChecksFormatter: getLatestStatuses, countStatuses, countPolicies, countBuildPolicies, formatPolicy, buildTooltip
+- prMatchesFilters (ado-pr-list.html) - core filtering logic
+- hasPRChanged (ado-pr-list.html) - change detection for live updates
+- getTimeAgo (ado-pr-list.html) - relative time formatting
+- calculateFileChangeStats (ado-pr-threads.html) - file change statistics
+- getActiveThreadCounts (ado-pr-threads.html) - active threads by author
+- getCompletionBlockers (ado-pr-threads.html) - PR completion validation
+- stripMarkdown (ado-pr-threads.html) - markdown stripping
+
+Medium priority:
+- ADOUI: formatDate, getStatusBadgeClass, getStatusText, renderStatusBadge

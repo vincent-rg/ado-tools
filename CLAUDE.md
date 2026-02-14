@@ -191,3 +191,9 @@ Markdown:
 
 - [ ] Replace inline `onclick` handlers with event delegation + `data-*` attributes
 - [ ] Standardize error handling (mix of `alert()`, `console.warn`, `try/catch`)
+
+## Workflow Rules
+
+- **Always work in a branch**: Create a feature branch before making changes. Never commit directly to `main`.
+- **Commit frequently**: Make small, focused commits as you go rather than one large commit at the end. Each commit should represent a logical unit of work (e.g., extract a module, add tests for it, fix a bug found during testing).
+- **Branch naming**: Use descriptive names like `add-vitest-unit-tests`, `extract-pr-list-utils`, `fix-diff-rendering`.
