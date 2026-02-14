@@ -217,3 +217,8 @@ const HistogramDiff = {
 if (typeof window !== 'undefined') {
     window.HistogramDiff = HistogramDiff;
 }
+
+// Export for use in Node.js (tests)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = HistogramDiff;
+}

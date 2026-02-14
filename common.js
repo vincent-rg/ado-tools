@@ -940,9 +940,9 @@ const ADOContent = {
      * Escape HTML
      */
     escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        if (!text) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     },
 
     /**
@@ -1740,12 +1740,19 @@ const ADOSearch = {
 };
 
 // Make utilities globally available
-window.ADOConfig = ADOConfig;
-window.ADOAPI = ADOAPI;
-window.ADOIdentity = ADOIdentity;
-window.ADOContent = ADOContent;
-window.ADOUI = ADOUI;
-window.ADOURL = ADOURL;
-window.ADOSearch = ADOSearch;
-window.ChecksFormatter = ChecksFormatter;
-window.AvatarLoader = AvatarLoader;
+if (typeof window !== 'undefined') {
+    window.ADOConfig = ADOConfig;
+    window.ADOAPI = ADOAPI;
+    window.ADOIdentity = ADOIdentity;
+    window.ADOContent = ADOContent;
+    window.ADOUI = ADOUI;
+    window.ADOURL = ADOURL;
+    window.ADOSearch = ADOSearch;
+    window.ChecksFormatter = ChecksFormatter;
+    window.AvatarLoader = AvatarLoader;
+}
+
+// Export for use in Node.js (tests)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ADOConfig, ADOAPI, ADOContent, ADOUI, ADOURL, ADOSearch, ChecksFormatter };
+}
