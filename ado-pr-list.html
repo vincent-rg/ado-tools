@@ -1221,6 +1221,7 @@
     </div>
 
     <script src="common.js"></script>
+    <script src="pr-list-utils.js"></script>
     <script>
         let allProjects = [];
         let allRepos = [];
@@ -1971,15 +1972,7 @@
         }
 
         function getTimeAgo(timestamp) {
-            const seconds = Math.floor((Date.now() - timestamp) / 1000);
-
-            if (seconds < 60) return 'just now';
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-            const days = Math.floor(hours / 24);
-            return `${days} day${days !== 1 ? 's' : ''} ago`;
+            return PRListUtils.getTimeAgo(timestamp);
         }
 
         function startUpdateTimeInterval() {
@@ -2081,78 +2074,10 @@
          * Test whether a single PR matches the given filters object.
          */
         function prMatchesFilters(pr, filters) {
-            // PR ID filter
-            if (filters.prId && pr.pullRequestId.toString() !== filters.prId) {
-                return false;
-            }
-
-            // Title filter - subsequence matching
-            if (filters.title) {
-                const titleNorm = ADOSearch.normalize(pr.title);
-                const pieces = ADOSearch.normalize(filters.title).split(/\s+/).filter(p => p.length > 0);
-
-                let lastIndex = -1;
-                for (const piece of pieces) {
-                    const index = titleNorm.indexOf(piece, lastIndex + 1);
-                    if (index === -1) {
-                        return false;
-                    }
-                    lastIndex = index;
-                }
-            }
-
-            // Status filter (if no statuses selected, show all)
-            if (filters.statuses.length > 0) {
-                if (!filters.statuses.includes(pr.status.toLowerCase())) {
-                    return false;
-                }
-            }
-
-            // Created by filter (semicolon-separated, match ANY)
-            if (filters.createdBy) {
-                const authors = filters.createdBy.split(';').map(a => a.trim()).filter(a => a.length > 0);
-                if (authors.length > 0) {
-                    const authorName = ADOSearch.normalize(pr.createdBy.displayName);
-                    const matchesAny = authors.some(a => authorName.includes(a));
-                    if (!matchesAny) {
-                        return false;
-                    }
-                }
-            }
-
-            // Assigned to filter (semicolon-separated, match ANY)
-            if (filters.assignedTo) {
-                const reviewerFilters = filters.assignedTo.split(';').map(r => r.trim()).filter(r => r.length > 0);
-                if (reviewerFilters.length > 0) {
-                    const matchesAny = reviewerFilters.some(rf =>
-                        pr.reviewers.some(reviewer =>
-                            ADOSearch.normalize(reviewer.displayName).includes(rf)
-                        )
-                    );
-                    if (!matchesAny) {
-                        return false;
-                    }
-                }
-            }
-
-            // Comment author filter
-            if (filters.commentAuthor) {
-                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
-                const cached = prCommentCounts[prKey];
-                if (cached && cached.authorObjects) {
-                    const hasCommentAuthor = Object.values(cached.authorObjects).some(author =>
-                        ADOSearch.normalize(author.displayName).includes(filters.commentAuthor)
-                    );
-                    if (!hasCommentAuthor) {
-                        return false;
-                    }
-                } else {
-                    // Comment data not loaded yet - hide until data arrives
-                    return false;
-                }
-            }
-
-            return true;
+            return PRListUtils.prMatchesFilters(pr, filters, {
+                normalize: ADOSearch.normalize,
+                commentCounts: prCommentCounts
+            });
         }
 
         function applyFilters() {
@@ -3941,7 +3866,7 @@
         }
 
         function getPRKey(pr) {
-            return `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+            return PRListUtils.getPRKey(pr);
         }
 
         function detectChanges(oldPRs, freshPRs) {
@@ -4004,14 +3929,7 @@
         }
 
         function hasPRChanged(oldPR, freshPR) {
-            // Check if important fields have changed
-            return (
-                oldPR.status !== freshPR.status ||
-                oldPR.title !== freshPR.title ||
-                oldPR.isDraft !== freshPR.isDraft ||
-                JSON.stringify(oldPR.reviewers) !== JSON.stringify(freshPR.reviewers) ||
-                oldPR.description !== freshPR.description
-            );
+            return PRListUtils.hasPRChanged(oldPR, freshPR);
         }
 
         async function handleDetectedChanges(changes, freshPRs) {
