@@ -545,6 +545,22 @@ const ADOAPI = {
      * @param {number} prId - Pull request ID
      * @param {boolean} isDraft - True to make draft, false to publish
      */
+    async updatePRDescription(config, prId, description) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify({ description })
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to update description: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
     async setDraft(config, prId, isDraft) {
         const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
 

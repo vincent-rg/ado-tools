@@ -6,7 +6,7 @@ PR list
 
 PR threads
 - Défilement dans diff file preview
-- Edition description (création d'un contrôle d'édition markdown)
+- Edition description: ajout des boutons de markdown
 - add "@" support in markdown
 - des builds qui apparaissent "unknown build" (peut-être récupérer le nom de la pipeline depuis le builddefinitionid?)
 - add a "Ready to complete!" badge when all requirements are met

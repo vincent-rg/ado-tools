@@ -1731,6 +1731,49 @@
             font-size: 14px;
             color: #323130;
             background: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .description-edit-btn {
+            background: none;
+            border: 1px solid transparent;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #605e5c;
+            font-size: 13px;
+        }
+
+        .description-card-content .comment-editor textarea {
+            min-height: 160px;
+        }
+
+        .description-preview {
+            margin-top: 10px;
+            border: 1px solid #e1dfdd;
+            border-radius: 2px;
+        }
+
+        .description-preview-header {
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #605e5c;
+            background: #faf9f8;
+            border-bottom: 1px solid #e1dfdd;
+        }
+
+        .description-preview-content {
+            padding: 10px;
+            white-space: pre-wrap;
+        }
+
+        .description-edit-btn:hover {
+            background: #f3f2f1;
+            border-color: #e1dfdd;
+            color: #323130;
         }
 
         .description-card-content {
@@ -3416,6 +3459,16 @@
                     targetBranchEl.textContent = prData.targetRefName?.replace('refs/heads/', '') || 'Unknown';
                 }
 
+                // Update description if not currently being edited
+                const descriptionContentEl = document.getElementById('pr-description-content');
+                if (descriptionContentEl && !descriptionContentEl.querySelector('.comment-editor')) {
+                    if (prData.description !== currentPRData.description) {
+                        descriptionContentEl.innerHTML = prData.description
+                            ? `<div class="pr-description">${ADOContent.processContent(prData.description)}</div>`
+                            : '<div class="pr-description" style="color: #a19f9d; font-style: italic;">No description</div>';
+                    }
+                }
+
                 // Update stored PR data first so updateReviewersDisplay uses fresh data
                 currentPRData = prData;
 
@@ -4673,6 +4726,87 @@
             } catch (error) {
                 console.error('Failed to update comment:', error);
                 alert(`Failed to update comment: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
+                if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+            }
+        }
+
+        function startEditDescription() {
+            const contentEl = document.getElementById('pr-description-content');
+            const editBtn = document.getElementById('description-edit-btn');
+            if (!contentEl) return;
+
+            contentEl.dataset.originalHtml = contentEl.innerHTML;
+            const rawDescription = (currentPRData.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            const previewHtml = currentPRData.description
+                ? ADOContent.processContent(currentPRData.description)
+                : '<span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>';
+
+            contentEl.innerHTML = `
+                <div class="comment-editor">
+                    <textarea id="edit-description-textarea">${rawDescription}</textarea>
+                    <div class="comment-editor-actions">
+                        <button class="btn-cancel" onclick="cancelEditDescription()">Cancel</button>
+                        <button class="btn-save" id="edit-description-save" onclick="saveEditDescription()">Save</button>
+                    </div>
+                </div>
+                <div class="description-preview">
+                    <div class="description-preview-header">Preview</div>
+                    <div class="description-preview-content pr-description" id="edit-description-preview">${previewHtml}</div>
+                </div>
+            `;
+
+            if (editBtn) editBtn.style.display = 'none';
+            const textarea = document.getElementById('edit-description-textarea');
+            if (textarea) {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                textarea.addEventListener('input', updateDescriptionPreview);
+            }
+        }
+
+        function updateDescriptionPreview() {
+            const textarea = document.getElementById('edit-description-textarea');
+            const preview = document.getElementById('edit-description-preview');
+            if (!textarea || !preview) return;
+            const text = textarea.value;
+            preview.innerHTML = text
+                ? ADOContent.processContent(text)
+                : '<span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>';
+        }
+
+        function cancelEditDescription() {
+            const contentEl = document.getElementById('pr-description-content');
+            const editBtn = document.getElementById('description-edit-btn');
+            if (!contentEl) return;
+
+            contentEl.innerHTML = contentEl.dataset.originalHtml || '';
+            if (editBtn) editBtn.style.display = '';
+        }
+
+        async function saveEditDescription() {
+            const textarea = document.getElementById('edit-description-textarea');
+            const btn = document.getElementById('edit-description-save');
+            if (!textarea) return;
+
+            const description = textarea.value;
+            if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+            try {
+                await ADOAPI.updatePRDescription(currentConfig, currentPRId, description);
+                currentPRData.description = description;
+
+                const contentEl = document.getElementById('pr-description-content');
+                const editBtn = document.getElementById('description-edit-btn');
+                if (contentEl) {
+                    contentEl.innerHTML = description
+                        ? `<div class="pr-description">${ADOContent.processContent(description)}</div>`
+                        : '<div class="pr-description" style="color: #a19f9d; font-style: italic;">No description</div>';
+                }
+                if (editBtn) editBtn.style.display = '';
+            } catch (error) {
+                console.error('Failed to update description:', error);
+                alert(`Failed to update description: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
                 if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
             }
         }
@@ -5968,14 +6102,17 @@
                 <div class="pr-header">
                     <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
                     <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code id="prTargetBranch">${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
-                    ${prData.description ? `
                     <div class="description-card">
-                        <div class="description-card-header">Description</div>
-                        <div class="description-card-content">
-                            <div class="pr-description">${ADOContent.processContent(prData.description)}</div>
+                        <div class="description-card-header">
+                            <span>Description</span>
+                            <button class="description-edit-btn" id="description-edit-btn" onclick="startEditDescription()" title="Edit description">&#9998;</button>
+                        </div>
+                        <div class="description-card-content" id="pr-description-content">
+                            ${prData.description
+                                ? `<div class="pr-description">${ADOContent.processContent(prData.description)}</div>`
+                                : '<div class="pr-description" style="color: #a19f9d; font-style: italic;">No description</div>'}
                         </div>
                     </div>
-                    ` : ''}
                 </div>
             `;
 
