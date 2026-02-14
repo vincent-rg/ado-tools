@@ -5913,7 +5913,19 @@
                     if (!oldCommitId) {
                         throw new Error('Could not determine old commit version');
                     }
-                    oldFilePath = await getFilePathAtIteration(filePath, newIterationId, oldIterationId);
+                    // Resolve old path via cumulative changes (same approach as files view)
+                    oldFilePath = filePath;
+                    try {
+                        const changesData = await ADOAPI.getPRIterationChanges(currentConfig, currentPRId, newIterationId, oldIterationId);
+                        const changeEntry = (changesData.changeEntries || []).find(e => e.item?.path === filePath);
+                        const ct = (changeEntry?.changeType || '').toLowerCase();
+                        if (ct.includes('rename') && (changeEntry.sourceServerItem || changeEntry.originalPath)) {
+                            oldFilePath = changeEntry.sourceServerItem || changeEntry.originalPath;
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch cumulative changes for path resolution, falling back to path history:', e);
+                        oldFilePath = await getFilePathAtIteration(filePath, newIterationId, oldIterationId);
+                    }
                 }
 
                 const result = await getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath);
