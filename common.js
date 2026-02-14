@@ -205,6 +205,30 @@ const ADOAPI = {
     /**
      * Get PR commits
      */
+    async getPRWorkItemRefs(config, prId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/workitems?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch PR work items: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    async getWorkItemsBatch(config, ids) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/wit/workitems?ids=${ids.join(',')}&$expand=none&api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch work item details: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
     async getPRCommits(config, prId) {
         const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/commits?api-version=6.0`;
         const response = await this.fetchWithAuth(url, config.pat);

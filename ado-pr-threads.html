@@ -1415,6 +1415,55 @@
         }
 
         /* Checks section */
+        .work-items-section {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f8f8;
+            border-radius: 0;
+        }
+
+        .work-items-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #323130;
+        }
+
+        .work-item-entry {
+            margin-bottom: 4px;
+        }
+
+        .work-item-entry a {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            border-radius: 3px;
+            text-decoration: none;
+            color: #323130;
+            font-size: 13px;
+        }
+
+        .work-item-entry a:hover {
+            background: #e8e8e8;
+        }
+
+        .work-item-id {
+            color: #0078d4;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .work-item-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .work-item-icon {
+            flex-shrink: 0;
+            font-size: 14px;
+        }
+
         .checks-section {
             margin-top: 15px;
             padding: 12px;
@@ -2689,6 +2738,7 @@
                 <div class="resize-handle resize-handle-left" id="resizeHandleRight"></div>
                 <div id="rightSidebarStats" class="right-sidebar-section"></div>
                 <div id="rightSidebarReviewers" class="right-sidebar-section"></div>
+                <div id="rightSidebarWorkItems" class="right-sidebar-section"></div>
                 <div id="rightSidebarChecks" class="right-sidebar-section"></div>
             </div>
         </div>
@@ -3295,6 +3345,7 @@
 
         // PR data polling
         let prChecksData = null;
+        let prWorkItems = null;
         let prPollingInterval = null;
         const PR_POLL_INTERVAL = 15000; // 15 seconds
 
@@ -3455,6 +3506,28 @@
             }
         }
 
+        // Fetch and update work items
+        async function fetchAndUpdateWorkItems(config, prId) {
+            try {
+                const refsData = await ADOAPI.getPRWorkItemRefs(config, prId);
+                const refs = refsData.value || [];
+                if (refs.length > 0) {
+                    const ids = refs.map(r => r.id);
+                    const detailsData = await ADOAPI.getWorkItemsBatch(config, ids);
+                    prWorkItems = detailsData.value || [];
+                } else {
+                    prWorkItems = [];
+                }
+                const container = document.getElementById('rightSidebarWorkItems');
+                if (container) {
+                    container.innerHTML = renderWorkItemsSection();
+                }
+            } catch (error) {
+                console.warn('Failed to fetch work items:', error);
+                prWorkItems = [];
+            }
+        }
+
         // Legacy alias for fetchAndUpdateChecks
         async function fetchPRChecks(config, prData) {
             await fetchAndUpdateChecks(config, prData);
@@ -3530,6 +3603,54 @@
         // Use shared utilities from common.js
         const getStatusIcon = ChecksFormatter.getIcon.bind(ChecksFormatter);
         const getStatusClass = ChecksFormatter.getClass.bind(ChecksFormatter);
+
+        function renderWorkItemsSection() {
+            if (!prWorkItems) {
+                return '';
+            }
+            if (prWorkItems.length === 0) {
+                return `
+                    <div class="work-items-section">
+                        <h4>Work Items</h4>
+                        <span class="no-reviewers">None</span>
+                    </div>
+                `;
+            }
+
+            const workItemTypeIcons = {
+                'Bug': '🐛',
+                'Task': '📋',
+                'User Story': '📖',
+                'Feature': '🚀',
+                'Epic': '⚡',
+                'Issue': '⚠️',
+                'Test Case': '🧪',
+                'Impediment': '🚧',
+            };
+
+            const itemsHtml = prWorkItems.map(wi => {
+                const typeName = wi.fields?.['System.WorkItemType'] || '';
+                const title = wi.fields?.['System.Title'] || `Work Item ${wi.id}`;
+                const state = wi.fields?.['System.State'] || '';
+                const icon = workItemTypeIcons[typeName] || '📌';
+                const wiUrl = `${currentConfig.serverUrl}/${currentConfig.organization}/${currentConfig.project}/_workitems/edit/${wi.id}`;
+
+                return `<div class="work-item-entry">
+                    <a href="${wiUrl}" target="_blank" rel="noopener" title="${ADOContent.escapeHtml(typeName)}${state ? ' - ' + ADOContent.escapeHtml(state) : ''}">
+                        <span class="work-item-icon">${icon}</span>
+                        <span class="work-item-id">${wi.id}</span>
+                        <span class="work-item-title">${ADOContent.escapeHtml(title)}</span>
+                    </a>
+                </div>`;
+            }).join('');
+
+            return `
+                <div class="work-items-section">
+                    <h4>Work Items</h4>
+                    ${itemsHtml}
+                </div>
+            `;
+        }
 
         function renderChecksSection() {
             if (!prChecksData) {
@@ -3897,8 +4018,9 @@
 
             ADOUI.showLoading('results', 'Loading PR threads...');
 
-            // Reset checks data for new PR
+            // Reset checks and work items data for new PR
             prChecksData = null;
+            prWorkItems = null;
 
             try {
                 // Clear caches for new PR
@@ -5709,9 +5831,13 @@
             // Checks HTML (right sidebar)
             const checksHtml = renderChecksSection();
 
+            // Work Items HTML (right sidebar)
+            const workItemsHtml = renderWorkItemsSection();
+
             // Inject right sidebar content
             document.getElementById('rightSidebarStats').innerHTML = statsHtml;
             document.getElementById('rightSidebarReviewers').innerHTML = reviewersHtml;
+            document.getElementById('rightSidebarWorkItems').innerHTML = workItemsHtml;
             document.getElementById('rightSidebarChecks').innerHTML = checksHtml;
             document.getElementById('rightSidebar').style.display = '';
 
@@ -6087,8 +6213,9 @@
             // Load avatars
             AvatarLoader.loadPending();
 
-            // Fetch PR checks (statuses, policies) asynchronously and start polling
+            // Fetch PR checks and work items asynchronously, then start polling
             fetchAndUpdateChecks(config, prData);
+            fetchAndUpdateWorkItems(config, prData.pullRequestId);
             startPRPolling(config);
 
             // Fetch line stats asynchronously

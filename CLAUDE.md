@@ -55,6 +55,7 @@ All exposed on `window.*`:
 - Git: `getMergeBases`, `getCommitDiffs`
 - Policies: `getPolicyEvaluations`, `requeuePolicyEvaluation`, `getPRConflicts`
 - Reviewers: `addReviewer`, `removeReviewer`, `updateReviewerRequired`, `searchIdentities`
+- Work Items: `getPRWorkItemRefs`, `getWorkItemsBatch`
 - Meta: `getRepositories`, `getProjects`, `getCurrentUser`, `setAutoComplete`, `removeAutoComplete`
 
 ## ado-pr-list.html - PR List Browser
@@ -96,7 +97,7 @@ All exposed on `window.*`:
 - **Main content**: Two views switched by tabs:
   - **Overview**: Thread list with comments, markdown rendering, CRUD operations
   - **Files**: File tree + side-by-side diff with inline threads
-- **Right sidebar**: PR info, stats, reviewers (with management), checks, iteration panel
+- **Right sidebar**: PR info, stats, reviewers (with management), linked work items, checks, iteration panel
 
 ### Key Global State (~25 variables)
 - `allThreads`, `allIterations`, `currentPRData`, `currentConfig` - Core data
@@ -107,6 +108,7 @@ All exposed on `window.*`:
 - `threadsByFilePath` (Map), `commentedFilePaths` (Set), `changedFilePaths` (Set)
 - `iterationChangesCache` (Map), `filePathHistoryCache` (Map)
 - `repoTreeCache` (Map), `repoTreeFullyLoaded`
+- `prWorkItems` - Linked work item details array
 - `isBulkMode`, `selectedThreadIds` (Set)
 
 ### Major Function Groups (~137 functions total)
@@ -117,6 +119,7 @@ All exposed on `window.*`:
 - **Diff rendering** (~7 funcs): shared utilities (`applyThreadHighlight`, `getHighlightedContent`, `buildThreadRange`, `renderDiffLines`) used by both overview diff preview and files view; `renderDiffLines` accepts `getLinePrefix`/`getLineSuffix` callbacks for files view gutter avatars and inline threads
 - **PR actions** (~8 funcs): status changes, draft toggle, abandon/reactivate, complete with merge strategy, auto-complete
 - **Reviewer management** (~7 funcs): add/remove/toggle required, identity search dropdown
+- **Work items** (~2 funcs): `fetchAndUpdateWorkItems()`, `renderWorkItemsSection()` - linked work items in right sidebar
 - **Line stats** (~8 funcs): async line count computation via local diff (fetch both versions, diff with HistogramDiff)
 - **Display** (~540 lines in `displayResults()`): thread rendering, compact/detailed views, stats, code context links
 - **Files view rendering** (~800 lines): file tree panel, diff panel, iteration selector
@@ -179,4 +182,5 @@ look at TODO file
 - **Always work in a branch**: Create a feature branch before making changes. Never commit directly to `main`.
 - **Commit frequently**: Make small, focused commits as you go rather than one large commit at the end. Each commit should represent a logical unit of work (e.g., extract a module, add tests for it, fix a bug found during testing).
 - **Branch naming**: Use descriptive names like `add-vitest-unit-tests`, `extract-pr-list-utils`, `fix-diff-rendering`.
-- **Validation**: Add unit-test whenever possible, run unit-test suite
+- **Validation**: Add unit-test whenever possible and relevant, run unit-test suite
+- **Clean TODO list**: when a TODO entry is done, remove it from the TODO file
