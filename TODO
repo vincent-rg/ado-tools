@@ -19,6 +19,7 @@ pr threads file view
 - side by side view
 - modified version view
 - focusing on a thread (eg by clicking on it in file list) should highlight it
+- sort threads under a file by order of apperance in the file (taking into account the offset that might occur by the file diff)
 
 global:
 - refactor avatar indicators display (maybe also some other stuff on avatars?)
