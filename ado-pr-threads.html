@@ -2697,6 +2697,7 @@
     <script src="common.js"></script>
     <script src="diff.js"></script>
     <script src="diff-utils.js"></script>
+    <script src="pr-threads-utils.js"></script>
     <script>
         DiffUtils.init(ADOContent.escapeHtml.bind(ADOContent));
 
@@ -2808,35 +2809,11 @@
         }
 
         function calculateFileChangeStats(changeEntries) {
-            const stats = {
-                totalFiles: 0,
-                added: 0,
-                modified: 0,
-                deleted: 0,
-                renamed: 0
-            };
-
-            changeEntries.forEach(entry => {
-                stats.totalFiles++;
-                const changeType = entry.changeType;
-                // changeType can be: add, edit, delete, rename, etc.
-                // It can also be a combination like "edit, rename"
-                if (changeType.includes('add')) {
-                    stats.added++;
-                } else if (changeType.includes('delete')) {
-                    stats.deleted++;
-                } else if (changeType.includes('rename') && !changeType.includes('edit')) {
-                    stats.renamed++;
-                } else if (changeType.includes('edit')) {
-                    stats.modified++;
-                }
-            });
-
-            return stats;
+            return PRThreadsUtils.calculateFileChangeStats(changeEntries);
         }
 
         function getLineStatsCacheKey(config, prId, iterationCount) {
-            return `line-stats-${config.organization}-${config.project}-${config.repository}-${prId}-${iterationCount}`;
+            return PRThreadsUtils.getLineStatsCacheKey(config, prId, iterationCount);
         }
 
         function getCachedLineStats(cacheKey) {
@@ -3118,22 +3095,7 @@
         }
 
         function getActiveThreadCounts(threads) {
-            const counts = {};
-            threads.forEach(thread => {
-                if (thread.isDeleted) return;
-                const status = thread.status;
-                if (status === 'active' || status === 'Active' || status === 1) {
-                    const firstComment = thread.comments && thread.comments[0];
-                    const commentType = firstComment?.commentType;
-                    // Only count threads with real comments (text type)
-                    const isRealComment = commentType === 1 || commentType === 'text';
-                    const authorId = firstComment?.author?.id;
-                    if (authorId && isRealComment) {
-                        counts[authorId] = (counts[authorId] || 0) + 1;
-                    }
-                }
-            });
-            return counts;
+            return PRThreadsUtils.getActiveThreadCounts(threads);
         }
 
         function renderAvatarWithBadges(user, vote, threadCount, isPRAuthor = false) {
@@ -4787,34 +4749,9 @@
         }
 
         function getCompletionBlockers(checksData, prData) {
-            const blockers = [];
-
-            // Check merge status
-            if (prData.mergeStatus === 'conflicts') {
-                blockers.push({
-                    type: 'conflict',
-                    message: 'This PR has merge conflicts that must be resolved'
-                });
-            }
-
-            // Check required policies
-            if (checksData && checksData.policies) {
-                checksData.policies.forEach(p => {
-                    const isBlocking = p.configuration?.isBlocking;
-                    const status = p.status;
-
-                    if (isBlocking && status !== 'approved') {
-                        const { label } = ChecksFormatter.formatPolicy(p);
-                        blockers.push({
-                            type: 'policy',
-                            status: status,
-                            message: `Required policy not met: ${label}`
-                        });
-                    }
-                });
-            }
-
-            return blockers;
+            return PRThreadsUtils.getCompletionBlockers(checksData, prData, {
+                formatPolicy: ChecksFormatter.formatPolicy.bind(ChecksFormatter)
+            });
         }
 
         function showCompletionBlockedModal(blockers) {
@@ -6282,13 +6219,7 @@
         }
 
         function stripMarkdown(text) {
-            if (!text) return '';
-            return text
-                .replace(/```[\s\S]*?```/g, '[code]')
-                .replace(/`[^`]+`/g, '[code]')
-                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-                .replace(/[*_~#>]/g, '')
-                .trim();
+            return PRThreadsUtils.stripMarkdown(text);
         }
 
         function renderThreadSubList(filePath, depth) {
