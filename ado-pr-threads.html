@@ -6367,8 +6367,17 @@
         function renderThreadSubList(filePath, depth) {
             const threads = threadsByFilePath.get(filePath);
             if (!threads || threads.length === 0) return '';
+            // Sort by line number (order of appearance in file), then by offset within the line
+            const sorted = [...threads].sort((a, b) => {
+                const lineA = a.threadContext?.rightFileStart?.line || a.threadContext?.leftFileStart?.line || 0;
+                const lineB = b.threadContext?.rightFileStart?.line || b.threadContext?.leftFileStart?.line || 0;
+                if (lineA !== lineB) return lineA - lineB;
+                const offsetA = a.threadContext?.rightFileStart?.offset || a.threadContext?.leftFileStart?.offset || 0;
+                const offsetB = b.threadContext?.rightFileStart?.offset || b.threadContext?.leftFileStart?.offset || 0;
+                return offsetA - offsetB;
+            });
             let html = `<div class="file-tree-threads" style="--depth: ${depth}">`;
-            for (const thread of threads) {
+            for (const thread of sorted) {
                 const firstComment = thread.comments?.find(c => c.commentType !== 'system');
                 if (!firstComment) continue;
                 const author = firstComment.author?.displayName || 'Unknown';

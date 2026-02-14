@@ -14,12 +14,10 @@ PR threads
 - work item status indicator (proposed, accepted, closed, resolved, completed, etc)
 
 pr threads file view
+- focusing on a thread (eg by clicking on it in file list) should highlight it
 - jump from comment to comment
 - jump from modification to modification
-- side by side view
-- modified version view
-- focusing on a thread (eg by clicking on it in file list) should highlight it
-- sort threads under a file by order of apperance in the file (taking into account the offset that might occur by the file diff)
+- "modified version" view
 
 global:
 - refactor avatar indicators display (maybe also some other stuff on avatars?)
