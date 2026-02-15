@@ -7,11 +7,11 @@ PR list
 PR threads
 - Défilement dans diff file preview
 - Edition description: ajout des boutons de markdown
-- add "@" support in markdown
 - des builds qui apparaissent "unknown build" (peut-être récupérer le nom de la pipeline depuis le builddefinitionid?)
 - add a "Ready to complete!" badge when all requirements are met
 - work item icon/background color matching the work item type
 - work item status indicator (proposed, accepted, closed, resolved, completed, etc)
+- add vote options
 
 pr threads file view
 - "modified version" view
@@ -19,4 +19,4 @@ pr threads file view
 global:
 - refactor avatar indicators display (maybe also some other stuff on avatars?)
 - make toad icon
-
+- possible to get connected user identity via pat?

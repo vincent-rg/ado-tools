@@ -15,6 +15,7 @@ common.js             (1747 lines)  Shared JS modules (API, config, UI, content,
 diff.js                (219 lines)  Histogram diff algorithm (line-by-line diff)
 diff-utils.js                       Extracted diff/thread utilities from ado-pr-threads.html
 pr-list-utils.js                    Extracted pure functions from ado-pr-list.html (filters, time, change detection)
+mention-utils.js                    @mention autocomplete utilities (context detection, text insertion)
 pr-threads-utils.js                 Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
 index.html             (206 lines)  Landing page with tool cards
 ado-settings.html      (219 lines)  Settings form (serverUrl, org, project, repo, PAT)
@@ -39,7 +40,7 @@ All exposed on `window.*`:
 |--------|---------|
 | `ADOConfig` | localStorage CRUD for config (get/save/clear/isValid/getFromForm) |
 | `ADOAPI` | All ADO REST API calls (PR, threads, iterations, commits, files, statuses, policies, reviewers, identity search) |
-| `ADOIdentity` | Resolve @mention identity IDs to display names (cached in `identityCache`) |
+| `ADOIdentity` | Resolve @mention identity IDs to display names (cached in `identityCache`), pre-populate cache from known data (`populateCacheFromKnownIdentities`) |
 | `ADOContent` | HTML escaping, markdown parsing (bold/italic/code/links/images/headers), @mention resolution |
 | `ADOUI` | showMessage/showError/showLoading/clear, date formatting, status badges, auto-complete icon |
 | `ADOURL` | URL param helpers, PR URL builder, thread URL builder |
@@ -119,6 +120,7 @@ All exposed on `window.*`:
 - **Diff rendering** (~7 funcs): shared utilities (`applyThreadHighlight`, `getHighlightedContent`, `buildThreadRange`, `renderDiffLines`) used by both overview diff preview and files view; `renderDiffLines` accepts `getLinePrefix`/`getLineSuffix` callbacks for files view gutter avatars and inline threads
 - **PR actions** (~8 funcs): status changes, draft toggle, abandon/reactivate, complete with merge strategy, auto-complete
 - **Reviewer management** (~7 funcs): add/remove/toggle required, identity search dropdown
+- **@mention autocomplete**: `MentionAutocomplete` IIFE (attach to textareas, dropdown UI, keyboard nav) + `MentionUtils` (from mention-utils.js: context detection, text insertion, display↔ID resolution). `resolveMentionsForSubmit()` converts `@<DisplayName>` back to `@<id>` on submit
 - **Work items** (~2 funcs): `fetchAndUpdateWorkItems()`, `renderWorkItemsSection()` - linked work items in right sidebar
 - **Line stats** (~8 funcs): async line count computation via local diff (fetch both versions, diff with HistogramDiff)
 - **Display** (~540 lines in `displayResults()`): thread rendering, compact/detailed views, stats, code context links
@@ -144,9 +146,10 @@ All exposed on `window.*`:
 
 - Python stdlib only (`http.server`, `socketserver`)
 - Serves static files from script directory
-- Two proxy endpoints:
+- Three proxy endpoints:
   - `GET /avatar?id=&org=&serverUrl=` - Proxy avatar images with PAT auth, 1-week cache
-  - `POST /identity-search` - Proxy Identity Picker API for reviewer search
+  - `GET /identity-resolve?id=&org=&serverUrl=` - Proxy identity resolution by ID (uses vssps.dev.azure.com for cloud)
+  - `POST /identity-search` - Proxy Identity Picker API for reviewer/@mention search
 - No-cache headers on static files (dev mode)
 - Listens on localhost only
 

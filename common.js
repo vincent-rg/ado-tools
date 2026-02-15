@@ -922,8 +922,10 @@ const ADOIdentity = {
         }
 
         try {
-            const identityUrl = `${serverUrl}/${organization}/_apis/identities/${encodeURIComponent(id)}?api-version=6.0`;
-            const response = await ADOAPI.fetchWithAuth(identityUrl, pat);
+            const proxyUrl = `/identity-resolve?id=${encodeURIComponent(id)}&org=${encodeURIComponent(organization)}&serverUrl=${encodeURIComponent(serverUrl)}`;
+            const response = await fetch(proxyUrl, {
+                headers: { 'X-ADO-PAT': pat }
+            });
 
             if (response.ok) {
                 const data = await response.json();
@@ -932,8 +934,6 @@ const ADOIdentity = {
                 identityCache[id] = id;
             }
         } catch (error) {
-            // CORS errors are expected when ADO Server doesn't allow cross-origin requests
-            // This is not critical - we'll just use the raw ID instead of display name
             identityCache[id] = id;
         }
 
@@ -943,32 +943,62 @@ const ADOIdentity = {
     /**
      * Collect and resolve all identities from threads
      */
-    async collectAndResolveFromThreads(threads, serverUrl, organization, pat) {
+    /**
+     * Pre-populate identity cache from known identities (thread authors, reviewers, PR author).
+     * This avoids API calls for identities already present in the loaded data.
+     */
+    populateCacheFromKnownIdentities(threads, prData) {
+        function cacheIdentity(person) {
+            if (person && person.id && person.displayName) {
+                identityCache[person.id] = person.displayName;
+            }
+        }
+
+        // PR author and reviewers
+        if (prData) {
+            cacheIdentity(prData.createdBy);
+            (prData.reviewers || []).forEach(r => cacheIdentity(r));
+        }
+
+        // All comment authors
+        threads.forEach(thread => {
+            (thread.comments || []).forEach(comment => cacheIdentity(comment.author));
+        });
+    },
+
+    async collectAndResolveFromThreads(threads, serverUrl, organization, pat, extraTexts) {
         const identityIds = new Set();
+        const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+        function collectFromText(text) {
+            if (!text) return;
+            const mentionPattern = /@<([^>]+)>/g;
+            let match;
+            while ((match = mentionPattern.exec(text)) !== null) {
+                if (guidPattern.test(match[1])) identityIds.add(match[1]);
+            }
+        }
 
         threads.forEach(thread => {
             if (thread.comments) {
-                thread.comments.forEach(comment => {
-                    if (comment.content) {
-                        const mentionPattern = /@<([^>]+)>/g;
-                        let match;
-                        while ((match = mentionPattern.exec(comment.content)) !== null) {
-                            identityIds.add(match[1]);
-                        }
-                    }
-                });
+                thread.comments.forEach(comment => collectFromText(comment.content));
             }
         });
 
-        if (identityIds.size > 0) {
-            console.log(`Attempting to resolve ${identityIds.size} @mention identities. CORS errors may appear but are harmless.`);
+        if (extraTexts) {
+            extraTexts.forEach(text => collectFromText(text));
         }
 
-        const resolvePromises = Array.from(identityIds).map(id =>
-            this.resolve(id, serverUrl, organization, pat)
-        );
+        // Filter out IDs already in cache (populated by populateCacheFromKnownIdentities)
+        const unresolvedIds = Array.from(identityIds).filter(id => !identityCache[id]);
 
-        await Promise.all(resolvePromises);
+        if (unresolvedIds.length > 0) {
+            console.log(`Resolving ${unresolvedIds.length} @mention identities via API (${identityIds.size - unresolvedIds.length} already cached)...`);
+            const resolvePromises = unresolvedIds.map(id =>
+                this.resolve(id, serverUrl, organization, pat)
+            );
+            await Promise.all(resolvePromises);
+        }
     }
 };
 

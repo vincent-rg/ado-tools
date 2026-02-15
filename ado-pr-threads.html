@@ -1357,6 +1357,60 @@
             font-size: 11px;
         }
 
+        /* @mention autocomplete dropdown */
+        .comment-editor {
+            position: relative;
+        }
+
+        .mention-dropdown {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 100%;
+            margin-bottom: 2px;
+            background: white;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            max-height: 180px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .mention-dropdown.active {
+            display: block;
+        }
+
+        .mention-result {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .mention-result:hover,
+        .mention-result.selected {
+            background: #e1f3ff;
+        }
+
+        .mention-result .result-name {
+            font-weight: 500;
+        }
+
+        .mention-result .result-email {
+            color: #605e5c;
+            font-size: 11px;
+        }
+
+        .mention-hint {
+            padding: 6px 8px;
+            color: #605e5c;
+            font-size: 11px;
+        }
+
         .reviewer-dropdown {
             display: none;
             position: absolute;
@@ -2841,6 +2895,7 @@
     <script src="diff.js"></script>
     <script src="diff-utils.js"></script>
     <script src="pr-threads-utils.js"></script>
+    <script src="mention-utils.js"></script>
     <script>
         DiffUtils.init(ADOContent.escapeHtml.bind(ADOContent));
 
@@ -2875,6 +2930,163 @@
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
         let filePathHistoryCache = new Map();  // filePath → Map<iterationId, pathAtIteration>
+
+        // --- @mention autocomplete ---
+        const MentionAutocomplete = (() => {
+            let searchTimeout = null;
+            let activeDropdown = null;
+            let selectedIndex = -1;
+
+            function getMentionContext(textarea) {
+                return MentionUtils.getMentionContext(textarea.value, textarea.selectionStart);
+            }
+
+            function getOrCreateDropdown(textarea) {
+                const editor = textarea.closest('.comment-editor') || textarea.parentElement;
+                let dropdown = editor.querySelector('.mention-dropdown');
+                if (!dropdown) {
+                    dropdown = document.createElement('div');
+                    dropdown.className = 'mention-dropdown';
+                    editor.insertBefore(dropdown, textarea);
+                }
+                return dropdown;
+            }
+
+            function closeDropdown() {
+                if (activeDropdown) {
+                    activeDropdown.classList.remove('active');
+                    activeDropdown = null;
+                }
+                selectedIndex = -1;
+                clearTimeout(searchTimeout);
+            }
+
+            function insertMention(textarea, identity, mentionStart) {
+                // Populate identity cache so resolveMentions can display the name after submit
+                if (identity.localId && identity.displayName) {
+                    identityCache[identity.localId] = identity.displayName;
+                }
+                // Track mention mapping on the textarea for resolution on submit
+                if (!textarea._mentionMap) textarea._mentionMap = new Map();
+                textarea._mentionMap.set(identity.displayName, identity.localId);
+
+                const result = MentionUtils.buildMentionText(textarea.value, textarea.selectionStart, mentionStart, identity.displayName);
+                textarea.value = result.text;
+                textarea.selectionStart = textarea.selectionEnd = result.cursorPos;
+                textarea.focus();
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                closeDropdown();
+            }
+
+            function renderResults(dropdown, textarea, identities, mentionStart) {
+                if (identities.length === 0) {
+                    dropdown.innerHTML = '<div class="mention-hint">No users found</div>';
+                    return;
+                }
+                selectedIndex = 0;
+                dropdown.innerHTML = identities.map((identity, i) => {
+                    const name = ADOContent.escapeHtml(identity.displayName || 'Unknown');
+                    const email = ADOContent.escapeHtml(identity.mail || '');
+                    const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    return `
+                        <div class="mention-result${i === 0 ? ' selected' : ''}" data-index="${i}">
+                            <div class="avatar-fallback" style="width: 24px; height: 24px; font-size: 9px;">${initials}</div>
+                            <div>
+                                <div class="result-name">${name}</div>
+                                ${email ? `<div class="result-email">${email}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                dropdown.querySelectorAll('.mention-result').forEach((el, i) => {
+                    el.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        insertMention(textarea, identities[i], mentionStart);
+                    });
+                });
+            }
+
+            function updateSelection(dropdown) {
+                dropdown.querySelectorAll('.mention-result').forEach((el, i) => {
+                    el.classList.toggle('selected', i === selectedIndex);
+                    if (i === selectedIndex) el.scrollIntoView({ block: 'nearest' });
+                });
+            }
+
+            function attach(textarea) {
+                let currentIdentities = [];
+                let currentMentionStart = 0;
+
+                textarea.addEventListener('input', () => {
+                    const ctx = getMentionContext(textarea);
+                    if (!ctx) { closeDropdown(); return; }
+
+                    const dropdown = getOrCreateDropdown(textarea);
+                    activeDropdown = dropdown;
+                    currentMentionStart = ctx.mentionStart;
+                    dropdown.classList.add('active');
+
+                    if (ctx.query.length < 2) {
+                        dropdown.innerHTML = '<div class="mention-hint">Keep typing to search...</div>';
+                        selectedIndex = -1;
+                        currentIdentities = [];
+                        return;
+                    }
+
+                    clearTimeout(searchTimeout);
+                    dropdown.innerHTML = '<div class="mention-hint">Searching...</div>';
+                    searchTimeout = setTimeout(async () => {
+                        try {
+                            const identities = await ADOAPI.searchIdentities(currentConfig, ctx.query);
+                            currentIdentities = identities;
+                            // Re-check context is still valid
+                            const freshCtx = getMentionContext(textarea);
+                            if (!freshCtx || freshCtx.query !== ctx.query) return;
+                            renderResults(dropdown, textarea, identities, ctx.mentionStart);
+                        } catch (err) {
+                            dropdown.innerHTML = `<div class="mention-hint" style="color: #a4262c;">Search failed</div>`;
+                        }
+                    }, 300);
+                });
+
+                textarea.addEventListener('keydown', (e) => {
+                    if (!activeDropdown || !activeDropdown.classList.contains('active')) return;
+                    const results = activeDropdown.querySelectorAll('.mention-result');
+                    if (results.length === 0 && e.key !== 'Escape') return;
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        selectedIndex = Math.min(selectedIndex + 1, results.length - 1);
+                        updateSelection(activeDropdown);
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        selectedIndex = Math.max(selectedIndex - 1, 0);
+                        updateSelection(activeDropdown);
+                    } else if (e.key === 'Enter' && selectedIndex >= 0 && currentIdentities[selectedIndex]) {
+                        e.preventDefault();
+                        insertMention(textarea, currentIdentities[selectedIndex], currentMentionStart);
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeDropdown();
+                    }
+                });
+
+                textarea.addEventListener('blur', () => {
+                    // Delay to allow mousedown on results
+                    setTimeout(closeDropdown, 200);
+                });
+            }
+
+            return { attach, closeDropdown };
+        })();
+
+        /** Resolve @DisplayName → @<id> in a textarea's content before submitting */
+        function resolveMentionsForSubmit(textarea) {
+            if (!textarea) return textarea?.value?.trim() || '';
+            const text = textarea.value.trim();
+            return MentionUtils.resolveDisplayMentions(text, textarea._mentionMap);
+        }
 
         /**
          * Get changes for an iteration (cached)
@@ -4178,8 +4390,10 @@
                 console.log('Loaded threads. Unique status values found:', Array.from(uniqueStatuses));
                 console.log('Sample threads with their statuses:', allThreads.slice(0, 5).map(t => ({ id: t.id, status: t.status })));
 
-                // Collect and resolve identities
-                await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
+                // Pre-populate identity cache from thread authors, reviewers, PR author
+                ADOIdentity.populateCacheFromKnownIdentities(allThreads, currentPRData);
+                // Resolve any remaining @mention identities not found in known data
+                await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat, [currentPRData?.description]);
 
                 // Show filters
                 document.getElementById('threadFilters').style.display = 'block';
@@ -4584,7 +4798,9 @@
                 </div>
             `;
 
-            document.getElementById('newThreadContent').focus();
+            const newThreadTextarea = document.getElementById('newThreadContent');
+            newThreadTextarea.focus();
+            MentionAutocomplete.attach(newThreadTextarea);
         }
 
         function hideNewThreadForm() {
@@ -4593,7 +4809,7 @@
         }
 
         async function createNewThread() {
-            const content = document.getElementById('newThreadContent').value.trim();
+            const content = resolveMentionsForSubmit(document.getElementById('newThreadContent'));
             if (!content) {
                 alert('Please enter a comment.');
                 return;
@@ -4650,7 +4866,7 @@
             `;
 
             const textarea = document.getElementById(`${prefix}reply-content-${threadId}`);
-            if (textarea) textarea.focus();
+            if (textarea) { textarea.focus(); MentionAutocomplete.attach(textarea); }
         }
 
         function hideReplyForm(threadId, prefix = '') {
@@ -4661,7 +4877,7 @@
         }
 
         async function submitReply(threadId, prefix = '') {
-            const content = document.getElementById(`${prefix}reply-content-${threadId}`)?.value.trim();
+            const content = resolveMentionsForSubmit(document.getElementById(`${prefix}reply-content-${threadId}`));
             if (!content) { alert('Please enter a reply.'); return; }
 
             const btn = document.getElementById(`${prefix}reply-submit-${threadId}`);
@@ -4682,12 +4898,14 @@
             if (!contentWrapper) return;
             const commentDiv = contentWrapper.closest('.comment');
             const originalContent = commentDiv?.dataset.commentContent || '';
+            const resolved = MentionUtils.resolveIdsToNames(originalContent, identityCache);
+            const escapedContent = resolved.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
             contentWrapper.dataset.originalHtml = contentWrapper.innerHTML;
 
             contentWrapper.innerHTML = `
                 <div class="comment-editor">
-                    <textarea id="${prefix}edit-content-${threadId}-${commentId}">${originalContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                    <textarea id="${prefix}edit-content-${threadId}-${commentId}">${escapedContent}</textarea>
                     <div class="comment-editor-actions">
                         <button class="btn-cancel" onclick="cancelEditComment(${threadId}, ${commentId}, '${prefix}')">Cancel</button>
                         <button class="btn-save" onclick="saveEditComment(${threadId}, ${commentId}, '${prefix}')" id="${prefix}edit-save-${threadId}-${commentId}">Save</button>
@@ -4696,7 +4914,11 @@
             `;
 
             const textarea = document.getElementById(`${prefix}edit-content-${threadId}-${commentId}`);
-            if (textarea) { textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length); }
+            if (textarea) {
+                textarea._mentionMap = resolved.mentionMap;
+                textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                MentionAutocomplete.attach(textarea);
+            }
 
             const actions = commentDiv?.querySelector('.comment-actions');
             if (actions) actions.style.display = 'none';
@@ -4714,7 +4936,7 @@
         }
 
         async function saveEditComment(threadId, commentId, prefix = '') {
-            const content = document.getElementById(`${prefix}edit-content-${threadId}-${commentId}`)?.value.trim();
+            const content = resolveMentionsForSubmit(document.getElementById(`${prefix}edit-content-${threadId}-${commentId}`));
             if (!content) { alert('Comment cannot be empty.'); return; }
 
             const btn = document.getElementById(`${prefix}edit-save-${threadId}-${commentId}`);
@@ -4736,7 +4958,8 @@
             if (!contentEl) return;
 
             contentEl.dataset.originalHtml = contentEl.innerHTML;
-            const rawDescription = (currentPRData.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const resolved = MentionUtils.resolveIdsToNames(currentPRData.description || '', identityCache);
+            const escapedDescription = resolved.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
             const previewHtml = currentPRData.description
                 ? ADOContent.processContent(currentPRData.description)
@@ -4744,7 +4967,7 @@
 
             contentEl.innerHTML = `
                 <div class="comment-editor">
-                    <textarea id="edit-description-textarea">${rawDescription}</textarea>
+                    <textarea id="edit-description-textarea">${escapedDescription}</textarea>
                     <div class="comment-editor-actions">
                         <button class="btn-cancel" onclick="cancelEditDescription()">Cancel</button>
                         <button class="btn-save" id="edit-description-save" onclick="saveEditDescription()">Save</button>
@@ -4759,9 +4982,11 @@
             if (editBtn) editBtn.style.display = 'none';
             const textarea = document.getElementById('edit-description-textarea');
             if (textarea) {
+                textarea._mentionMap = resolved.mentionMap;
                 textarea.focus();
                 textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 textarea.addEventListener('input', updateDescriptionPreview);
+                MentionAutocomplete.attach(textarea);
             }
         }
 
@@ -4769,7 +4994,7 @@
             const textarea = document.getElementById('edit-description-textarea');
             const preview = document.getElementById('edit-description-preview');
             if (!textarea || !preview) return;
-            const text = textarea.value;
+            const text = MentionUtils.resolveDisplayMentions(textarea.value, textarea._mentionMap);
             preview.innerHTML = text
                 ? ADOContent.processContent(text)
                 : '<span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>';
@@ -4789,7 +5014,7 @@
             const btn = document.getElementById('edit-description-save');
             if (!textarea) return;
 
-            const description = textarea.value;
+            const description = resolveMentionsForSubmit(textarea);
             if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
             try {

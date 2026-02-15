@@ -38,6 +38,8 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
         # Handle avatar proxy requests
         if self.path.startswith('/avatar?'):
             self.handle_avatar_proxy()
+        elif self.path.startswith('/identity-resolve?'):
+            self.handle_identity_resolve_proxy()
         else:
             super().do_GET()
 
@@ -86,6 +88,51 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Cache-Control', 'max-age=604800')  # Cache avatars for 1 week
                 self.end_headers()
                 self.wfile.write(image_data)
+
+        except urllib.error.HTTPError as e:
+            self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
+        except urllib.error.URLError as e:
+            self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
+        except Exception as e:
+            self.send_error(500, f'Proxy error: {str(e)}')
+
+    def handle_identity_resolve_proxy(self):
+        """Proxy identity resolve requests to Azure DevOps Identities API"""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        identity_id = params.get('id', [None])[0]
+        org = params.get('org', [None])[0]
+        server_url = params.get('serverUrl', ['https://dev.azure.com'])[0]
+        pat = self.headers.get('X-ADO-PAT', '')
+
+        if not identity_id or not org or not pat:
+            self.send_error(400, 'Missing required parameters (id, org) or X-ADO-PAT header')
+            return
+
+        server_url = server_url.rstrip('/')
+        # Azure DevOps Services: identities API lives on vssps.dev.azure.com
+        # On-premises: same server URL
+        if 'dev.azure.com' in server_url:
+            identity_base = f"https://vssps.dev.azure.com/{org}"
+        else:
+            identity_base = f"{server_url}/{org}"
+        ado_url = f"{identity_base}/_apis/identities/{urllib.parse.quote(identity_id, safe='')}?api-version=6.0"
+
+        try:
+            auth_string = base64.b64encode(f":{pat}".encode()).decode()
+            req = urllib.request.Request(ado_url)
+            req.add_header('Authorization', f'Basic {auth_string}')
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                response_data = response.read()
+                content_type = response.headers.get('Content-Type', 'application/json')
+
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Length', len(response_data))
+                self.end_headers()
+                self.wfile.write(response_data)
 
         except urllib.error.HTTPError as e:
             self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
