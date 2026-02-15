@@ -864,6 +864,72 @@
             fill: #fff;
         }
 
+        /* Comment bubble on line hover */
+        .diff-comment-bubble {
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0078d4;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 5;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .diff-comment-bubble svg {
+            width: 12px;
+            height: 12px;
+            fill: #fff;
+        }
+        .diff-comment-bubble:hover {
+            background: #106ebe;
+        }
+        /* Inline mode: show bubble on hover of diff-line, except removed lines */
+        .diff-line:hover > .diff-comment-bubble { display: flex; }
+        .diff-line.diff-removed > .diff-comment-bubble { display: none !important; }
+        /* SBS mode: show bubble on hover of sbs-left / sbs-right */
+        .sbs-left:hover > .diff-comment-bubble,
+        .sbs-right:hover > .diff-comment-bubble { display: flex; }
+        .sbs-left.sbs-empty > .diff-comment-bubble,
+        .sbs-right.sbs-empty > .diff-comment-bubble { display: none !important; }
+        /* Position within sbs panes */
+        .sbs-left, .sbs-right { position: relative; }
+
+        /* Line comment form */
+        .line-comment-form {
+            padding: 8px 16px 8px 60px;
+            background: #faf9f8;
+            border-top: 1px solid #e1dfdd;
+            border-bottom: 1px solid #e1dfdd;
+        }
+        .line-comment-form .comment-editor textarea {
+            min-height: 60px;
+        }
+        .sbs-line-comment-form {
+            display: flex;
+            border-top: 1px solid #e1dfdd;
+            border-bottom: 1px solid #e1dfdd;
+        }
+        .sbs-line-comment-side {
+            flex: 1;
+            min-width: 0;
+            padding: 8px 12px;
+            background: #faf9f8;
+        }
+        .sbs-line-comment-spacer {
+            flex: 1;
+            min-width: 0;
+            background: #f6f8fa;
+        }
+        .sbs-line-comment-side .comment-editor textarea {
+            min-height: 60px;
+        }
+
         .diff-indicator {
             width: 20px;
             text-align: center;
@@ -3677,6 +3743,166 @@
             }
         }
 
+        // ==================== Line-level comment bubbles ====================
+
+        const COMMENT_BUBBLE_SVG = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>';
+
+        function injectCommentBubbles(filePath) {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            const escapedFile = ADOContent.escapeHtml(filePath);
+
+            if (fileDiffDisplayMode === 'side-by-side') {
+                diffPanel.querySelectorAll('.sbs-left, .sbs-right').forEach(pane => {
+                    const lineNumEl = pane.querySelector('.diff-line-number');
+                    if (!lineNumEl || !lineNumEl.textContent.trim()) return;
+                    if (pane.classList.contains('sbs-empty')) return;
+                    const lineNum = lineNumEl.textContent.trim();
+                    const side = pane.classList.contains('sbs-left') ? 'left' : 'right';
+                    const contentEl = pane.querySelector('.diff-content');
+                    const lineLen = contentEl ? contentEl.textContent.length : 0;
+                    const bubble = document.createElement('div');
+                    bubble.className = 'diff-comment-bubble';
+                    bubble.setAttribute('data-line', lineNum);
+                    bubble.setAttribute('data-side', side);
+                    bubble.setAttribute('data-file', filePath);
+                    bubble.setAttribute('data-line-len', lineLen);
+                    bubble.innerHTML = COMMENT_BUBBLE_SVG;
+                    pane.appendChild(bubble);
+                });
+            } else {
+                diffPanel.querySelectorAll('.diff-line').forEach(line => {
+                    if (line.classList.contains('diff-removed')) return;
+                    const lineNums = line.querySelectorAll('.diff-line-number');
+                    // Second line-number span is the new line number
+                    const newLineEl = lineNums[1];
+                    if (!newLineEl || !newLineEl.textContent.trim()) return;
+                    const lineNum = newLineEl.textContent.trim();
+                    const contentEl = line.querySelector('.diff-content');
+                    const lineLen = contentEl ? contentEl.textContent.length : 0;
+                    const bubble = document.createElement('div');
+                    bubble.className = 'diff-comment-bubble';
+                    bubble.setAttribute('data-line', lineNum);
+                    bubble.setAttribute('data-side', 'right');
+                    bubble.setAttribute('data-file', filePath);
+                    bubble.setAttribute('data-line-len', lineLen);
+                    bubble.innerHTML = COMMENT_BUBBLE_SVG;
+                    line.style.position = 'relative';
+                    line.appendChild(bubble);
+                });
+            }
+        }
+
+        function openLineCommentEditor(filePath, lineNum, side, bubbleEl, lineLen) {
+            hideLineCommentForm();
+            const escapedFile = ADOContent.escapeJs(filePath);
+            const endOffset = Math.max(1, lineLen);
+
+            if (fileDiffDisplayMode === 'side-by-side') {
+                const sbsRow = bubbleEl.closest('.sbs-row');
+                if (!sbsRow) return;
+
+                const formRow = document.createElement('div');
+                formRow.className = 'sbs-line-comment-form';
+
+                const editorHtml = `
+                    <div class="comment-editor">
+                        <textarea class="line-comment-textarea" placeholder="Write a comment on line ${lineNum}..."></textarea>
+                        <div class="comment-editor-actions">
+                            <button class="btn-cancel" onclick="hideLineCommentForm()">Cancel</button>
+                            <button class="btn-save line-comment-submit" data-file="${ADOContent.escapeHtml(filePath)}" data-line="${lineNum}" data-side="${side}" data-end-offset="${endOffset}">Create</button>
+                        </div>
+                    </div>
+                `;
+
+                if (side === 'left') {
+                    formRow.innerHTML = `<div class="sbs-line-comment-side">${editorHtml}</div><div class="sbs-line-comment-spacer"></div>`;
+                } else {
+                    formRow.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
+                }
+
+                sbsRow.insertAdjacentElement('afterend', formRow);
+            } else {
+                const diffLine = bubbleEl.closest('.diff-line');
+                if (!diffLine) return;
+
+                const formDiv = document.createElement('div');
+                formDiv.className = 'line-comment-form';
+                formDiv.innerHTML = `
+                    <div class="comment-editor">
+                        <textarea class="line-comment-textarea" placeholder="Write a comment on line ${lineNum}..."></textarea>
+                        <div class="comment-editor-actions">
+                            <button class="btn-cancel" onclick="hideLineCommentForm()">Cancel</button>
+                            <button class="btn-save line-comment-submit" data-file="${ADOContent.escapeHtml(filePath)}" data-line="${lineNum}" data-side="${side}" data-end-offset="${endOffset}">Create</button>
+                        </div>
+                    </div>
+                `;
+
+                diffLine.insertAdjacentElement('afterend', formDiv);
+            }
+
+            const textarea = document.querySelector('.line-comment-textarea');
+            if (textarea) {
+                textarea.focus();
+                MentionAutocomplete.attach(textarea);
+                textarea.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        const submitBtn = textarea.closest('.comment-editor').querySelector('.line-comment-submit');
+                        if (submitBtn) createLineComment(submitBtn);
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        hideLineCommentForm();
+                    }
+                });
+            }
+        }
+
+        function hideLineCommentForm() {
+            document.querySelectorAll('.line-comment-form, .sbs-line-comment-form').forEach(el => el.remove());
+        }
+
+        async function createLineComment(btn) {
+            const filePath = btn.getAttribute('data-file');
+            const lineNum = parseInt(btn.getAttribute('data-line'), 10);
+            const side = btn.getAttribute('data-side');
+            const endOffset = parseInt(btn.getAttribute('data-end-offset') || '1', 10);
+
+            const textarea = btn.closest('.comment-editor').querySelector('.line-comment-textarea');
+            const content = resolveMentionsForSubmit(textarea);
+            if (!content) {
+                alert('Please enter a comment.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+
+            try {
+                const { threadContext, pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                    filePath, selectedIterationStart, selectedIterationEnd, allIterations.length, allChangeEntries
+                );
+
+                if (side === 'right') {
+                    threadContext.rightFileStart = { line: lineNum, offset: 1 };
+                    threadContext.rightFileEnd = { line: lineNum, offset: endOffset };
+                } else {
+                    threadContext.leftFileStart = { line: lineNum, offset: 1 };
+                    threadContext.leftFileEnd = { line: lineNum, offset: endOffset };
+                }
+
+                await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
+                hideLineCommentForm();
+                await refreshThreadsFromAPI();
+            } catch (err) {
+                console.error('Failed to create line comment:', err);
+                alert('Failed to create comment: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Create';
+            }
+        }
+
         function updateLineStatsDisplay(added, removed) {
             const container = document.getElementById('lineStatsContainer');
             if (!container) return;
@@ -5436,9 +5662,50 @@
             updateHunkNav(prevIndex);
         }
 
+        function updateFileTreeThreadInfo() {
+            const container = document.getElementById('fileTreeContainer');
+            if (!container) return;
+
+            container.querySelectorAll('.file-tree-file[data-path]').forEach(fileEl => {
+                const filePath = fileEl.getAttribute('data-path');
+
+                // Update thread count badge
+                const existingBadge = fileEl.querySelector('.file-thread-count');
+                const newBadgeHtml = getThreadCountBadge(filePath);
+                if (existingBadge) {
+                    if (newBadgeHtml) {
+                        existingBadge.outerHTML = newBadgeHtml;
+                    } else {
+                        existingBadge.remove();
+                    }
+                } else if (newBadgeHtml) {
+                    const kebab = fileEl.querySelector('.file-kebab-wrapper');
+                    if (kebab) kebab.insertAdjacentHTML('beforebegin', newBadgeHtml);
+                    else fileEl.insertAdjacentHTML('beforeend', newBadgeHtml);
+                }
+
+                // Update thread sub-list
+                const nextSibling = fileEl.nextElementSibling;
+                const hasSubList = nextSibling && nextSibling.classList.contains('file-tree-threads');
+                const depth = parseInt(fileEl.style.getPropertyValue('--depth') || '0', 10);
+                const newSubListHtml = renderThreadSubList(filePath, depth);
+
+                if (hasSubList) {
+                    if (newSubListHtml) {
+                        nextSibling.outerHTML = newSubListHtml;
+                    } else {
+                        nextSibling.remove();
+                    }
+                } else if (newSubListHtml) {
+                    fileEl.insertAdjacentHTML('afterend', newSubListHtml);
+                }
+            });
+        }
+
         function refreshInlineThreadsIfNeeded() {
             if (currentView !== 'files' || !selectedFilePath) return;
             buildThreadsByFilePath();
+            updateFileTreeThreadInfo();
 
             const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
             const ct = (changeEntry?.changeType || 'edit').toLowerCase();
@@ -8354,6 +8621,9 @@
             // Trigger avatar loading for inline threads
             AvatarLoader.loadPending();
 
+            // Inject comment bubbles for line-level commenting
+            injectCommentBubbles(filePath);
+
             // Set up horizontal scroll sync for SBS mode
             if (fileDiffDisplayMode === 'side-by-side') {
                 setupSbsScrollSync(diffPanel);
@@ -8403,6 +8673,31 @@
                 // Will be applied after PR loads — just set the variable
                 currentView = 'files';
             }
+        })();
+
+        // Event delegation for line comment bubbles and submit buttons
+        (function initLineCommentDelegation() {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            diffPanel.addEventListener('click', (e) => {
+                const bubble = e.target.closest('.diff-comment-bubble');
+                if (bubble) {
+                    e.stopPropagation();
+                    const filePath = bubble.getAttribute('data-file');
+                    const lineNum = bubble.getAttribute('data-line');
+                    const side = bubble.getAttribute('data-side');
+                    const lineLen = parseInt(bubble.getAttribute('data-line-len') || '0', 10);
+                    openLineCommentEditor(filePath, parseInt(lineNum, 10), side, bubble, lineLen);
+                    return;
+                }
+
+                const submitBtn = e.target.closest('.line-comment-submit');
+                if (submitBtn) {
+                    e.stopPropagation();
+                    createLineComment(submitBtn);
+                }
+            });
         })();
 
         // Left sidebar resize functionality
