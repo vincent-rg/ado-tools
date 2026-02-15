@@ -1013,11 +1013,11 @@
         }
 
         .reviewer-status-badge.status-approved-suggestions {
-            background: #498205;
+            background: #107c10;
         }
 
         .reviewer-status-badge.status-waiting {
-            background: #ff8c00;
+            background: #ca5010;
         }
 
         .reviewer-status-badge.status-rejected {
@@ -2284,14 +2284,18 @@
                     avatarHtml = `<div class="avatar-fallback" title="${title}">${initials}</div>`;
                 }
 
-                // Badge icons for different statuses (no badge for no-vote)
+                // Badge SVG icons for different statuses (no badge for no-vote)
+                const svgSize = 11;
+                const svgAttrs = `xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize}" viewBox="0 0 16 16" fill="white"`;
                 let badgeHtml = '';
-                if (vote === 10 || vote === 5) {
-                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">✓</span>`;
+                if (vote === 10) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}"><svg ${svgAttrs}><path d="M13.5 2.5l-7.5 9-3.5-3.5-2 2 5.5 5.5 9.5-11.5z"/></svg></span>`;
+                } else if (vote === 5) {
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}"><svg ${svgAttrs}><path d="M9 2h-2v7h2zM9 11h-2v2h2z"/></svg></span>`;
                 } else if (vote === -10) {
-                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">✗</span>`;
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}"><svg ${svgAttrs}><path d="M3 3l10 10M13 3l-10 10" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg></span>`;
                 } else if (vote === -5) {
-                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}">!</span>`;
+                    badgeHtml = `<span class="reviewer-status-badge ${statusClass}"><svg ${svgAttrs}><path d="M8 4v4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M8 8l2.5 3" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>`;
                 }
 
                 const wrapperId = r.id ? ` data-user-id="${r.id}"` : '';

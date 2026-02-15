@@ -1202,11 +1202,11 @@
         }
 
         .vote-badge.vote-approved-suggestions {
-            background: #498205;
+            background: #107c10;
         }
 
         .vote-badge.vote-wait {
-            background: #d83b01;
+            background: #ca5010;
         }
 
         .vote-badge.vote-rejected {
@@ -1459,6 +1459,41 @@
             background: #fde7e9;
         }
 
+        /* Vote dropdown in PR title bar */
+        .vote-select-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .vote-select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding: 3px 22px 3px 8px;
+            border: 1px solid #8a8886;
+            border-radius: 3px;
+            background: white;
+            font-size: 12px;
+            cursor: pointer;
+            color: #323130;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23605e5c'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+        }
+
+        .vote-select:hover {
+            border-color: #323130;
+        }
+
+        .vote-select:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+
+        .vote-select.vote-active-approved { border-color: #107c10; color: #107c10; font-weight: 600; }
+        .vote-select.vote-active-suggestions { border-color: #107c10; color: #107c10; font-weight: 600; }
+        .vote-select.vote-active-waiting { border-color: #ca5010; color: #ca5010; font-weight: 600; }
+        .vote-select.vote-active-rejected { border-color: #a4262c; color: #a4262c; font-weight: 600; }
 
         /* PR title avatar */
         .pr-title-avatar {
@@ -2911,6 +2946,7 @@
         let fileDiffCache = new Map();
         let fileTreeBuilt = false;
         let currentMergeBase = null;
+        let currentUserId = null;
         let selectedIterationStart = null; // null = "all"
         let selectedIterationEnd = null;
         let threadsByFilePath = new Map();     // Map<filePath, Thread[]>
@@ -3461,27 +3497,29 @@
             let voteClass = '';
             let voteText = '';
             let voteIcon = '';
+            const svgSize = 10;
+            const svgAttrs = `xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize}" viewBox="0 0 16 16" fill="white"`;
             if (vote !== undefined) {
                 switch (vote) {
                     case 10:
                         voteClass = 'vote-approved';
                         voteText = 'Approved';
-                        voteIcon = '✓';
+                        voteIcon = `<svg ${svgAttrs}><path d="M13.5 2.5l-7.5 9-3.5-3.5-2 2 5.5 5.5 9.5-11.5z"/></svg>`;
                         break;
                     case 5:
                         voteClass = 'vote-approved-suggestions';
                         voteText = 'Approved with suggestions';
-                        voteIcon = '✓';
+                        voteIcon = `<svg ${svgAttrs}><path d="M9 2h-2v7h2zM9 11h-2v2h2z"/></svg>`;
                         break;
                     case -5:
                         voteClass = 'vote-wait';
                         voteText = 'Waiting for author';
-                        voteIcon = '!';
+                        voteIcon = `<svg ${svgAttrs}><path d="M8 4v4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M8 8l2.5 3" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`;
                         break;
                     case -10:
                         voteClass = 'vote-rejected';
                         voteText = 'Rejected';
-                        voteIcon = '✗';
+                        voteIcon = `<svg ${svgAttrs}><path d="M3 3l10 10M13 3l-10 10" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
                         break;
                     default:
                         voteClass = 'vote-no-vote';
@@ -4351,12 +4389,14 @@
                 iterationChangesCache.clear();
                 filePathHistoryCache.clear();
 
-                // Fetch PR details, threads, and iterations in parallel
-                const [prData, threadsData, iterationsData] = await Promise.all([
+                // Fetch PR details, threads, iterations, and current user in parallel
+                const [prData, threadsData, iterationsData, currentUser] = await Promise.all([
                     ADOAPI.getPR(config, currentPRId),
                     ADOAPI.getPRThreads(config, currentPRId),
-                    ADOAPI.getPRIterations(config, currentPRId)
+                    ADOAPI.getPRIterations(config, currentPRId),
+                    ADOAPI.getCurrentUser(config).catch(() => null)
                 ]);
+                currentUserId = currentUser?.id || null;
 
                 allThreads = (threadsData.value || []).map((t, idx) => ({ ...t, _originalIndex: idx }));
                 allIterations = iterationsData.value || [];
@@ -5737,6 +5777,66 @@
             }
         }
 
+        function renderVoteDropdown(currentVote) {
+            if (!currentUserId) return '';
+
+            const voteOptions = [
+                { value: 0, label: 'No vote', cls: '' },
+                { value: 10, label: 'Approve', cls: 'vote-active-approved' },
+                { value: 5, label: 'Approve with suggestions', cls: 'vote-active-suggestions' },
+                { value: -5, label: 'Wait for author', cls: 'vote-active-waiting' },
+                { value: -10, label: 'Reject', cls: 'vote-active-rejected' },
+            ];
+
+            const activeOption = voteOptions.find(o => o.value === currentVote) || voteOptions[0];
+            const selectClass = activeOption.cls ? ` ${activeOption.cls}` : '';
+
+            const optionsHtml = voteOptions.map(opt => {
+                const selected = opt.value === currentVote ? ' selected' : '';
+                return `<option value="${opt.value}"${selected}>${opt.label}</option>`;
+            }).join('');
+
+            return `<select id="voteDropdown" class="vote-select${selectClass}" onchange="setOwnVote(parseInt(this.value))">${optionsHtml}</select>`;
+        }
+
+        function getCurrentUserVote() {
+            if (!currentUserId || !currentPRData?.reviewers) return 0;
+            const self = currentPRData.reviewers.find(r => r.id === currentUserId);
+            return self ? (self.vote || 0) : null;
+        }
+
+        function updateVoteDropdown() {
+            const container = document.getElementById('voteDropdownContainer');
+            if (!container) return;
+            const vote = getCurrentUserVote();
+            container.innerHTML = vote !== null ? renderVoteDropdown(vote) : '';
+        }
+
+        async function setOwnVote(vote) {
+            if (!currentUserId) return;
+            const select = document.getElementById('voteDropdown');
+            if (select) select.disabled = true;
+            try {
+                await ADOAPI.setReviewerVote(currentConfig, currentPRId, currentUserId, vote);
+
+                // Refresh PR data to get updated reviewers list
+                currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
+
+                // Update vote dropdown styling and reviewers display
+                updateVoteDropdown();
+                updateReviewersDisplay();
+            } catch (error) {
+                alert(`Failed to set vote: ${error.message}\n\nNote: This requires a PAT with appropriate permissions.`);
+                // Revert select to previous value
+                if (select) {
+                    const currentVote = getCurrentUserVote();
+                    if (currentVote !== null) select.value = currentVote;
+                }
+            } finally {
+                if (select) select.disabled = false;
+            }
+        }
+
         async function toggleReviewerRequired(reviewerId, isRequired) {
             try {
                 await ADOAPI.updateReviewerRequired(currentConfig, currentPRId, reviewerId, isRequired);
@@ -6309,11 +6409,13 @@
 
             // PR title bar HTML (sticky, rendered outside #results)
             const fileCount = allChangeEntries.length;
+            const ownVote = getCurrentUserVote();
+            const voteDropdownHtml = ownVote !== null ? renderVoteDropdown(ownVote) : '';
             const titleBarHtml = `
                 <div class="pr-title-bar">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
                         <span style="display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span>PR #${prData.pullRequestId}: ${ADOContent.escapeHtml(prData.title)}</span></span>
-                        <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
+                        <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="voteDropdownContainer">${voteDropdownHtml}</span><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
                     </h2>
                 </div>
                 <div class="view-tabs">

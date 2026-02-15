@@ -865,6 +865,30 @@ const ADOAPI = {
     },
 
     /**
+     * Set a reviewer's vote on a PR
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {string} reviewerId - Reviewer's identity ID
+     * @param {number} vote - Vote value: 10=Approved, 5=Approved with suggestions, -5=Waiting for author, -10=Rejected, 0=Reset
+     * @returns {Promise<object>} Updated reviewer object
+     */
+    async setReviewerVote(config, prId, reviewerId, vote) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/reviewers/${encodeURIComponent(reviewerId)}?api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PUT',
+            body: JSON.stringify({ vote })
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to set vote: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
      * Search for identities (users/groups) by name or email
      * Uses local proxy to avoid CORS issues with Identity Picker API
      * @param {object} config - ADO configuration
