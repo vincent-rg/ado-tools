@@ -13,7 +13,6 @@ PR threads
 - work item icon/background color matching the work item type
 - work item status indicator (proposed, accepted, closed, resolved, completed, etc)
 - add vote options
-- create comment on file
 - create comment on line; for comment made on sbs mode, take into account the displayed revision, if the comment is made on left or right pane (ie before or after); in inline mode, comment should only be made on unchanged or new content (restriction in ado, i don't really see why it's not possible actually)
 - create comment on selection; for comment made on sbs mode, take into account the displayed revision, if the comment is made on left or right pane (ie before or after); in inline mode, comment should only be made on unchanged or new content (restriction in ado, i don't really see why it's not possible actually)
 
