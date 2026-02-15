@@ -321,6 +321,82 @@ describe('PRThreadsUtils', () => {
         });
     });
 
+    describe('buildFileCommentContext', () => {
+        it('returns threadContext with only filePath', () => {
+            const { threadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', null, null, 3, []
+            );
+            expect(threadContext).toEqual({ filePath: '/src/main.cpp' });
+        });
+
+        it('sets both iterations to latest in all-iterations mode', () => {
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', null, null, 3, []
+            );
+            expect(pullRequestThreadContext.iterationContext).toEqual({
+                firstComparingIteration: 3,
+                secondComparingIteration: 3
+            });
+        });
+
+        it('uses (start - 1) as firstComparingIteration for specific iteration', () => {
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', 2, 2, 3, []
+            );
+            expect(pullRequestThreadContext.iterationContext).toEqual({
+                firstComparingIteration: 1,
+                secondComparingIteration: 2
+            });
+        });
+
+        it('clamps firstComparingIteration to 1 for iteration 1', () => {
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', 1, 1, 3, []
+            );
+            expect(pullRequestThreadContext.iterationContext).toEqual({
+                firstComparingIteration: 1,
+                secondComparingIteration: 1
+            });
+        });
+
+        it('handles iteration range selection', () => {
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', 2, 4, 5, []
+            );
+            expect(pullRequestThreadContext.iterationContext).toEqual({
+                firstComparingIteration: 1,
+                secondComparingIteration: 4
+            });
+        });
+
+        it('includes changeTrackingId when file has a matching change entry', () => {
+            const entries = [
+                { item: { path: '/src/other.cpp' }, changeTrackingId: 5 },
+                { item: { path: '/src/main.cpp' }, changeTrackingId: 7 }
+            ];
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', null, null, 3, entries
+            );
+            expect(pullRequestThreadContext.changeTrackingId).toBe(7);
+        });
+
+        it('omits changeTrackingId when no matching change entry', () => {
+            const entries = [{ item: { path: '/src/other.cpp' }, changeTrackingId: 5 }];
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', null, null, 3, entries
+            );
+            expect(pullRequestThreadContext.changeTrackingId).toBeUndefined();
+        });
+
+        it('omits changeTrackingId when entry has no item', () => {
+            const entries = [{ changeTrackingId: 5 }];
+            const { pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                '/src/main.cpp', null, null, 3, entries
+            );
+            expect(pullRequestThreadContext.changeTrackingId).toBeUndefined();
+        });
+    });
+
     describe('getLineStatsCacheKey', () => {
         it('generates correct cache key', () => {
             const config = { organization: 'org', project: 'proj', repository: 'repo' };

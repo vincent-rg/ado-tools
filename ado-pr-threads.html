@@ -1975,6 +1975,90 @@
             background: #f3f2f1;
         }
 
+        /* File tree kebab menu */
+        .file-tree-kebab {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+            color: #605e5c;
+            line-height: 1;
+            display: none;
+            align-items: center;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .file-tree-kebab:hover {
+            background: #e1dfdd;
+            color: #323130;
+        }
+
+        .file-tree-kebab svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .file-tree-file:hover .file-tree-kebab,
+        .file-tree-file .file-tree-kebab.active {
+            display: flex;
+        }
+
+        .file-tree-context-menu {
+            display: none;
+            position: absolute;
+            right: 4px;
+            top: 100%;
+            background: white;
+            border: 1px solid #e1dfdd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 150px;
+            padding: 4px 0;
+        }
+
+        .file-tree-context-menu.open {
+            display: block;
+        }
+
+        .file-tree-context-menu button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 6px 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            color: #323130;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .file-tree-context-menu button:hover {
+            background: #f3f2f1;
+        }
+
+        .file-tree-file {
+            position: relative;
+        }
+
+        .file-comment-form {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e1dfdd;
+            background: #faf9f8;
+        }
+
+        .file-comment-form h4 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #323130;
+        }
+
         /* Live updates toggle */
         .live-toggle {
             display: inline-flex;
@@ -2153,7 +2237,7 @@
         }
 
         .file-tree-file.selected {
-            background: #e1dfdd;
+            background: #deecf9;
         }
 
         .file-tree-file-name {
@@ -3471,6 +3555,126 @@
 
             // Trigger fresh computation
             await fetchLineStatsAsync(currentConfig, currentPRData);
+        }
+
+        function getFileKebabHtml(filePath) {
+            const escaped = ADOContent.escapeJs(filePath);
+            return `<button class="file-tree-kebab" onclick="toggleFileContextMenu(event, '${escaped}')" title="File actions">` +
+                `<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>` +
+                `</button>` +
+                `<div class="file-tree-context-menu">` +
+                `<button onclick="showFileCommentForm(event, '${escaped}')">Add comment</button>` +
+                `</div>`;
+        }
+
+        function toggleFileContextMenu(event, filePath) {
+            event.stopPropagation();
+            const btn = event.currentTarget;
+            const menu = btn.nextElementSibling;
+            if (!menu) return;
+
+            // Close any other open file context menus
+            document.querySelectorAll('.file-tree-context-menu.open').forEach(m => {
+                if (m !== menu) m.classList.remove('open');
+            });
+            document.querySelectorAll('.file-tree-kebab.active').forEach(b => {
+                if (b !== btn) b.classList.remove('active');
+            });
+
+            menu.classList.toggle('open');
+            btn.classList.toggle('active', menu.classList.contains('open'));
+
+            if (menu.classList.contains('open')) {
+                const closeHandler = (e) => {
+                    if (!menu.contains(e.target) && e.target !== btn) {
+                        menu.classList.remove('open');
+                        btn.classList.remove('active');
+                        document.removeEventListener('click', closeHandler);
+                    }
+                };
+                setTimeout(() => document.addEventListener('click', closeHandler), 0);
+            }
+        }
+
+        function showFileCommentForm(event, filePath) {
+            event.stopPropagation();
+            // Close the context menu
+            document.querySelectorAll('.file-tree-context-menu.open').forEach(m => m.classList.remove('open'));
+            document.querySelectorAll('.file-tree-kebab.active').forEach(b => b.classList.remove('active'));
+
+            // Find the file's changeType from tree data
+            const fileEl = document.querySelector(`.file-tree-file[data-path="${CSS.escape(filePath)}"]`);
+            const changeType = fileEl ? (fileEl.getAttribute('onclick')?.match(/,\s*'([^']*?)'\)/)?.[1] || 'none') : 'none';
+
+            // Select the file to show its diff
+            selectFileForDiff(filePath, changeType).then(() => {
+                injectFileCommentEditor(filePath);
+            });
+        }
+
+        function injectFileCommentEditor(filePath) {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            // Remove any existing file comment form
+            const existing = diffPanel.querySelector('.file-comment-form');
+            if (existing) existing.remove();
+
+            const body = diffPanel.querySelector('.file-diff-body');
+            if (!body) return;
+
+            const formDiv = document.createElement('div');
+            formDiv.className = 'file-comment-form';
+            formDiv.innerHTML = `
+                <h4>Comment on file</h4>
+                <div class="comment-editor">
+                    <textarea id="fileCommentContent" placeholder="Write a comment on this file..."></textarea>
+                    <div class="comment-editor-actions">
+                        <button class="btn-cancel" onclick="hideFileCommentForm()">Cancel</button>
+                        <button class="btn-save" onclick="createFileComment('${ADOContent.escapeJs(filePath)}')" id="fileCommentSubmitBtn">Create</button>
+                    </div>
+                </div>
+            `;
+
+            body.parentNode.insertBefore(formDiv, body);
+
+            const textarea = document.getElementById('fileCommentContent');
+            if (textarea) {
+                textarea.focus();
+                MentionAutocomplete.attach(textarea);
+            }
+        }
+
+        function hideFileCommentForm() {
+            const form = document.querySelector('.file-comment-form');
+            if (form) form.remove();
+        }
+
+        async function createFileComment(filePath) {
+            const content = resolveMentionsForSubmit(document.getElementById('fileCommentContent'));
+            if (!content) {
+                alert('Please enter a comment.');
+                return;
+            }
+
+            const btn = document.getElementById('fileCommentSubmitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+
+            try {
+                const { threadContext, pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                    filePath, selectedIterationStart, selectedIterationEnd, allIterations.length, allChangeEntries
+                );
+
+                await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
+                hideFileCommentForm();
+                await refreshThreadsFromAPI();
+            } catch (err) {
+                console.error('Failed to create file comment:', err);
+                alert('Failed to create comment: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Create';
+            }
         }
 
         function updateLineStatsDisplay(added, removed) {
@@ -7153,6 +7357,7 @@
                     html += indicator;
                     html += `<span class="file-tree-file-name" title="${escapedPath}">${ADOContent.escapeHtml(file.name)}</span>`;
                     html += getThreadCountBadge(file.path);
+                    html += getFileKebabHtml(file.path);
                     html += `</div>`;
                     html += renderThreadSubList(file.path, depth);
                 }
@@ -7237,6 +7442,7 @@
                 html += indicator;
                 html += `<span class="file-tree-file-name" title="${escapedPath}">${ADOContent.escapeHtml(fileName)}</span>`;
                 html += getThreadCountBadge(filePath);
+                html += getFileKebabHtml(filePath);
                 html += `</div>`;
                 html += renderThreadSubList(filePath, depth);
             }
@@ -8090,12 +8296,21 @@
                 return html;
             }
 
+            // Render file-level threads (no line position) above the diff
+            let fileLevelHtml = '';
+            for (const tr of threadRanges) {
+                if (tr.startLine === 0 && tr.endLine === 0) {
+                    tr.inserted = true;
+                    fileLevelHtml += renderInlineThread(tr.thread, tr.appliesToView);
+                }
+            }
+
             // Render diff lines with highlighting and inline threads
-            let diffHtml;
+            let diffHtml = fileLevelHtml;
             if (fileDiffDisplayMode === 'side-by-side') {
-                diffHtml = DiffUtils.renderDiffLinesSideBySide(diff, threadRanges, { getLinePrefix, getLineSuffix });
+                diffHtml += DiffUtils.renderDiffLinesSideBySide(diff, threadRanges, { getLinePrefix, getLineSuffix });
             } else {
-                diffHtml = DiffUtils.renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
+                diffHtml += DiffUtils.renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
             }
 
             // Insert any remaining threads that weren't placed (e.g. beyond end of diff)

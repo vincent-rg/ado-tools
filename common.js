@@ -696,7 +696,7 @@ const ADOAPI = {
      * @param {number} status - Thread status (1=active, default)
      * @returns {Promise<object>} Created thread
      */
-    async createThread(config, prId, content, status = 1) {
+    async createThread(config, prId, content, status = 1, threadContext = null, pullRequestThreadContext = null) {
         const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads?api-version=6.0`;
 
         const payload = {
@@ -706,6 +706,8 @@ const ADOAPI = {
             }],
             status: status
         };
+        if (threadContext) payload.threadContext = threadContext;
+        if (pullRequestThreadContext) payload.pullRequestThreadContext = pullRequestThreadContext;
 
         const response = await this.fetchWithAuth(url, config.pat, {
             method: 'POST',

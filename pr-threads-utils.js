@@ -125,6 +125,38 @@ const PRThreadsUtils = {
      */
     getLineStatsCacheKey(config, prId, iterationCount) {
         return `line-stats-${config.organization}-${config.project}-${config.repository}-${prId}-${iterationCount}`;
+    },
+
+    /**
+     * Build threadContext and pullRequestThreadContext for a file-level comment.
+     * @param {string} filePath - The file path to comment on
+     * @param {number|null} selectedIterationStart - Selected iteration start (null = all)
+     * @param {number|null} selectedIterationEnd - Selected iteration end (null = all)
+     * @param {number} allIterationsLength - Total number of iterations
+     * @param {Array} allChangeEntries - Iteration change entries with item.path and changeTrackingId
+     * @returns {{ threadContext: object, pullRequestThreadContext: object }}
+     */
+    buildFileCommentContext(filePath, selectedIterationStart, selectedIterationEnd, allIterationsLength, allChangeEntries) {
+        const threadContext = { filePath };
+
+        const iterationEnd = selectedIterationEnd || allIterationsLength;
+        const iterationStart = selectedIterationStart != null
+            ? Math.max(1, selectedIterationStart - 1)
+            : iterationEnd;
+
+        const pullRequestThreadContext = {
+            iterationContext: {
+                firstComparingIteration: iterationStart,
+                secondComparingIteration: iterationEnd
+            }
+        };
+
+        const changeEntry = allChangeEntries.find(e => e.item?.path === filePath);
+        if (changeEntry && changeEntry.changeTrackingId != null) {
+            pullRequestThreadContext.changeTrackingId = changeEntry.changeTrackingId;
+        }
+
+        return { threadContext, pullRequestThreadContext };
     }
 };
 
