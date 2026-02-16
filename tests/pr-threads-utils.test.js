@@ -412,4 +412,213 @@ describe('PRThreadsUtils', () => {
             );
         });
     });
+
+    describe('buildRenameMaps', () => {
+        it('returns empty maps for empty entries', () => {
+            const { oldToNew, newToOld } = PRThreadsUtils.buildRenameMaps([]);
+            expect(oldToNew.size).toBe(0);
+            expect(newToOld.size).toBe(0);
+        });
+
+        it('maps a rename with sourceServerItem', () => {
+            const entries = [{
+                item: { path: '/new/file.js' },
+                changeType: 'rename',
+                sourceServerItem: '/old/file.js'
+            }];
+            const { oldToNew, newToOld } = PRThreadsUtils.buildRenameMaps(entries);
+            expect(oldToNew.get('/old/file.js')).toBe('/new/file.js');
+            expect(newToOld.get('/new/file.js')).toBe('/old/file.js');
+        });
+
+        it('falls back to originalPath when sourceServerItem is missing', () => {
+            const entries = [{
+                item: { path: '/new/file.js' },
+                changeType: 'rename',
+                originalPath: '/old/file.js'
+            }];
+            const { oldToNew, newToOld } = PRThreadsUtils.buildRenameMaps(entries);
+            expect(oldToNew.get('/old/file.js')).toBe('/new/file.js');
+            expect(newToOld.get('/new/file.js')).toBe('/old/file.js');
+        });
+
+        it('handles multiple renames', () => {
+            const entries = [
+                { item: { path: '/b.js' }, changeType: 'rename', sourceServerItem: '/a.js' },
+                { item: { path: '/d.js' }, changeType: 'edit, rename', sourceServerItem: '/c.js' }
+            ];
+            const { oldToNew, newToOld } = PRThreadsUtils.buildRenameMaps(entries);
+            expect(oldToNew.size).toBe(2);
+            expect(oldToNew.get('/a.js')).toBe('/b.js');
+            expect(oldToNew.get('/c.js')).toBe('/d.js');
+        });
+
+        it('ignores non-rename entries', () => {
+            const entries = [
+                { item: { path: '/file.js' }, changeType: 'edit' },
+                { item: { path: '/new.js' }, changeType: 'add' },
+                { item: { path: '/gone.js' }, changeType: 'delete' }
+            ];
+            const { oldToNew, newToOld } = PRThreadsUtils.buildRenameMaps(entries);
+            expect(oldToNew.size).toBe(0);
+            expect(newToOld.size).toBe(0);
+        });
+
+        it('ignores rename entries without old path', () => {
+            const entries = [{ item: { path: '/file.js' }, changeType: 'rename' }];
+            const { oldToNew } = PRThreadsUtils.buildRenameMaps(entries);
+            expect(oldToNew.size).toBe(0);
+        });
+
+        it('ignores entries without item.path', () => {
+            const entries = [{ changeType: 'rename', sourceServerItem: '/old.js' }];
+            const { oldToNew } = PRThreadsUtils.buildRenameMaps(entries);
+            expect(oldToNew.size).toBe(0);
+        });
+    });
+
+    describe('buildThreadsByFilePath', () => {
+        const emptyMaps = { oldToNew: new Map(), newToOld: new Map() };
+
+        const makeThread = (filePath, opts = {}) => ({
+            isDeleted: opts.isDeleted || false,
+            threadContext: filePath ? { filePath } : null,
+            comments: opts.comments || [{ commentType: 'text', author: { id: 'u1' } }]
+        });
+
+        const makeChangeEntry = (path, changeType = 'edit') => ({
+            item: { path, gitObjectType: 'blob' },
+            changeType
+        });
+
+        it('returns empty collections when no threads or entries', () => {
+            const result = PRThreadsUtils.buildThreadsByFilePath([], [], emptyMaps);
+            expect(result.threadsByFilePath.size).toBe(0);
+            expect(result.changedFilePaths.size).toBe(0);
+            expect(result.commentedFilePaths.size).toBe(0);
+        });
+
+        it('indexes thread by its file path', () => {
+            const thread = makeThread('/src/a.js');
+            const entries = [makeChangeEntry('/src/a.js')];
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], entries, emptyMaps);
+            expect(result.threadsByFilePath.get('/src/a.js')).toEqual([thread]);
+            expect(result.commentedFilePaths.has('/src/a.js')).toBe(false);
+        });
+
+        it('puts thread on unchanged file into commentedFilePaths', () => {
+            const thread = makeThread('/src/readme.md');
+            const entries = [makeChangeEntry('/src/a.js')];
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], entries, emptyMaps);
+            expect(result.threadsByFilePath.has('/src/readme.md')).toBe(true);
+            expect(result.commentedFilePaths.has('/src/readme.md')).toBe(true);
+        });
+
+        it('skips deleted threads', () => {
+            const thread = makeThread('/src/a.js', { isDeleted: true });
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], [], emptyMaps);
+            expect(result.threadsByFilePath.size).toBe(0);
+        });
+
+        it('skips threads without filePath', () => {
+            const thread = makeThread(null);
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], [], emptyMaps);
+            expect(result.threadsByFilePath.size).toBe(0);
+        });
+
+        it('skips system-only threads', () => {
+            const thread = makeThread('/src/a.js', {
+                comments: [{ commentType: 'system' }]
+            });
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], [], emptyMaps);
+            expect(result.threadsByFilePath.size).toBe(0);
+        });
+
+        it('excludes tree entries and folder paths from changedFilePaths', () => {
+            const entries = [
+                { item: { path: '/src', gitObjectType: 'tree' }, changeType: 'edit' },
+                { item: { path: '/src/' }, changeType: 'edit' }
+            ];
+            const result = PRThreadsUtils.buildThreadsByFilePath([], entries, emptyMaps);
+            expect(result.changedFilePaths.size).toBe(0);
+        });
+
+        // Rename consolidation tests
+        it('consolidates thread on old path under new path via rename maps', () => {
+            const renameMaps = {
+                oldToNew: new Map([['/old/file.js', '/new/file.js']]),
+                newToOld: new Map([['/new/file.js', '/old/file.js']])
+            };
+            const thread = makeThread('/old/file.js');
+            const entries = [
+                makeChangeEntry('/new/file.js', 'edit, rename')
+            ];
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], entries, renameMaps);
+            // Thread accessible via both old and new path
+            expect(result.threadsByFilePath.get('/new/file.js')).toContain(thread);
+            expect(result.threadsByFilePath.get('/old/file.js')).toContain(thread);
+            // Old path excluded from commentedFilePaths (its rename target is in changedFilePaths)
+            expect(result.commentedFilePaths.has('/old/file.js')).toBe(false);
+        });
+
+        it('consolidates thread on new path under old path via rename maps', () => {
+            const renameMaps = {
+                oldToNew: new Map([['/old/file.js', '/new/file.js']]),
+                newToOld: new Map([['/new/file.js', '/old/file.js']])
+            };
+            const thread = makeThread('/new/file.js');
+            const entries = [
+                makeChangeEntry('/new/file.js', 'edit, rename')
+            ];
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], entries, renameMaps);
+            expect(result.threadsByFilePath.get('/old/file.js')).toContain(thread);
+            expect(result.threadsByFilePath.get('/new/file.js')).toContain(thread);
+            expect(result.commentedFilePaths.has('/old/file.js')).toBe(false);
+        });
+
+        it('pre-rename iteration: old path in entries, thread on new path excluded from commented', () => {
+            const renameMaps = {
+                oldToNew: new Map([['/old/file.js', '/new/file.js']]),
+                newToOld: new Map([['/new/file.js', '/old/file.js']])
+            };
+            const thread = makeThread('/new/file.js');
+            // In a pre-rename iteration, only the old path appears in change entries
+            const entries = [makeChangeEntry('/old/file.js', 'edit')];
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], entries, renameMaps);
+            // Thread cross-mapped to old path
+            expect(result.threadsByFilePath.get('/old/file.js')).toContain(thread);
+            // New path not in commentedFilePaths because its rename source is in changedFilePaths
+            expect(result.commentedFilePaths.has('/new/file.js')).toBe(false);
+        });
+
+        it('post-rename iteration: new path in entries, thread on old path excluded from commented', () => {
+            const renameMaps = {
+                oldToNew: new Map([['/old/file.js', '/new/file.js']]),
+                newToOld: new Map([['/new/file.js', '/old/file.js']])
+            };
+            const thread = makeThread('/old/file.js');
+            // In a post-rename iteration, only the new path appears in change entries
+            const entries = [makeChangeEntry('/new/file.js', 'edit')];
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], entries, renameMaps);
+            expect(result.threadsByFilePath.get('/new/file.js')).toContain(thread);
+            expect(result.commentedFilePaths.has('/old/file.js')).toBe(false);
+        });
+
+        it('threads on both old and new paths are accessible from either path', () => {
+            const renameMaps = {
+                oldToNew: new Map([['/old/file.js', '/new/file.js']]),
+                newToOld: new Map([['/new/file.js', '/old/file.js']])
+            };
+            const threadOld = makeThread('/old/file.js');
+            const threadNew = makeThread('/new/file.js');
+            const entries = [makeChangeEntry('/new/file.js', 'edit, rename')];
+            const result = PRThreadsUtils.buildThreadsByFilePath([threadOld, threadNew], entries, renameMaps);
+            const threadsAtNew = result.threadsByFilePath.get('/new/file.js');
+            expect(threadsAtNew).toContain(threadOld);
+            expect(threadsAtNew).toContain(threadNew);
+            const threadsAtOld = result.threadsByFilePath.get('/old/file.js');
+            expect(threadsAtOld).toContain(threadOld);
+            expect(threadsAtOld).toContain(threadNew);
+        });
+    });
 });

@@ -128,6 +128,82 @@ const PRThreadsUtils = {
     },
 
     /**
+     * Build rename maps (old↔new path) from change entries that include renames.
+     * @param {Array} changeEntries - Array of iteration change entries
+     * @returns {{ oldToNew: Map<string,string>, newToOld: Map<string,string> }}
+     */
+    buildRenameMaps(changeEntries) {
+        const oldToNew = new Map();
+        const newToOld = new Map();
+        for (const entry of changeEntries) {
+            if (!entry.item?.path) continue;
+            const ct = (entry.changeType || '').toLowerCase();
+            if (ct.includes('rename')) {
+                const oldPath = entry.sourceServerItem || entry.originalPath;
+                if (oldPath) {
+                    oldToNew.set(oldPath, entry.item.path);
+                    newToOld.set(entry.item.path, oldPath);
+                }
+            }
+        }
+        return { oldToNew, newToOld };
+    },
+
+    /**
+     * Build thread-by-file-path index, changed file set, and commented (unchanged) file set.
+     * Threads are cross-mapped across renames so lookups by either old or new path work.
+     * @param {Array} allThreads - Thread objects from ADO API
+     * @param {Array} allChangeEntries - Iteration change entries (current view)
+     * @param {{ oldToNew: Map, newToOld: Map }} renameMaps - Cumulative rename maps from full PR
+     * @returns {{ threadsByFilePath: Map, changedFilePaths: Set, commentedFilePaths: Set }}
+     */
+    buildThreadsByFilePath(allThreads, allChangeEntries, renameMaps) {
+        const threadsByFilePath = new Map();
+        const commentedFilePaths = new Set();
+        const changedFilePaths = new Set();
+        const { oldToNew, newToOld } = renameMaps;
+
+        for (const thread of allThreads) {
+            if (thread.isDeleted) continue;
+            const fp = thread.threadContext?.filePath;
+            if (!fp) continue;
+            const hasRealComment = thread.comments?.some(c => c.commentType !== 'system');
+            if (!hasRealComment) continue;
+
+            if (!threadsByFilePath.has(fp)) threadsByFilePath.set(fp, []);
+            threadsByFilePath.get(fp).push(thread);
+
+            const newPath = oldToNew.get(fp);
+            if (newPath && newPath !== fp) {
+                if (!threadsByFilePath.has(newPath)) threadsByFilePath.set(newPath, []);
+                threadsByFilePath.get(newPath).push(thread);
+            }
+
+            const oldPath = newToOld.get(fp);
+            if (oldPath && oldPath !== fp) {
+                if (!threadsByFilePath.has(oldPath)) threadsByFilePath.set(oldPath, []);
+                threadsByFilePath.get(oldPath).push(thread);
+            }
+        }
+
+        for (const entry of allChangeEntries) {
+            if (entry.item?.path && entry.item.gitObjectType !== 'tree' && !entry.item.path.endsWith('/')) {
+                changedFilePaths.add(entry.item.path);
+            }
+        }
+
+        for (const fp of threadsByFilePath.keys()) {
+            if (changedFilePaths.has(fp)) continue;
+            const renamedTo = oldToNew.get(fp);
+            const renamedFrom = newToOld.get(fp);
+            if ((renamedTo && changedFilePaths.has(renamedTo)) || (renamedFrom && changedFilePaths.has(renamedFrom))) continue;
+            commentedFilePaths.add(fp);
+        }
+
+        return { threadsByFilePath, changedFilePaths, commentedFilePaths };
+    },
+
+    /**
      * Build threadContext and pullRequestThreadContext for a file-level comment.
      * @param {string} filePath - The file path to comment on
      * @param {number|null} selectedIterationStart - Selected iteration start (null = all)

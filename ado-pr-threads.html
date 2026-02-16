@@ -3125,6 +3125,8 @@
         let repoTreeFullyLoaded = false;
         let commentedFilePaths = new Set();    // Files with threads but not in changeEntries
         let changedFilePaths = new Set();      // Files in changeEntries
+        let cumulativeOldToNew = new Map();    // Rename maps from full PR (all iterations)
+        let cumulativeNewToOld = new Map();
         let isBulkMode = false;
         let selectedThreadIds = new Set();
         let isRestoringFromURL = false;
@@ -3313,60 +3315,18 @@
             }
         }
 
+        function buildCumulativeRenameMaps(entries) {
+            const result = PRThreadsUtils.buildRenameMaps(entries);
+            cumulativeOldToNew = result.oldToNew;
+            cumulativeNewToOld = result.newToOld;
+        }
+
         function buildThreadsByFilePath() {
-            threadsByFilePath.clear();
-            commentedFilePaths.clear();
-            changedFilePaths.clear();
-
-            // Build rename maps: oldPath→newPath and newPath→oldPath from change entries
-            const oldToNew = new Map();
-            const newToOld = new Map();
-            for (const entry of allChangeEntries) {
-                if (!entry.item?.path) continue;
-                const ct = (entry.changeType || '').toLowerCase();
-                if (ct.includes('rename')) {
-                    const oldPath = entry.sourceServerItem || entry.originalPath;
-                    if (oldPath) {
-                        oldToNew.set(oldPath, entry.item.path);
-                        newToOld.set(entry.item.path, oldPath);
-                    }
-                }
-            }
-
-            for (const thread of allThreads) {
-                if (thread.isDeleted) continue;
-                const fp = thread.threadContext?.filePath;
-                if (!fp) continue;
-                // Skip system threads (no real comments)
-                const hasRealComment = thread.comments?.some(c => c.commentType !== 'system');
-                if (!hasRealComment) continue;
-
-                // Map thread to its original path
-                if (!threadsByFilePath.has(fp)) threadsByFilePath.set(fp, []);
-                threadsByFilePath.get(fp).push(thread);
-
-                // If this thread's path was renamed, also map it under the new path
-                const newPath = oldToNew.get(fp);
-                if (newPath && newPath !== fp) {
-                    if (!threadsByFilePath.has(newPath)) threadsByFilePath.set(newPath, []);
-                    threadsByFilePath.get(newPath).push(thread);
-                }
-
-                // If this thread's path is the new name, also map under old path
-                const oldPath = newToOld.get(fp);
-                if (oldPath && oldPath !== fp) {
-                    if (!threadsByFilePath.has(oldPath)) threadsByFilePath.set(oldPath, []);
-                    threadsByFilePath.get(oldPath).push(thread);
-                }
-            }
-            for (const entry of allChangeEntries) {
-                if (entry.item?.path && entry.item.gitObjectType !== 'tree' && !entry.item.path.endsWith('/')) {
-                    changedFilePaths.add(entry.item.path);
-                }
-            }
-            for (const fp of threadsByFilePath.keys()) {
-                if (!changedFilePaths.has(fp)) commentedFilePaths.add(fp);
-            }
+            const renameMaps = { oldToNew: cumulativeOldToNew, newToOld: cumulativeNewToOld };
+            const result = PRThreadsUtils.buildThreadsByFilePath(allThreads, allChangeEntries, renameMaps);
+            threadsByFilePath = result.threadsByFilePath;
+            changedFilePaths = result.changedFilePaths;
+            commentedFilePaths = result.commentedFilePaths;
         }
 
         function calculateFileChangeStats(changeEntries) {
@@ -4281,6 +4241,7 @@
                             fileDiffCache.clear();
                             fileTreeBuilt = false;
                             currentFileChangeStats = calculateFileChangeStats(entries);
+                            buildCumulativeRenameMaps(entries);
                             updateFileStats();
                             // Rebuild file tree if currently in files view
                             if (currentView === 'files') {
@@ -4889,6 +4850,8 @@
                         fileDiffCache.clear();
                         fileTreeBuilt = false;
                         fileChangeStats = calculateFileChangeStats(entries);
+                        // Build cumulative rename maps from all iterations
+                        buildCumulativeRenameMaps(entries);
                     } catch (e) {
                         console.warn('Failed to fetch file change stats:', e);
                     }
