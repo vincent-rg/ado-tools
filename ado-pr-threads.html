@@ -2790,6 +2790,23 @@
             padding: 0 5px;
             line-height: 16px;
             flex-shrink: 0;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .file-thread-count:hover {
+            filter: brightness(0.9);
+        }
+
+        .file-thread-count .thread-toggle-chevron {
+            font-size: 8px;
+            transition: transform 0.15s ease;
+        }
+
+        .file-thread-count.expanded .thread-toggle-chevron {
+            transform: rotate(90deg);
         }
 
         .file-thread-count.has-active {
@@ -2800,6 +2817,10 @@
         /* Thread sub-list under files */
         .file-tree-threads {
             padding-left: calc(28px + var(--depth, 0) * 16px);
+        }
+
+        .file-tree-threads.collapsed {
+            display: none;
         }
 
         .file-tree-thread {
@@ -5590,6 +5611,13 @@
             // Also highlight corresponding file tree entry
             const treeEntry = document.querySelector(`.file-tree-thread[data-thread-id="${threadId}"]`);
             if (treeEntry) {
+                // Auto-expand thread list if collapsed so the highlight is visible
+                const threadList = treeEntry.closest('.file-tree-threads');
+                if (threadList && threadList.classList.contains('collapsed')) {
+                    threadList.classList.remove('collapsed');
+                    const badge = threadList.previousElementSibling?.querySelector('.file-thread-count');
+                    if (badge) badge.classList.add('expanded');
+                }
                 treeEntry.classList.add('focused');
                 treeEntry.addEventListener('animationend', () => treeEntry.classList.remove('focused'), { once: true });
             }
@@ -7558,7 +7586,8 @@
             const threads = threadsByFilePath.get(filePath);
             if (!threads || threads.length === 0) return '';
             const hasActive = threads.some(t => t.status === 'active' || t.status === undefined);
-            return `<span class="file-thread-count${hasActive ? ' has-active' : ''}">${threads.length}</span>`;
+            const escapedPath = ADOContent.escapeHtml(filePath);
+            return `<span class="file-thread-count expanded${hasActive ? ' has-active' : ''}" data-path="${escapedPath}" onclick="event.stopPropagation(); toggleFileThreads(this)"><span class="thread-toggle-chevron">▶</span>${threads.length}</span>`;
         }
 
         // Propagate hasChanges/hasComments up the tree
@@ -8152,6 +8181,16 @@
             if (toggle) {
                 toggle.textContent = dir.classList.contains('expanded') ? '▼' : '▶';
             }
+        }
+
+        function toggleFileThreads(badge) {
+            // Find the sibling .file-tree-threads container (next element after the file row)
+            const fileRow = badge.closest('.file-tree-file');
+            if (!fileRow) return;
+            const threadList = fileRow.nextElementSibling;
+            if (!threadList || !threadList.classList.contains('file-tree-threads')) return;
+            threadList.classList.toggle('collapsed');
+            badge.classList.toggle('expanded');
         }
 
         function getChangeIndicator(changeType) {
