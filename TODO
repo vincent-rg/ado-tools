@@ -19,4 +19,3 @@ pr threads file view
 global:
 - refactor avatar indicators display (maybe also some other stuff on avatars?)
 - make toad icon
-- possible to get connected user identity via pat?
