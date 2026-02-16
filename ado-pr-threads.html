@@ -3745,6 +3745,12 @@
 
         // ==================== Line-level comment bubbles ====================
 
+        // Effective display mode: respects per-panel override (e.g. unchanged files always render inline)
+        function getEffectiveDisplayMode() {
+            const panel = document.getElementById('fileDiffPanel');
+            return panel?.getAttribute('data-render-mode') || fileDiffDisplayMode;
+        }
+
         const COMMENT_BUBBLE_SVG = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>';
 
         function injectCommentBubbles(filePath) {
@@ -3752,8 +3758,9 @@
             if (!diffPanel) return;
 
             const escapedFile = ADOContent.escapeHtml(filePath);
+            const effectiveMode = getEffectiveDisplayMode();
 
-            if (fileDiffDisplayMode === 'side-by-side') {
+            if (effectiveMode === 'side-by-side') {
                 diffPanel.querySelectorAll('.sbs-left, .sbs-right').forEach(pane => {
                     const lineNumEl = pane.querySelector('.diff-line-number');
                     if (!lineNumEl || !lineNumEl.textContent.trim()) return;
@@ -3801,7 +3808,8 @@
             const endOffset = Math.max(1, lineLen);
 
             // Highlight the line content with <mark>
-            const contentEl = (fileDiffDisplayMode === 'side-by-side')
+            const effectiveMode = getEffectiveDisplayMode();
+            const contentEl = (effectiveMode === 'side-by-side')
                 ? bubbleEl.closest('.sbs-left, .sbs-right')?.querySelector('.diff-content')
                 : bubbleEl.closest('.diff-line')?.querySelector('.diff-content');
             if (contentEl) {
@@ -3809,7 +3817,7 @@
                 contentEl.innerHTML = `<mark class="line-comment-highlight-mark" style="background: #ffe082; color: inherit;">${ADOContent.escapeHtml(text)}</mark>`;
             }
 
-            if (fileDiffDisplayMode === 'side-by-side') {
+            if (effectiveMode === 'side-by-side') {
                 const sbsRow = bubbleEl.closest('.sbs-row');
                 if (!sbsRow) return;
 
@@ -8199,21 +8207,99 @@
                     return;
                 }
 
-                // Non-changed file: show as read-only content (no diff)
+                // Non-changed file: show as read-only content with comment support
                 if (ct === 'none' || ct === '') {
                     const content = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
                     if (selectedFilePath !== filePath) return;
-                    const lines = content.split('\n');
-                    let bodyHtml = '';
-                    for (let i = 0; i < lines.length; i++) {
-                        bodyHtml += `<tr><td style="padding: 0 8px; color: #a19f9d; text-align: right; user-select: none; min-width: 40px;">${i + 1}</td><td style="padding: 0 8px; white-space: pre-wrap; word-break: break-all;">${ADOContent.escapeHtml(lines[i])}</td></tr>`;
+
+                    // Build a synthetic diff (all unchanged lines) so we can reuse renderDiffLines
+                    const syntheticDiff = content.split('\n').map(line => ({ type: 'unchanged', content: line }));
+
+                    // Gather threads for this file
+                    const fileThreads = (threadsByFilePath.get(filePath) || []).filter(thread => {
+                        if (thread.isDeleted) return false;
+                        if (!thread.threadContext) return false;
+                        return thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
+                    }).sort((a, b) => {
+                        const aLine = a.threadContext.rightFileStart?.line || a.threadContext.leftFileStart?.line || 0;
+                        const bLine = b.threadContext.rightFileStart?.line || b.threadContext.leftFileStart?.line || 0;
+                        return aLine - bLine;
+                    });
+
+                    const viewIterStart = selectedIterationStart ?? 1;
+                    const viewIterEnd = selectedIterationEnd ?? (allIterations.length || 1);
+                    const threadRanges = fileThreads.map(thread => DiffUtils.buildThreadRange(thread, viewIterStart, viewIterEnd));
+
+                    function getLinePrefix(newLineNum, oldLineNum) {
+                        let html = '';
+                        for (const tr of threadRanges) {
+                            const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                            if (lineNum == null || lineNum !== tr.startLine) continue;
+                            const thread = tr.thread;
+                            const status = thread.status;
+                            const isResolved = status === 'fixed' || status === 'closed' || status === 'wontFix';
+                            const isCollapsed = isResolved || !tr.appliesToView;
+                            const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
+                            const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
+                            const cachedUrl = firstRealComment?.author?.id ? AvatarLoader.getCached(firstRealComment.author.id) : null;
+                            const avatarInner = cachedUrl
+                                ? `<img src="${cachedUrl}" alt="${authorName}" title="${authorName}: click to expand thread">`
+                                : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
+                            const displayStyle = isCollapsed ? '' : ' style="display:none"';
+                            html += `<div class="diff-gutter-avatar" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})"${displayStyle}>${avatarInner}</div>`;
+                        }
+                        return html;
                     }
+
+                    function getLineSuffix(newLineNum, oldLineNum) {
+                        let html = '';
+                        for (const tr of threadRanges) {
+                            if (tr.inserted) continue;
+                            const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                            if (lineNum != null && lineNum >= tr.endLine) {
+                                tr.inserted = true;
+                                html += renderInlineThread(tr.thread, tr.appliesToView);
+                            }
+                        }
+                        return html;
+                    }
+
+                    // File-level threads (no line position)
+                    let fileLevelHtml = '';
+                    for (const tr of threadRanges) {
+                        if (tr.startLine === 0 && tr.endLine === 0) {
+                            tr.inserted = true;
+                            fileLevelHtml += renderInlineThread(tr.thread, tr.appliesToView);
+                        }
+                    }
+
+                    let diffHtml = fileLevelHtml;
+                    diffHtml += DiffUtils.renderDiffLines(syntheticDiff, threadRanges, { getLinePrefix, getLineSuffix });
+
+                    // Append remaining threads beyond end of file
+                    for (const tr of threadRanges) {
+                        if (!tr.inserted) {
+                            diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
+                        }
+                    }
+
                     diffPanel.innerHTML = `
                         <div class="file-diff-header">
-                            <span class="file-diff-path">${ADOContent.escapeHtml(filePath.split('/').pop())}</span>
-                            <span style="font-size: 12px; color: #a19f9d;">(read-only view)</span>
+                            <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
+                            <span style="font-size: 12px; color: #a19f9d;">(unchanged file)</span>
                         </div>
-                        <div class="file-diff-body"><table style="border-collapse: collapse; width: 100%; font-family: monospace; font-size: 12px;">${bodyHtml}</table></div>`;
+                        <div class="file-diff-body">
+                            <div class="diff-scroll-area">
+                                <div class="diff-lines">${diffHtml}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    AvatarLoader.loadPending();
+                    // Unchanged files always render inline — mark the panel so comment
+                    // interactions use inline logic even when user preference is side-by-side
+                    diffPanel.setAttribute('data-render-mode', 'inline');
+                    injectCommentBubbles(filePath);
                     return;
                 }
 
@@ -8475,6 +8561,7 @@
             clearSelectionComment();
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
+            diffPanel.removeAttribute('data-render-mode');
 
             const indicator = getChangeIndicator(changeType);
             const ct = changeType.toLowerCase();
@@ -8868,7 +8955,7 @@
             if (!diffPanel || !diffPanel.contains(sel.anchorNode)) return;
 
             let parsed;
-            if (fileDiffDisplayMode === 'side-by-side') {
+            if (getEffectiveDisplayMode() === 'side-by-side') {
                 parsed = parseSelectionSBS(sel);
             } else {
                 parsed = parseSelectionInline(sel);
@@ -8954,7 +9041,7 @@
             `;
 
             // Insert form after the last selected row/line
-            if (fileDiffDisplayMode === 'side-by-side') {
+            if (getEffectiveDisplayMode() === 'side-by-side') {
                 const formRow = document.createElement('div');
                 formRow.className = 'sbs-line-comment-form selection-comment-form-row';
 
@@ -9001,7 +9088,7 @@
             const contentEls = [];
             const lineNums = [];
 
-            if (fileDiffDisplayMode === 'side-by-side') {
+            if (getEffectiveDisplayMode() === 'side-by-side') {
                 const paneSelector = parsed.side === 'left' ? '.sbs-left' : '.sbs-right';
                 let inRange = false;
                 diffPanel.querySelectorAll('.sbs-row').forEach(row => {
