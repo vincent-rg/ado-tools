@@ -73,6 +73,15 @@ describe('ADOContent', () => {
             expect(result).toContain('checked');
         });
 
+        it('parses checkboxes after a heading', () => {
+            const result = ADOContent.parseMarkdownLinks('### liste choix\n- [X] choix A\n- [ ] choix B\n');
+            expect(result).toContain('<h3');
+            expect(result).toContain('liste choix');
+            expect(result).toContain('type="checkbox"');
+            expect(result).toContain('choix A');
+            expect(result).toContain('choix B');
+        });
+
         it('parses bullet lists', () => {
             const result = ADOContent.parseMarkdownLinks('- item1\n- item2\n');
             expect(result).toContain('<ul');

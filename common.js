@@ -1124,10 +1124,10 @@ const ADOContent = {
         });
 
         // 4. Parse headers (h1-h6) - consume trailing newline to avoid double spacing with pre-wrap
-        result = result.replace(/^(#{1,6})\s+(.+)\n?/gm, (match, hashes, text) => {
+        result = result.replace(/^(#{1,6})\s+(.+)(\n?)/gm, (match, hashes, text, trailing) => {
             const level = hashes.length;
             const html = `<h${level} style="margin: 0.5em 0; font-size: ${1.5 - (level - 1) * 0.15}em;">${text}</h${level}>`;
-            return createPlaceholder(html);
+            return createPlaceholder(html) + trailing;
         });
 
         // 4b. Parse task lists (checkboxes): - [ ] unchecked, - [x] checked
