@@ -1905,13 +1905,13 @@
             min-height: 160px;
         }
 
-        .description-preview {
+        .edit-preview {
             margin-top: 10px;
             border: 1px solid #e1dfdd;
             border-radius: 2px;
         }
 
-        .description-preview-header {
+        .edit-preview-header {
             padding: 6px 10px;
             font-size: 12px;
             font-weight: 600;
@@ -1920,7 +1920,7 @@
             border-bottom: 1px solid #e1dfdd;
         }
 
-        .description-preview-content {
+        .edit-preview-content {
             padding: 10px;
             white-space: pre-wrap;
         }
@@ -3708,6 +3708,7 @@
             if (textarea) {
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
+                attachEditPreview(textarea);
             }
         }
 
@@ -3856,6 +3857,7 @@
             if (textarea) {
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
+                attachEditPreview(textarea);
                 textarea.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
@@ -5287,6 +5289,7 @@
             const newThreadTextarea = document.getElementById('newThreadContent');
             newThreadTextarea.focus();
             MentionAutocomplete.attach(newThreadTextarea);
+            attachEditPreview(newThreadTextarea);
         }
 
         function hideNewThreadForm() {
@@ -5352,7 +5355,11 @@
             `;
 
             const textarea = document.getElementById(`${prefix}reply-content-${threadId}`);
-            if (textarea) { textarea.focus(); MentionAutocomplete.attach(textarea); }
+            if (textarea) {
+                textarea.focus();
+                MentionAutocomplete.attach(textarea);
+                attachEditPreview(textarea);
+            }
         }
 
         function hideReplyForm(threadId, prefix = '') {
@@ -5404,6 +5411,8 @@
                 textarea._mentionMap = resolved.mentionMap;
                 textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 MentionAutocomplete.attach(textarea);
+                const { update } = attachEditPreview(textarea);
+                update();
             }
 
             const actions = commentDiv?.querySelector('.comment-actions');
@@ -5447,10 +5456,6 @@
             const resolved = MentionUtils.resolveIdsToNames(currentPRData.description || '', identityCache);
             const escapedDescription = resolved.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-            const previewHtml = currentPRData.description
-                ? ADOContent.processContent(currentPRData.description)
-                : '<span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>';
-
             contentEl.innerHTML = `
                 <div class="comment-editor">
                     <textarea id="edit-description-textarea">${escapedDescription}</textarea>
@@ -5458,10 +5463,6 @@
                         <button class="btn-cancel" onclick="cancelEditDescription()">Cancel</button>
                         <button class="btn-save" id="edit-description-save" onclick="saveEditDescription()">Save</button>
                     </div>
-                </div>
-                <div class="description-preview">
-                    <div class="description-preview-header">Preview</div>
-                    <div class="description-preview-content pr-description" id="edit-description-preview">${previewHtml}</div>
                 </div>
             `;
 
@@ -5471,20 +5472,41 @@
                 textarea._mentionMap = resolved.mentionMap;
                 textarea.focus();
                 textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-                textarea.addEventListener('input', updateDescriptionPreview);
                 MentionAutocomplete.attach(textarea);
+                const { update } = attachEditPreview(textarea);
+                update();
             }
         }
 
-        function updateDescriptionPreview() {
-            const textarea = document.getElementById('edit-description-textarea');
-            const preview = document.getElementById('edit-description-preview');
-            if (!textarea || !preview) return;
-            const text = MentionUtils.resolveDisplayMentions(textarea.value, textarea._mentionMap);
-            preview.innerHTML = text
-                ? ADOContent.processContent(text)
-                : '<span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>';
+        let editPreviewCounter = 0;
+
+        function attachEditPreview(textarea) {
+            if (!textarea) return;
+            const previewId = `edit-preview-${++editPreviewCounter}`;
+            const previewDiv = document.createElement('div');
+            previewDiv.className = 'edit-preview';
+            previewDiv.innerHTML = `
+                <div class="edit-preview-header">Preview</div>
+                <div class="edit-preview-content pr-description" id="${previewId}">
+                    <span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>
+                </div>
+            `;
+            const editor = textarea.closest('.comment-editor');
+            if (editor) {
+                editor.insertAdjacentElement('afterend', previewDiv);
+            }
+            const update = () => {
+                const previewEl = document.getElementById(previewId);
+                if (!previewEl) return;
+                const text = MentionUtils.resolveDisplayMentions(textarea.value, textarea._mentionMap);
+                previewEl.innerHTML = text
+                    ? ADOContent.processContent(text)
+                    : '<span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>';
+            };
+            textarea.addEventListener('input', update);
+            return { previewId, update };
         }
+
 
         function cancelEditDescription() {
             const contentEl = document.getElementById('pr-description-content');
@@ -8955,6 +8977,7 @@
             if (textarea) {
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
+                attachEditPreview(textarea);
                 textarea.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
