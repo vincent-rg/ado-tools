@@ -930,6 +930,41 @@
             min-height: 60px;
         }
 
+        /* Selection comment button */
+        .selection-comment-btn {
+            position: absolute;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: #0078d4;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            white-space: nowrap;
+        }
+        .selection-comment-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: #fff;
+        }
+        .selection-comment-btn:hover {
+            background: #106ebe;
+        }
+        /* Selection highlight mark used during comment creation */
+        .selection-highlight-mark {
+            background: #ffe082;
+        }
+        .selection-range-label {
+            font-size: 11px;
+            color: #605e5c;
+            margin-bottom: 4px;
+        }
+
         .diff-indicator {
             width: 20px;
             text-align: center;
@@ -967,19 +1002,7 @@
             color: #cf222e;
         }
 
-        /* Highlighted diff lines in a thread's code range */
-        .diff-line-commented {
-            background: #fff3cd !important;
-            box-shadow: inset 3px 0 0 #e8a517;
-        }
-        .diff-line-commented.diff-added {
-            background: #d4f0b4 !important;
-            box-shadow: inset 3px 0 0 #6a9e3a;
-        }
-        .diff-line-commented.diff-removed {
-            background: #f5c2c0 !important;
-            box-shadow: inset 3px 0 0 #c44f4f;
-        }
+        /* Comment highlight is applied only on the selected character range via <mark> */
 
         /* Side-by-side diff mode */
         .sbs-row {
@@ -1047,30 +1070,7 @@
         .sbs-empty .diff-line-number {
             visibility: hidden;
         }
-        /* Commented-line highlights for SBS */
-        .sbs-left.diff-line-commented,
-        .sbs-right.diff-line-commented {
-            background: #fff3cd !important;
-            box-shadow: inset 3px 0 0 #e8a517;
-        }
-        .sbs-left.diff-line-commented .diff-line-number,
-        .sbs-right.diff-line-commented .diff-line-number {
-            background: #ffe9a0;
-        }
-        .sbs-left.diff-line-commented.diff-removed {
-            background: #f5c2c0 !important;
-            box-shadow: inset 3px 0 0 #c44f4f;
-        }
-        .sbs-left.diff-line-commented.diff-removed .diff-line-number {
-            background: #eaacaa;
-        }
-        .sbs-right.diff-line-commented.diff-added {
-            background: #d4f0b4 !important;
-            box-shadow: inset 3px 0 0 #6a9e3a;
-        }
-        .sbs-right.diff-line-commented.diff-added .diff-line-number {
-            background: #b8e098;
-        }
+        /* Comment highlight is applied only via <mark> inside .diff-content */
         /* SBS thread positioning */
         .sbs-thread-row {
             display: flex;
@@ -3796,8 +3796,18 @@
 
         function openLineCommentEditor(filePath, lineNum, side, bubbleEl, lineLen) {
             hideLineCommentForm();
+            hideSelectionCommentForm();
             const escapedFile = ADOContent.escapeJs(filePath);
             const endOffset = Math.max(1, lineLen);
+
+            // Highlight the line content with <mark>
+            const contentEl = (fileDiffDisplayMode === 'side-by-side')
+                ? bubbleEl.closest('.sbs-left, .sbs-right')?.querySelector('.diff-content')
+                : bubbleEl.closest('.diff-line')?.querySelector('.diff-content');
+            if (contentEl) {
+                const text = contentEl.textContent;
+                contentEl.innerHTML = `<mark class="line-comment-highlight-mark" style="background: #ffe082; color: inherit;">${ADOContent.escapeHtml(text)}</mark>`;
+            }
 
             if (fileDiffDisplayMode === 'side-by-side') {
                 const sbsRow = bubbleEl.closest('.sbs-row');
@@ -3861,6 +3871,12 @@
 
         function hideLineCommentForm() {
             document.querySelectorAll('.line-comment-form, .sbs-line-comment-form').forEach(el => el.remove());
+            document.querySelectorAll('.line-comment-highlight-mark').forEach(mark => {
+                const parent = mark.parentNode;
+                while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+                parent.removeChild(mark);
+                parent.normalize();
+            });
         }
 
         async function createLineComment(btn) {
@@ -7451,6 +7467,7 @@
             if (mode === fileDiffDisplayMode) return;
             fileDiffDisplayMode = mode;
             localStorage.setItem('fileDiffDisplayMode', mode);
+            clearSelectionComment();
             if (selectedFilePath) refreshInlineThreadsIfNeeded();
         }
 
@@ -8434,6 +8451,7 @@
         }
 
         function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem) {
+            clearSelectionComment();
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
 
@@ -8696,7 +8714,391 @@
                 if (submitBtn) {
                     e.stopPropagation();
                     createLineComment(submitBtn);
+                    return;
                 }
+
+                const selSubmitBtn = e.target.closest('.selection-comment-submit');
+                if (selSubmitBtn) {
+                    e.stopPropagation();
+                    createSelectionComment(selSubmitBtn);
+                }
+            });
+        })();
+
+        // ==================== Text selection commenting ====================
+
+        let selectionCommentState = null; // { startLine, endLine, startOffset, endOffset, side }
+
+        function clearSelectionComment() {
+            const btn = document.querySelector('.selection-comment-btn');
+            if (btn) btn.remove();
+            hideSelectionCommentForm();
+        }
+
+        function hideSelectionCommentForm() {
+            document.querySelectorAll('.selection-comment-form-row').forEach(el => el.remove());
+            removeSelectionHighlightMarks();
+            selectionCommentState = null;
+        }
+
+        function removeSelectionHighlightMarks() {
+            document.querySelectorAll('.selection-highlight-mark').forEach(mark => {
+                const parent = mark.parentNode;
+                while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+                parent.removeChild(mark);
+                parent.normalize();
+            });
+        }
+
+        function parseSelectionSBS(sel) {
+            const range = sel.getRangeAt(0);
+            const startContainer = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+            const endContainer = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer;
+
+            const startContent = startContainer.closest('.diff-content');
+            const endContent = endContainer.closest('.diff-content');
+            if (!startContent || !endContent) return null;
+
+            const startPane = startContent.closest('.sbs-left, .sbs-right');
+            const endPane = endContent.closest('.sbs-left, .sbs-right');
+            if (!startPane || !endPane) return null;
+
+            // Must be on same side
+            const startIsLeft = startPane.classList.contains('sbs-left');
+            const endIsLeft = endPane.classList.contains('sbs-left');
+            if (startIsLeft !== endIsLeft) return null;
+
+            const side = startIsLeft ? 'left' : 'right';
+
+            const startRow = startPane.closest('.sbs-row');
+            const endRow = endPane.closest('.sbs-row');
+            if (!startRow || !endRow) return null;
+
+            // Get line numbers
+            const startLineEl = startPane.querySelector('.diff-line-number');
+            const endLineEl = endPane.querySelector('.diff-line-number');
+            if (!startLineEl || !endLineEl) return null;
+            const startLine = parseInt(startLineEl.textContent.trim(), 10);
+            const endLine = parseInt(endLineEl.textContent.trim(), 10);
+            if (isNaN(startLine) || isNaN(endLine)) return null;
+
+            // Compute character offsets (1-based for ADO)
+            const startOffset = computeOffsetInContent(range, startContent, true) + 1;
+            const endOffset = computeOffsetInContent(range, endContent, false) + 1;
+
+            return { startLine, endLine, startOffset, endOffset, side, startRow, endRow };
+        }
+
+        function parseSelectionInline(sel) {
+            const range = sel.getRangeAt(0);
+            const startContainer = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+            const endContainer = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer;
+
+            const startContent = startContainer.closest('.diff-content');
+            const endContent = endContainer.closest('.diff-content');
+            if (!startContent || !endContent) return null;
+
+            const startDiffLine = startContent.closest('.diff-line');
+            const endDiffLine = endContent.closest('.diff-line');
+            if (!startDiffLine || !endDiffLine) return null;
+
+            // Check no removed lines in selection range
+            let current = startDiffLine;
+            while (current) {
+                if (current.classList.contains('diff-line')) {
+                    if (current.classList.contains('diff-removed')) return null;
+                }
+                if (current === endDiffLine) break;
+                current = current.nextElementSibling;
+            }
+
+            // Get new line numbers (second .diff-line-number span)
+            const startLineNums = startDiffLine.querySelectorAll('.diff-line-number');
+            const endLineNums = endDiffLine.querySelectorAll('.diff-line-number');
+            const startLineEl = startLineNums[1];
+            const endLineEl = endLineNums[1];
+            if (!startLineEl || !endLineEl) return null;
+            const startLine = parseInt(startLineEl.textContent.trim(), 10);
+            const endLine = parseInt(endLineEl.textContent.trim(), 10);
+            if (isNaN(startLine) || isNaN(endLine)) return null;
+
+            const startOffset = computeOffsetInContent(range, startContent, true) + 1;
+            const endOffset = computeOffsetInContent(range, endContent, false) + 1;
+
+            return { startLine, endLine, startOffset, endOffset, side: 'right', startEl: startDiffLine, endEl: endDiffLine };
+        }
+
+        function computeOffsetInContent(range, contentEl, isStart) {
+            const tempRange = document.createRange();
+            tempRange.selectNodeContents(contentEl);
+            if (isStart) {
+                tempRange.setEnd(range.startContainer, range.startOffset);
+            } else {
+                tempRange.setEnd(range.endContainer, range.endOffset);
+            }
+            return tempRange.toString().length;
+        }
+
+        function handleDiffSelection() {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel || !diffPanel.contains(sel.anchorNode)) return;
+
+            let parsed;
+            if (fileDiffDisplayMode === 'side-by-side') {
+                parsed = parseSelectionSBS(sel);
+            } else {
+                parsed = parseSelectionInline(sel);
+            }
+            if (!parsed) return;
+
+            // Only show button for multi-character selections
+            if (parsed.startLine === parsed.endLine && parsed.startOffset === parsed.endOffset) return;
+
+            showSelectionCommentButton(sel, parsed);
+        }
+
+        function showSelectionCommentButton(sel, parsed) {
+            // Remove any existing button
+            const existing = document.querySelector('.selection-comment-btn');
+            if (existing) existing.remove();
+
+            const range = sel.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const diffBody = document.querySelector('.file-diff-body');
+            if (!diffBody) return;
+            const bodyRect = diffBody.getBoundingClientRect();
+
+            const btn = document.createElement('button');
+            btn.className = 'selection-comment-btn';
+            btn.innerHTML = COMMENT_BUBBLE_SVG + ' Comment';
+            btn.style.top = (rect.bottom - bodyRect.top + 4) + 'px';
+            btn.style.left = (rect.left - bodyRect.left) + 'px';
+
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openSelectionCommentEditor(parsed);
+            });
+
+            diffBody.style.position = 'relative';
+            diffBody.appendChild(btn);
+        }
+
+        function openSelectionCommentEditor(parsed) {
+            // Remove button
+            const btn = document.querySelector('.selection-comment-btn');
+            if (btn) btn.remove();
+
+            // Clear any existing selection form
+            hideSelectionCommentForm();
+            // Also hide any line comment form
+            hideLineCommentForm();
+
+            selectionCommentState = parsed;
+
+            // Highlight selected character range with <mark>
+            applySelectionHighlight(parsed);
+
+            // Build range label
+            const sideLabel = parsed.side === 'left' ? 'old' : 'new';
+            let rangeLabel;
+            if (parsed.startLine === parsed.endLine) {
+                rangeLabel = `Line ${parsed.startLine} (${sideLabel})`;
+            } else {
+                rangeLabel = `Lines ${parsed.startLine}-${parsed.endLine} (${sideLabel})`;
+            }
+
+            const escapedFile = ADOContent.escapeHtml(selectedFilePath);
+            const editorHtml = `
+                <div class="comment-editor">
+                    <div class="selection-range-label">${rangeLabel}</div>
+                    <textarea class="line-comment-textarea" placeholder="Write a comment on ${rangeLabel.toLowerCase()}..."></textarea>
+                    <div class="comment-editor-actions">
+                        <button class="btn-cancel" onclick="hideSelectionCommentForm()">Cancel</button>
+                        <button class="btn-save selection-comment-submit"
+                            data-file="${escapedFile}"
+                            data-start-line="${parsed.startLine}"
+                            data-end-line="${parsed.endLine}"
+                            data-start-offset="${parsed.startOffset}"
+                            data-end-offset="${parsed.endOffset}"
+                            data-side="${parsed.side}">Create</button>
+                    </div>
+                </div>
+            `;
+
+            // Insert form after the last selected row/line
+            if (fileDiffDisplayMode === 'side-by-side') {
+                const formRow = document.createElement('div');
+                formRow.className = 'sbs-line-comment-form selection-comment-form-row';
+
+                if (parsed.side === 'left') {
+                    formRow.innerHTML = `<div class="sbs-line-comment-side">${editorHtml}</div><div class="sbs-line-comment-spacer"></div>`;
+                } else {
+                    formRow.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
+                }
+
+                parsed.endRow.insertAdjacentElement('afterend', formRow);
+            } else {
+                const formDiv = document.createElement('div');
+                formDiv.className = 'line-comment-form selection-comment-form-row';
+                formDiv.innerHTML = editorHtml;
+                parsed.endEl.insertAdjacentElement('afterend', formDiv);
+            }
+
+            const textarea = document.querySelector('.selection-comment-form-row .line-comment-textarea');
+            if (textarea) {
+                textarea.focus();
+                MentionAutocomplete.attach(textarea);
+                textarea.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        const submitBtn = textarea.closest('.comment-editor').querySelector('.selection-comment-submit');
+                        if (submitBtn) createSelectionComment(submitBtn);
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        hideSelectionCommentForm();
+                    }
+                });
+            }
+
+            // Clear the text selection
+            window.getSelection().removeAllRanges();
+        }
+
+        function applySelectionHighlight(parsed) {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            // Collect diff-content elements in the selected range
+            const contentEls = [];
+            const lineNums = [];
+
+            if (fileDiffDisplayMode === 'side-by-side') {
+                const paneSelector = parsed.side === 'left' ? '.sbs-left' : '.sbs-right';
+                let inRange = false;
+                diffPanel.querySelectorAll('.sbs-row').forEach(row => {
+                    const pane = row.querySelector(paneSelector);
+                    if (!pane) return;
+                    if (row === parsed.startRow) inRange = true;
+                    if (inRange) {
+                        const content = pane.querySelector('.diff-content');
+                        const lineEl = pane.querySelector('.diff-line-number');
+                        if (content && lineEl) {
+                            contentEls.push(content);
+                            lineNums.push(parseInt(lineEl.textContent.trim(), 10));
+                        }
+                    }
+                    if (row === parsed.endRow) inRange = false;
+                });
+            } else {
+                let current = parsed.startEl;
+                while (current) {
+                    if (current.classList && current.classList.contains('diff-line')) {
+                        const content = current.querySelector('.diff-content');
+                        const lineNumEls = current.querySelectorAll('.diff-line-number');
+                        const lineEl = lineNumEls[1]; // new line number
+                        if (content && lineEl) {
+                            contentEls.push(content);
+                            lineNums.push(parseInt(lineEl.textContent.trim(), 10));
+                        }
+                    }
+                    if (current === parsed.endEl) break;
+                    current = current.nextElementSibling;
+                }
+            }
+
+            // Apply <mark> to each content element based on offsets
+            for (let i = 0; i < contentEls.length; i++) {
+                const el = contentEls[i];
+                const lineNum = lineNums[i];
+                const text = el.textContent;
+
+                let markStart, markEnd;
+                if (lineNum === parsed.startLine && lineNum === parsed.endLine) {
+                    markStart = parsed.startOffset - 1;
+                    markEnd = parsed.endOffset - 1;
+                } else if (lineNum === parsed.startLine) {
+                    markStart = parsed.startOffset - 1;
+                    markEnd = text.length;
+                } else if (lineNum === parsed.endLine) {
+                    markStart = 0;
+                    markEnd = parsed.endOffset - 1;
+                } else {
+                    markStart = 0;
+                    markEnd = text.length;
+                }
+
+                markStart = Math.max(0, markStart);
+                markEnd = Math.min(text.length, markEnd);
+
+                const before = ADOContent.escapeHtml(text.substring(0, markStart));
+                const highlighted = ADOContent.escapeHtml(text.substring(markStart, markEnd));
+                const after = ADOContent.escapeHtml(text.substring(markEnd));
+                el.innerHTML = `${before}<mark class="selection-highlight-mark" style="background: #ffe082;">${highlighted}</mark>${after}`;
+            }
+        }
+
+        async function createSelectionComment(btn) {
+            const filePath = btn.getAttribute('data-file');
+            const startLine = parseInt(btn.getAttribute('data-start-line'), 10);
+            const endLine = parseInt(btn.getAttribute('data-end-line'), 10);
+            const startOffset = parseInt(btn.getAttribute('data-start-offset'), 10);
+            const endOffset = parseInt(btn.getAttribute('data-end-offset'), 10);
+            const side = btn.getAttribute('data-side');
+
+            const textarea = btn.closest('.comment-editor').querySelector('.line-comment-textarea');
+            const content = resolveMentionsForSubmit(textarea);
+            if (!content) {
+                alert('Please enter a comment.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+
+            try {
+                const { threadContext, pullRequestThreadContext } = PRThreadsUtils.buildFileCommentContext(
+                    filePath, selectedIterationStart, selectedIterationEnd, allIterations.length, allChangeEntries
+                );
+
+                if (side === 'right') {
+                    threadContext.rightFileStart = { line: startLine, offset: startOffset };
+                    threadContext.rightFileEnd = { line: endLine, offset: endOffset };
+                } else {
+                    threadContext.leftFileStart = { line: startLine, offset: startOffset };
+                    threadContext.leftFileEnd = { line: endLine, offset: endOffset };
+                }
+
+                await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
+                hideSelectionCommentForm();
+                await refreshThreadsFromAPI();
+            } catch (err) {
+                console.error('Failed to create selection comment:', err);
+                alert('Failed to create comment: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Create';
+            }
+        }
+
+        (function initSelectionComments() {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+
+            diffPanel.addEventListener('mouseup', () => {
+                setTimeout(handleDiffSelection, 10);
+            });
+
+            diffPanel.addEventListener('mousedown', (e) => {
+                // Don't clear if clicking on the button itself, a form, or a comment editor
+                if (e.target.closest('.selection-comment-btn, .selection-comment-form-row, .comment-editor')) return;
+                const existingBtn = document.querySelector('.selection-comment-btn');
+                if (existingBtn) existingBtn.remove();
             });
         })();
 

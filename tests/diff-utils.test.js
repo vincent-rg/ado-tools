@@ -182,12 +182,13 @@ describe('renderDiffLines', () => {
         expect(suffixes.length).toBe(4);
     });
 
-    it('applies thread highlighting', () => {
+    it('applies thread highlighting via mark tags', () => {
         const threadRanges = [
             { startLine: 2, endLine: 2, startOffset: 0, endOffset: 0, useRight: true, appliesToView: true },
         ];
         const html = DiffUtils.renderDiffLines(simpleDiff, threadRanges);
-        expect(html).toContain('diff-line-commented');
+        expect(html).toContain('<mark');
+        expect(html).toContain('background: #ffe082;');
     });
 });
 
