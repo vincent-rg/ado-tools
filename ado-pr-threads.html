@@ -827,6 +827,7 @@
             user-select: none;
             background: rgba(0, 0, 0, 0.05);
             box-sizing: border-box;
+            position: relative;
         }
 
         /* Dedicated avatar column — sits before line numbers, no overlap */
@@ -868,22 +869,17 @@
             fill: #fff;
         }
 
-        /* Comment bubble on line hover */
+        /* Comment bubble — fills the line-number cell on hover */
         .diff-comment-bubble {
             position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
+            inset: 0;
+            border-radius: 2px;
             background: #0078d4;
             display: none;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             z-index: 5;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
         .diff-comment-bubble svg {
             width: 12px;
@@ -893,14 +889,14 @@
         .diff-comment-bubble:hover {
             background: #106ebe;
         }
-        /* Inline mode: show bubble on hover of diff-line, except removed lines */
-        .diff-line:hover > .diff-comment-bubble { display: flex; }
-        .diff-line.diff-removed > .diff-comment-bubble { display: none !important; }
-        /* SBS mode: show bubble on hover of sbs-left / sbs-right */
-        .sbs-left:hover > .diff-comment-bubble,
-        .sbs-right:hover > .diff-comment-bubble { display: flex; }
-        .sbs-left.sbs-empty > .diff-comment-bubble,
-        .sbs-right.sbs-empty > .diff-comment-bubble { display: none !important; }
+        /* Inline mode: show on hover of the line, except removed lines */
+        .diff-line:hover .diff-comment-bubble { display: flex; }
+        .diff-line.diff-removed .diff-comment-bubble { display: none !important; }
+        /* SBS mode: show on hover of each pane */
+        .sbs-left:hover .diff-comment-bubble,
+        .sbs-right:hover .diff-comment-bubble { display: flex; }
+        .sbs-left.sbs-empty .diff-comment-bubble,
+        .sbs-right.sbs-empty .diff-comment-bubble { display: none !important; }
         /* Position within sbs panes */
         .sbs-left, .sbs-right { position: relative; }
 
@@ -3764,7 +3760,7 @@
                     bubble.setAttribute('data-file', filePath);
                     bubble.setAttribute('data-line-len', lineLen);
                     bubble.innerHTML = COMMENT_BUBBLE_SVG;
-                    pane.appendChild(bubble);
+                    if (lineNumEl) lineNumEl.appendChild(bubble);
                 });
             } else {
                 diffPanel.querySelectorAll('.diff-line').forEach(line => {
@@ -3783,8 +3779,7 @@
                     bubble.setAttribute('data-file', filePath);
                     bubble.setAttribute('data-line-len', lineLen);
                     bubble.innerHTML = COMMENT_BUBBLE_SVG;
-                    line.style.position = 'relative';
-                    line.appendChild(bubble);
+                    if (newLineEl) newLineEl.appendChild(bubble);
                 });
             }
         }
