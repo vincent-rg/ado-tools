@@ -8223,10 +8223,13 @@
                             const isCollapsed = isResolved || !tr.appliesToView;
                             const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
                             const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
-                            const cachedUrl = firstRealComment?.author?.id ? AvatarLoader.getCached(firstRealComment.author.id) : null;
+                            const authorId = firstRealComment?.author?.id;
+                            const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
                             const avatarInner = cachedUrl
                                 ? `<img src="${cachedUrl}" alt="${authorName}" title="${authorName}: click to expand thread">`
-                                : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
+                                : authorId
+                                    ? `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div><img data-user-id="${authorId}" alt="${authorName}" title="${authorName}: click to expand thread" class="avatar-pending">`
+                                    : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
                             const displayStyle = isCollapsed ? '' : ' style="display:none"';
                             html += `<div class="diff-gutter-avatar" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})"${displayStyle}>${avatarInner}</div>`;
                         }
@@ -8617,11 +8620,14 @@
 
                     const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
                     const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
-                    const cachedUrl = firstRealComment?.author?.id ? AvatarLoader.getCached(firstRealComment.author.id) : null;
+                    const authorId = firstRealComment?.author?.id;
+                    const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
 
                     const avatarInner = cachedUrl
                         ? `<img src="${cachedUrl}" alt="${authorName}" title="${authorName}: click to expand thread">`
-                        : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
+                        : authorId
+                            ? `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div><img data-user-id="${authorId}" alt="${authorName}" title="${authorName}: click to expand thread" class="avatar-pending">`
+                            : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
 
                     // Visible when collapsed, hidden when expanded
                     const displayStyle = isCollapsed ? '' : ' style="display:none"';
