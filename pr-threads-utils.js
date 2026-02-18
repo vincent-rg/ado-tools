@@ -204,6 +204,56 @@ const PRThreadsUtils = {
     },
 
     /**
+     * Test whether a thread matches the given filter settings.
+     * @param {object} thread - Thread object from ADO API
+     * @param {object} filters - Filter state
+     * @param {boolean} filters.showDeleted - Include deleted threads
+     * @param {string[]} filters.selectedStatuses - Allowed status values; empty = all allowed
+     * @param {string} filters.selectedAuthor - Required first-comment author displayName; empty = any
+     * @param {string} filters.selectedCommentAuthor - Required any-comment author displayName; empty = any
+     * @param {string} filters.searchText - Text that must appear in at least one comment; empty = any
+     * @param {object} deps - Dependencies
+     * @param {function} deps.normalize - Accent-insensitive normalizer (e.g. ADOSearch.normalize)
+     * @returns {boolean}
+     */
+    threadMatchesFilters(thread, filters, deps) {
+        const { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText } = filters;
+        const { normalize } = deps;
+
+        if (!showDeleted && thread.isDeleted === true) {
+            return false;
+        }
+
+        if (selectedStatuses && selectedStatuses.length > 0) {
+            if (thread.status === undefined) {
+                if (!selectedStatuses.includes('noStatus')) return false;
+            } else {
+                const status = thread.status.toLowerCase();
+                const selectedLower = selectedStatuses.map(s => s.toLowerCase());
+                if (!selectedLower.includes(status)) return false;
+            }
+        }
+
+        if (selectedAuthor) {
+            const first = thread.comments?.[0];
+            if (!first || first.author?.displayName !== selectedAuthor) return false;
+        }
+
+        if (selectedCommentAuthor) {
+            const has = thread.comments?.some(c => c.author?.displayName === selectedCommentAuthor);
+            if (!has) return false;
+        }
+
+        if (searchText) {
+            const searchNorm = normalize(searchText);
+            const has = thread.comments?.some(c => c.content && normalize(c.content).includes(searchNorm));
+            if (!has) return false;
+        }
+
+        return true;
+    },
+
+    /**
      * Build threadContext and pullRequestThreadContext for a file-level comment.
      * @param {string} filePath - The file path to comment on
      * @param {number|null} selectedIterationStart - Selected iteration start (null = all)

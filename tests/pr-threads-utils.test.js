@@ -621,4 +621,179 @@ describe('PRThreadsUtils', () => {
             expect(threadsAtOld).toContain(threadNew);
         });
     });
+
+    describe('threadMatchesFilters', () => {
+        // Identity normalize: no accent folding needed for these tests
+        const deps = { normalize: s => s.toLowerCase() };
+
+        const emptyFilters = {
+            showDeleted: true,
+            selectedStatuses: [],
+            selectedAuthor: '',
+            selectedCommentAuthor: '',
+            searchText: ''
+        };
+
+        const makeThread = (opts = {}) => ({
+            id: opts.id || 1,
+            isDeleted: opts.isDeleted || false,
+            status: opts.status,
+            comments: opts.comments || [
+                { author: { displayName: opts.author || 'Alice' }, content: opts.content || 'hello world', commentType: 'text' }
+            ]
+        });
+
+        it('passes a normal thread with empty filters', () => {
+            expect(PRThreadsUtils.threadMatchesFilters(makeThread(), emptyFilters, deps)).toBe(true);
+        });
+
+        describe('showDeleted filter', () => {
+            it('hides deleted threads when showDeleted is false', () => {
+                const filters = { ...emptyFilters, showDeleted: false };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ isDeleted: true }), filters, deps)).toBe(false);
+            });
+
+            it('shows deleted threads when showDeleted is true', () => {
+                const filters = { ...emptyFilters, showDeleted: true };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ isDeleted: true }), filters, deps)).toBe(true);
+            });
+
+            it('shows non-deleted threads regardless of showDeleted', () => {
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread(), { ...emptyFilters, showDeleted: false }, deps)).toBe(true);
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread(), { ...emptyFilters, showDeleted: true }, deps)).toBe(true);
+            });
+        });
+
+        describe('selectedStatuses filter', () => {
+            it('passes when selectedStatuses is empty (all allowed)', () => {
+                const filters = { ...emptyFilters, selectedStatuses: [] };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'active' }), filters, deps)).toBe(true);
+            });
+
+            it('passes when thread status is in the selected list', () => {
+                const filters = { ...emptyFilters, selectedStatuses: ['active', 'fixed'] };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'active' }), filters, deps)).toBe(true);
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'fixed' }), filters, deps)).toBe(true);
+            });
+
+            it('blocks when thread status is not in the selected list', () => {
+                const filters = { ...emptyFilters, selectedStatuses: ['active'] };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'closed' }), filters, deps)).toBe(false);
+            });
+
+            it('is case-insensitive for status matching', () => {
+                const filters = { ...emptyFilters, selectedStatuses: ['wontFix'] };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'wontfix' }), filters, deps)).toBe(true);
+            });
+
+            it('handles noStatus for threads with undefined status', () => {
+                const filters = { ...emptyFilters, selectedStatuses: ['noStatus'] };
+                const thread = makeThread();
+                delete thread.status;
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(true);
+            });
+
+            it('blocks threads with undefined status when noStatus is not selected', () => {
+                const filters = { ...emptyFilters, selectedStatuses: ['active'] };
+                const thread = makeThread();
+                delete thread.status;
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(false);
+            });
+        });
+
+        describe('selectedAuthor filter', () => {
+            it('passes when selectedAuthor is empty', () => {
+                const filters = { ...emptyFilters, selectedAuthor: '' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ author: 'Bob' }), filters, deps)).toBe(true);
+            });
+
+            it('passes when first comment author matches', () => {
+                const filters = { ...emptyFilters, selectedAuthor: 'Alice' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ author: 'Alice' }), filters, deps)).toBe(true);
+            });
+
+            it('blocks when first comment author does not match', () => {
+                const filters = { ...emptyFilters, selectedAuthor: 'Alice' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ author: 'Bob' }), filters, deps)).toBe(false);
+            });
+
+            it('blocks threads with no comments', () => {
+                const filters = { ...emptyFilters, selectedAuthor: 'Alice' };
+                const thread = { ...makeThread(), comments: [] };
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(false);
+            });
+        });
+
+        describe('selectedCommentAuthor filter', () => {
+            it('passes when selectedCommentAuthor is empty', () => {
+                const filters = { ...emptyFilters, selectedCommentAuthor: '' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread(), filters, deps)).toBe(true);
+            });
+
+            it('passes when any comment is from the selected user', () => {
+                const filters = { ...emptyFilters, selectedCommentAuthor: 'Carol' };
+                const thread = makeThread();
+                thread.comments = [
+                    { author: { displayName: 'Alice' }, content: 'first' },
+                    { author: { displayName: 'Carol' }, content: 'second' }
+                ];
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(true);
+            });
+
+            it('blocks when no comment is from the selected user', () => {
+                const filters = { ...emptyFilters, selectedCommentAuthor: 'Carol' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ author: 'Alice' }), filters, deps)).toBe(false);
+            });
+        });
+
+        describe('searchText filter', () => {
+            it('passes when searchText is empty', () => {
+                const filters = { ...emptyFilters, searchText: '' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread(), filters, deps)).toBe(true);
+            });
+
+            it('passes when a comment contains the search text', () => {
+                const filters = { ...emptyFilters, searchText: 'world' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ content: 'hello world' }), filters, deps)).toBe(true);
+            });
+
+            it('blocks when no comment matches the search text', () => {
+                const filters = { ...emptyFilters, searchText: 'xyz' };
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ content: 'hello world' }), filters, deps)).toBe(false);
+            });
+
+            it('uses normalize for accent-insensitive search', () => {
+                const accentDeps = { normalize: s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
+                const filters = { ...emptyFilters, searchText: 'cafe' };
+                const thread = makeThread({ content: 'café is good' });
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, accentDeps)).toBe(true);
+            });
+
+            it('blocks threads with no comments', () => {
+                const filters = { ...emptyFilters, searchText: 'hello' };
+                const thread = { ...makeThread(), comments: [] };
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(false);
+            });
+        });
+
+        describe('combined filters', () => {
+            it('all filters must pass simultaneously', () => {
+                const filters = {
+                    showDeleted: false,
+                    selectedStatuses: ['active'],
+                    selectedAuthor: 'Alice',
+                    selectedCommentAuthor: 'Alice',
+                    searchText: 'hello'
+                };
+                // passes all
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'active', author: 'Alice', content: 'hello world' }), filters, deps)).toBe(true);
+                // fails status
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'closed', author: 'Alice', content: 'hello world' }), filters, deps)).toBe(false);
+                // fails author
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'active', author: 'Bob', content: 'hello world' }), filters, deps)).toBe(false);
+                // fails search
+                expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'active', author: 'Alice', content: 'goodbye' }), filters, deps)).toBe(false);
+            });
+        });
+    });
 });

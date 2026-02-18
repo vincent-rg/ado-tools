@@ -3121,6 +3121,7 @@
         let selectedIterationStart = null; // null = "all"
         let selectedIterationEnd = null;
         let threadsByFilePath = new Map();     // Map<filePath, Thread[]>
+        let filteredThreadIds = null;          // Set of thread IDs passing current filters; null = show all
         let fileViewMode = 'changed';          // 'changed' | 'commented' | 'all'
         let repoTreeCache = new Map();         // Map<dirPath, Array<item>>
         let repoTreeFullyLoaded = false;
@@ -3328,6 +3329,13 @@
             threadsByFilePath = result.threadsByFilePath;
             changedFilePaths = result.changedFilePaths;
             commentedFilePaths = result.commentedFilePaths;
+        }
+
+        // Returns threads for a file, respecting the active overview filters.
+        function getVisibleThreadsForFile(filePath) {
+            const threads = threadsByFilePath.get(filePath) || [];
+            if (filteredThreadIds === null) return threads;
+            return threads.filter(t => filteredThreadIds.has(t.id));
         }
 
         function calculateFileChangeStats(changeEntries) {
@@ -4937,72 +4945,12 @@
             const selectedCommentAuthor = document.getElementById('commentAuthorFilter').value;
             const searchText = document.getElementById('searchFilter').value.trim();
 
-            const filtered = allThreads.filter(thread => {
-                // Deleted filter
-                if (!showDeleted && thread.isDeleted === true) {
-                    return false;
-                }
+            const threadFilters = { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText };
+            const filterDeps = { normalize: ADOSearch.normalize };
 
-                // Status filter
-                // Distinguish between undefined (no status) and "unknown" (actual status value)
-                if (selectedStatuses.length > 0) {
-                    if (thread.status === undefined) {
-                        // Thread has no status field
-                        if (!selectedStatuses.includes('noStatus')) {
-                            return false;
-                        }
-                    } else {
-                        // Thread has a status field
-                        // Lowercase both the thread status and selected statuses for comparison
-                        // (selectedStatuses contains camelCase values like 'wontFix', 'active', etc.)
-                        const status = thread.status.toLowerCase();
-                        const selectedStatusesLower = selectedStatuses.map(s => s.toLowerCase());
-                        if (!selectedStatusesLower.includes(status)) {
-                            return false;
-                        }
-                    }
-                }
-
-                // Author filter (first comment author)
-                if (selectedAuthor) {
-                    if (!thread.comments || thread.comments.length === 0) {
-                        return false;
-                    }
-                    const firstComment = thread.comments[0];
-                    if (!firstComment.author || firstComment.author.displayName !== selectedAuthor) {
-                        return false;
-                    }
-                }
-
-                // Comment author filter (any comment from selected user)
-                if (selectedCommentAuthor) {
-                    if (!thread.comments || thread.comments.length === 0) {
-                        return false;
-                    }
-                    const hasCommentFromUser = thread.comments.some(comment =>
-                        comment.author && comment.author.displayName === selectedCommentAuthor
-                    );
-                    if (!hasCommentFromUser) {
-                        return false;
-                    }
-                }
-
-                // Search filter (search in all comment content)
-                if (searchText) {
-                    if (!thread.comments || thread.comments.length === 0) {
-                        return false;
-                    }
-                    const searchNorm = ADOSearch.normalize(searchText);
-                    const hasMatchingContent = thread.comments.some(comment =>
-                        comment.content && ADOSearch.normalize(comment.content).includes(searchNorm)
-                    );
-                    if (!hasMatchingContent) {
-                        return false;
-                    }
-                }
-
-                return true;
-            });
+            const filtered = allThreads.filter(thread =>
+                PRThreadsUtils.threadMatchesFilters(thread, threadFilters, filterDeps)
+            );
 
             // Sort threads by creation date descending
             // If dates are equal, reverse original order (later in array = first in display)
@@ -5022,6 +4970,9 @@
                 return idxB - idxA;
             });
 
+            // Update filteredThreadIds so files view uses the same filter
+            filteredThreadIds = new Set(filtered.map(t => t.id));
+
             // Update counts
             document.getElementById('totalCount').textContent = allThreads.length;
             document.getElementById('filteredCount').textContent = filtered.length;
@@ -5035,6 +4986,15 @@
             // Restore form state after re-render
             if (!skipFormRestore) {
                 restoreFormState(formState);
+            }
+
+            // Sync files view thread display (badges, sub-lists, inline diff)
+            if (fileTreeBuilt) {
+                if (currentView === 'files' && selectedFilePath) {
+                    refreshInlineThreadsIfNeeded();
+                } else {
+                    updateFileTreeThreadInfo();
+                }
             }
 
             // Update URL with current filter state
@@ -7454,6 +7414,9 @@
                     buildFileTree(allChangeEntries);
                     buildIterationSelector();
                     fileTreeBuilt = true;
+                } else {
+                    // Filters may have changed while in overview – refresh thread display
+                    refreshInlineThreadsIfNeeded();
                 }
             } else {
                 if (overviewView) overviewView.style.display = '';
@@ -7516,7 +7479,7 @@
         }
 
         function renderThreadSubList(filePath, depth) {
-            const threads = threadsByFilePath.get(filePath);
+            const threads = getVisibleThreadsForFile(filePath);
             if (!threads || threads.length === 0) return '';
             // Sort by line number (order of appearance in file), then by offset within the line
             const sorted = [...threads].sort((a, b) => {
@@ -7547,7 +7510,7 @@
         }
 
         function getThreadCountBadge(filePath) {
-            const threads = threadsByFilePath.get(filePath);
+            const threads = getVisibleThreadsForFile(filePath);
             if (!threads || threads.length === 0) return '';
             const hasActive = threads.some(t => t.status === 'active' || t.status === undefined);
             const escapedPath = ADOContent.escapeHtml(filePath);
@@ -7560,7 +7523,7 @@
             let hasComments = false;
             for (const file of node.files) {
                 if (file.changeType && file.changeType !== 'none') hasChanges = true;
-                if (threadsByFilePath.has(file.path)) hasComments = true;
+                if (getVisibleThreadsForFile(file.path).length > 0) hasComments = true;
             }
             for (const [, child] of node.children) {
                 propagateIndicators(child);
@@ -8218,8 +8181,8 @@
                     // Build a synthetic diff (all unchanged lines) so we can reuse renderDiffLines
                     const syntheticDiff = content.split('\n').map(line => ({ type: 'unchanged', content: line }));
 
-                    // Gather threads for this file
-                    const fileThreads = (threadsByFilePath.get(filePath) || []).filter(thread => {
+                    // Gather threads for this file (applying active overview filters)
+                    const fileThreads = getVisibleThreadsForFile(filePath).filter(thread => {
                         if (thread.isDeleted) return false;
                         if (!thread.threadContext) return false;
                         return thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
@@ -8603,8 +8566,8 @@
                 </div>
             `;
 
-            // Gather threads for this file, sorted by start line
-            const fileThreads = (threadsByFilePath.get(filePath) || []).filter(thread => {
+            // Gather threads for this file (applying active overview filters), sorted by start line
+            const fileThreads = getVisibleThreadsForFile(filePath).filter(thread => {
                 if (thread.isDeleted) return false;
                 if (!thread.threadContext) return false;
                 const hasRealComment = thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
