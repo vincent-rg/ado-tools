@@ -4674,7 +4674,8 @@
                 author: params.get('author') || null,
                 commentAuthor: params.get('commentAuthor') || null,
                 search: params.get('search') || null,
-                view: params.get('view') || null
+                view: params.get('view') || null,
+                file: params.get('file') || null
             };
         }
 
@@ -4724,6 +4725,9 @@
             // View (files/overview)
             if (currentView === 'files') {
                 params.set('view', 'files');
+                if (selectedFilePath) {
+                    params.set('file', selectedFilePath);
+                }
             }
 
             const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
@@ -7333,6 +7337,12 @@
                     buildIterationSelector();
                     fileTreeBuilt = true;
                 }
+                // Restore selected file from URL
+                const _restoredFile = new URLSearchParams(window.location.search).get('file');
+                if (_restoredFile && !selectedFilePath) {
+                    const entry = allChangeEntries.find(e => e.item?.path === _restoredFile);
+                    selectFileForDiff(_restoredFile, entry?.changeType || 'edit');
+                }
             }
 
             // Load avatars
@@ -7429,6 +7439,7 @@
                 url.searchParams.set('view', 'files');
             } else {
                 url.searchParams.delete('view');
+                url.searchParams.delete('file');
             }
             history.replaceState(null, '', url);
         }
@@ -8152,6 +8163,11 @@
 
             selectedFilePath = filePath;
 
+            // Reflect selected file in URL for shareability
+            const _fileUrl = new URL(window.location);
+            _fileUrl.searchParams.set('file', filePath);
+            history.replaceState(null, '', _fileUrl);
+
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
 
@@ -8761,7 +8777,7 @@
         // Restore view from URL on load
         (function restoreViewFromURL() {
             const params = new URLSearchParams(window.location.search);
-            if (params.get('view') === 'files') {
+            if (params.get('view') === 'files' || params.get('file')) {
                 // Will be applied after PR loads — just set the variable
                 currentView = 'files';
             }
