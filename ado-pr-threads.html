@@ -27,6 +27,86 @@
             overflow-y: auto;
             flex-shrink: 0;
             position: relative;
+            transition: width 0.15s ease;
+        }
+
+        /* Left sidebar header (title + toggle button) */
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .sidebar-header h3 {
+            margin: 0;
+        }
+
+        .sidebar-toggle-btn {
+            background: none;
+            border: 1px solid #c8c6c4;
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 2px 7px;
+            font-size: 12px;
+            color: #605e5c;
+            line-height: 1.4;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle-btn:hover {
+            background: #f3f2f1;
+            border-color: #a19f9d;
+        }
+
+        /* Filter active badge (shown collapsed when filters differ from defaults) */
+        .filter-active-badge {
+            display: none;
+            background: #0078d4;
+            color: white;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 18px;
+            height: 18px;
+            line-height: 18px;
+            text-align: center;
+            padding: 0 4px;
+        }
+
+        /* Collapsed state */
+        #threadFilters.sidebar-collapsed {
+            width: 36px !important;
+            min-width: 36px;
+            padding: 8px 4px;
+            overflow: hidden;
+        }
+
+        #threadFilters.sidebar-collapsed .resize-handle {
+            display: none;
+        }
+
+        #threadFilters.sidebar-collapsed .sidebar-header {
+            flex-direction: column;
+            margin-bottom: 0;
+            gap: 6px;
+            align-items: center;
+        }
+
+        #threadFilters.sidebar-collapsed .sidebar-title {
+            display: none;
+        }
+
+        #threadFilters.sidebar-collapsed .sidebar-content {
+            display: none;
+        }
+
+        #threadFilters.sidebar-collapsed .thread-count {
+            display: none;
+        }
+
+        #threadFilters.sidebar-collapsed .filter-active-badge.has-filters {
+            display: block;
         }
 
         .resize-handle {
@@ -2931,49 +3011,55 @@
             <!-- Left Sidebar with Filters -->
             <div class="sidebar" id="threadFilters" style="display: none;">
                 <div class="resize-handle" id="resizeHandle"></div>
-                <h3 style="margin-top: 0; margin-bottom: 20px;">Filters</h3>
+                <div class="sidebar-header">
+                    <h3 class="sidebar-title" style="margin: 0;">Filters</h3>
+                    <div id="filterActiveBadge" class="filter-active-badge" title="Active filters"></div>
+                    <button class="sidebar-toggle-btn" id="leftSidebarToggle" onclick="toggleLeftSidebar()" title="Collapse filters">◀</button>
+                </div>
 
-                <div class="filter-section">
-                    <h4>Thread Status</h4>
-                    <div class="status-chips-vertical">
-                        <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this)">Active</button>
-                        <button class="status-chip selected" data-status="fixed" onclick="toggleStatusChip(this)">Resolved</button>
-                        <button class="status-chip selected" data-status="closed" onclick="toggleStatusChip(this)">Closed</button>
-                        <button class="status-chip selected" data-status="wontFix" onclick="toggleStatusChip(this)">Won't Fix</button>
-                        <button class="status-chip selected" data-status="pending" onclick="toggleStatusChip(this)">Pending</button>
-                        <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this)">Unknown</button>
-                        <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this)">No status</button>
+                <div class="sidebar-content">
+                    <div class="filter-section">
+                        <h4>Thread Status</h4>
+                        <div class="status-chips-vertical">
+                            <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this)">Active</button>
+                            <button class="status-chip selected" data-status="fixed" onclick="toggleStatusChip(this)">Resolved</button>
+                            <button class="status-chip selected" data-status="closed" onclick="toggleStatusChip(this)">Closed</button>
+                            <button class="status-chip selected" data-status="wontFix" onclick="toggleStatusChip(this)">Won't Fix</button>
+                            <button class="status-chip selected" data-status="pending" onclick="toggleStatusChip(this)">Pending</button>
+                            <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this)">Unknown</button>
+                            <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this)">No status</button>
+                        </div>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showDeleted" onchange="applyThreadFilters()">
+                            Show deleted threads
+                        </label>
                     </div>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="showDeleted" onchange="applyThreadFilters()">
-                        Show deleted threads
-                    </label>
-                </div>
 
-                <div class="filter-section">
-                    <h4>Thread Author</h4>
-                    <select id="threadAuthorFilter" onchange="applyThreadFilters()">
-                        <option value="">All authors</option>
-                    </select>
-                </div>
+                    <div class="filter-section">
+                        <h4>Thread Author</h4>
+                        <select id="threadAuthorFilter" onchange="applyThreadFilters()">
+                            <option value="">All authors</option>
+                        </select>
+                    </div>
 
-                <div class="filter-section">
-                    <h4>Comments by User</h4>
-                    <select id="commentAuthorFilter" onchange="applyThreadFilters()">
-                        <option value="">All users</option>
-                    </select>
-                </div>
+                    <div class="filter-section">
+                        <h4>Comments by User</h4>
+                        <select id="commentAuthorFilter" onchange="applyThreadFilters()">
+                            <option value="">All users</option>
+                        </select>
+                    </div>
 
-                <div class="filter-section">
-                    <h4>Search in Comments</h4>
-                    <input type="text" id="searchFilter" placeholder="Search text..." oninput="applyThreadFilters()">
-                </div>
+                    <div class="filter-section">
+                        <h4>Search in Comments</h4>
+                        <input type="text" id="searchFilter" placeholder="Search text..." oninput="applyThreadFilters()">
+                    </div>
 
-                <div class="filter-section">
-                    <h4>View Options</h4>
-                    <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary" style="width: 100%;">
-                        Enable Bulk Selection
-                    </button>
+                    <div class="filter-section">
+                        <h4>View Options</h4>
+                        <button id="bulkModeToggle" onclick="toggleBulkMode()" class="btn-secondary" style="width: 100%;">
+                            Enable Bulk Selection
+                        </button>
+                    </div>
                 </div>
 
                 <div class="thread-count">
@@ -4871,6 +4957,13 @@
                 // Show filters
                 document.getElementById('threadFilters').style.display = 'block';
 
+                // Restore collapsed state
+                if (localStorage.getItem('threadFiltersSidebarCollapsed') === '1') {
+                    document.getElementById('threadFilters').classList.add('sidebar-collapsed');
+                    document.getElementById('leftSidebarToggle').textContent = '▶';
+                    document.getElementById('leftSidebarToggle').title = 'Expand filters';
+                }
+
                 // Populate author filter
                 populateAuthorFilter();
 
@@ -4984,6 +5077,38 @@
 
             // Update URL with current filter state
             updateURL();
+
+            // Update collapsed sidebar badge
+            updateFilterBadge();
+        }
+
+        function updateFilterBadge() {
+            const defaultSelected = new Set(['active', 'fixed', 'closed', 'wontFix', 'pending']);
+            const selectedChips = document.querySelectorAll('.sidebar .status-chip.selected');
+            const selectedStatuses = new Set([...selectedChips].map(c => c.dataset.status));
+
+            let count = 0;
+            const statusDiffers = [...defaultSelected].some(s => !selectedStatuses.has(s)) ||
+                                  [...selectedStatuses].some(s => !defaultSelected.has(s));
+            if (statusDiffers) count++;
+            if (document.getElementById('showDeleted').checked) count++;
+            if (document.getElementById('threadAuthorFilter').value) count++;
+            if (document.getElementById('commentAuthorFilter').value) count++;
+            if (document.getElementById('searchFilter').value.trim()) count++;
+
+            const badge = document.getElementById('filterActiveBadge');
+            badge.textContent = count;
+            badge.classList.toggle('has-filters', count > 0);
+            badge.title = count > 0 ? `${count} active filter${count > 1 ? 's' : ''}` : '';
+        }
+
+        function toggleLeftSidebar() {
+            const sidebar = document.getElementById('threadFilters');
+            const btn = document.getElementById('leftSidebarToggle');
+            const isCollapsed = sidebar.classList.toggle('sidebar-collapsed');
+            btn.textContent = isCollapsed ? '▶' : '◀';
+            btn.title = isCollapsed ? 'Expand filters' : 'Collapse filters';
+            localStorage.setItem('threadFiltersSidebarCollapsed', isCollapsed ? '1' : '0');
         }
 
         function toggleStatusChip(button) {
@@ -9182,12 +9307,13 @@
         // Left sidebar resize functionality
         (function initLeftSidebarResize() {
             const resizeHandle = document.getElementById('resizeHandle');
-            const sidebar = document.querySelector('.left-sidebar');
+            const sidebar = document.getElementById('threadFilters');
             let isResizing = false;
             let startX = 0;
             let startWidth = 0;
 
             resizeHandle.addEventListener('mousedown', (e) => {
+                if (sidebar.classList.contains('sidebar-collapsed')) return;
                 isResizing = true;
                 startX = e.clientX;
                 startWidth = sidebar.offsetWidth;
