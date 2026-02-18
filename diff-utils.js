@@ -121,7 +121,7 @@ function renderDiffLines(diff, threadRanges, options = {}) {
                 contentHtml = r.html;
             }
             const prefix = getLinePrefix ? getLinePrefix(newLineNum, oldLineNum) : '';
-            html += `<div class="diff-line diff-unchanged">${prefix}<span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator"> </span><span class="diff-content">${contentHtml}</span></div>`;
+            html += `<div class="diff-line diff-unchanged"><span class="diff-avatar-slot">${prefix}</span><span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator"> </span><span class="diff-content">${contentHtml}</span></div>`;
             oldLineNum++;
             newLineNum++;
         } else if (entry.type === 'removed') {
@@ -129,14 +129,14 @@ function renderDiffLines(diff, threadRanges, options = {}) {
             curOld = oldLineNum;
             ({ html: contentHtml } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges));
             const prefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
-            html += `<div class="diff-line diff-removed"${hunkAttr}>${prefix}<span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number"></span><span class="diff-indicator">−</span><span class="diff-content">${contentHtml}</span></div>`;
+            html += `<div class="diff-line diff-removed"${hunkAttr}><span class="diff-avatar-slot">${prefix}</span><span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number"></span><span class="diff-indicator">−</span><span class="diff-content">${contentHtml}</span></div>`;
             oldLineNum++;
         } else if (entry.type === 'added') {
             if (!inChange) { hunkAttr = ` data-hunk="${hunkIndex++}"`; inChange = true; }
             curNew = newLineNum;
             ({ html: contentHtml } = getHighlightedContent(entry.content, newLineNum, true, threadRanges));
             const prefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
-            html += `<div class="diff-line diff-added"${hunkAttr}>${prefix}<span class="diff-line-number"></span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator">+</span><span class="diff-content">${contentHtml}</span></div>`;
+            html += `<div class="diff-line diff-added"${hunkAttr}><span class="diff-avatar-slot">${prefix}</span><span class="diff-line-number"></span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator">+</span><span class="diff-content">${contentHtml}</span></div>`;
             newLineNum++;
         }
 
@@ -167,8 +167,9 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
         if (entry.type === 'unchanged') {
             const { html: contentHtmlR } = getHighlightedContent(entry.content, newLineNum, true, threadRanges);
             const { html: contentHtmlL } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges);
-            const prefix = getLinePrefix ? getLinePrefix(newLineNum, oldLineNum) : '';
-            html += `<div class="sbs-row diff-unchanged">${prefix}<div class="sbs-left"><span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${contentHtmlL}</span></div><div class="sbs-right"><span class="diff-line-number">${newLineNum}</span><span class="diff-content">${contentHtmlR}</span></div></div>`;
+            const leftSlot = `<span class="diff-avatar-slot">${getLinePrefix ? getLinePrefix(null, oldLineNum) : ''}</span>`;
+            const rightSlot = `<span class="diff-avatar-slot">${getLinePrefix ? getLinePrefix(newLineNum, null) : ''}</span>`;
+            html += `<div class="sbs-row diff-unchanged"><div class="sbs-left">${leftSlot}<span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${contentHtmlL}</span></div><div class="sbs-right">${rightSlot}<span class="diff-line-number">${newLineNum}</span><span class="diff-content">${contentHtmlR}</span></div></div>`;
             if (getLineSuffix) html += getLineSuffix(newLineNum, oldLineNum);
             oldLineNum++;
             newLineNum++;
@@ -194,23 +195,24 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
                 if (j < removed.length) {
                     curOld = oldLineNum;
                     const { html: cHtml } = getHighlightedContent(removed[j].content, oldLineNum, false, threadRanges);
-                    leftHtml = `<div class="sbs-left diff-removed"><span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
+                    const leftSlot = `<span class="diff-avatar-slot">${getLinePrefix ? getLinePrefix(null, oldLineNum) : ''}</span>`;
+                    leftHtml = `<div class="sbs-left diff-removed">${leftSlot}<span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
                     oldLineNum++;
                 } else {
-                    leftHtml = `<div class="sbs-left sbs-empty"><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
+                    leftHtml = `<div class="sbs-left sbs-empty"><span class="diff-avatar-slot"></span><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
                 }
 
                 if (j < added.length) {
                     curNew = newLineNum;
                     const { html: cHtml } = getHighlightedContent(added[j].content, newLineNum, true, threadRanges);
-                    rightHtml = `<div class="sbs-right diff-added"><span class="diff-line-number">${newLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
+                    const rightSlot = `<span class="diff-avatar-slot">${getLinePrefix ? getLinePrefix(newLineNum, null) : ''}</span>`;
+                    rightHtml = `<div class="sbs-right diff-added">${rightSlot}<span class="diff-line-number">${newLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
                     newLineNum++;
                 } else {
-                    rightHtml = `<div class="sbs-right sbs-empty"><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
+                    rightHtml = `<div class="sbs-right sbs-empty"><span class="diff-avatar-slot"></span><span class="diff-line-number"></span><span class="diff-content"></span></div>`;
                 }
 
-                const prefix = getLinePrefix ? getLinePrefix(curNew, curOld) : '';
-                html += `<div class="sbs-row"${j === 0 ? hunkAttr : ''}>${prefix}${leftHtml}${rightHtml}</div>`;
+                html += `<div class="sbs-row"${j === 0 ? hunkAttr : ''}>${leftHtml}${rightHtml}</div>`;
                 if (getLineSuffix) html += getLineSuffix(curNew, curOld);
             }
             continue;
