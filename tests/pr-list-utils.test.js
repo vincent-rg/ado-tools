@@ -260,4 +260,67 @@ describe('PRListUtils', () => {
             expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(false);
         });
     });
+
+    describe('prMatchesFilters - involvedIn', () => {
+        const deps = { normalize, commentCounts: {} };
+        const prKey = 'MyProject/repo-1/42';
+        const depsWithComments = {
+            normalize,
+            commentCounts: {
+                [prKey]: {
+                    authorObjects: { '1': { displayName: 'Dave Wilson' } }
+                }
+            }
+        };
+
+        it('matches when person is the PR creator', () => {
+            const filters = { statuses: [], involvedIn: 'alice' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(true);
+        });
+
+        it('matches when person is a reviewer', () => {
+            const filters = { statuses: [], involvedIn: 'bob' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(true);
+        });
+
+        it('matches when person is a comment author (data loaded)', () => {
+            const filters = { statuses: [], involvedIn: 'dave' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, depsWithComments)).toBe(true);
+        });
+
+        it('excludes PR when person not involved in any role', () => {
+            const filters = { statuses: [], involvedIn: 'charlie' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, depsWithComments)).toBe(false);
+        });
+
+        it('still matches on creator/reviewer when comment data not loaded', () => {
+            const filters = { statuses: [], involvedIn: 'alice' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(true);
+        });
+
+        it('excludes PR when comment data not loaded and person not creator/reviewer', () => {
+            const filters = { statuses: [], involvedIn: 'dave' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(false);
+        });
+
+        it('matches any of semicolon-separated names', () => {
+            const filters = { statuses: [], involvedIn: 'charlie; alice' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(true);
+        });
+
+        it('ignores empty involvedIn filter', () => {
+            const filters = { statuses: [], involvedIn: '' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(true);
+        });
+
+        it('combines with other filters using AND', () => {
+            const filters = { statuses: ['active'], involvedIn: 'alice', title: 'login' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(true);
+        });
+
+        it('rejects when involvedIn matches but another filter fails', () => {
+            const filters = { statuses: ['completed'], involvedIn: 'alice' };
+            expect(PRListUtils.prMatchesFilters(makePR(), filters, deps)).toBe(false);
+        });
+    });
 });

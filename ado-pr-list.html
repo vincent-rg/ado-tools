@@ -1138,6 +1138,14 @@
                 </div>
 
                 <div class="filter-section">
+                    <h4>Involved In</h4>
+                    <div class="autocomplete-container">
+                        <input type="text" id="involvedInFilter" placeholder="Creator, reviewer, or commenter" oninput="showAutocomplete('involvedIn')">
+                        <div id="involvedInAutocomplete" class="autocomplete-results"></div>
+                    </div>
+                </div>
+
+                <div class="filter-section">
                     <h4>Created By</h4>
                     <div class="autocomplete-container">
                         <input type="text" id="createdByFilter" placeholder="Filter by author (use ; for multiple)" oninput="showAutocomplete('createdBy')">
@@ -1333,6 +1341,7 @@
                 status: params.get('status') ? params.get('status').split(',') : null,
                 prId: params.get('prId') || null,
                 title: params.get('title') || null,
+                involvedIn: params.get('involvedIn') || null,
                 createdBy: params.get('createdBy') || null,
                 assignedTo: params.get('assignedTo') || null,
                 commentAuthor: params.get('commentAuthor') || null,
@@ -1379,6 +1388,12 @@
             const title = document.getElementById('titleFilter').value.trim();
             if (title) {
                 params.set('title', title);
+            }
+
+            // Involved In
+            const involvedIn = document.getElementById('involvedInFilter').value.trim();
+            if (involvedIn) {
+                params.set('involvedIn', involvedIn);
             }
 
             // Created By
@@ -1463,6 +1478,9 @@
                 }
                 if (urlParams.title) {
                     document.getElementById('titleFilter').value = urlParams.title;
+                }
+                if (urlParams.involvedIn) {
+                    document.getElementById('involvedInFilter').value = urlParams.involvedIn;
                 }
                 if (urlParams.createdBy) {
                     document.getElementById('createdByFilter').value = urlParams.createdBy;
@@ -2063,6 +2081,7 @@
             return {
                 prId: document.getElementById('prIdFilter').value.trim(),
                 title: document.getElementById('titleFilter').value.trim(),
+                involvedIn: ADOSearch.normalize(document.getElementById('involvedInFilter').value.trim()),
                 createdBy: ADOSearch.normalize(document.getElementById('createdByFilter').value.trim()),
                 assignedTo: ADOSearch.normalize(document.getElementById('assignedToFilter').value.trim()),
                 commentAuthor: ADOSearch.normalize(document.getElementById('commentAuthorFilter').value.trim()),
@@ -2113,6 +2132,19 @@
                     document.getElementById('titleFilter').value = '';
                     applyFilters();
                 }});
+            }
+
+            const involvedInFilter = document.getElementById('involvedInFilter').value.trim();
+            if (involvedInFilter) {
+                const names = involvedInFilter.split(';').map(n => n.trim()).filter(n => n.length > 0);
+                names.forEach(name => {
+                    filters.push({ label: `Involved: ${name}`, clear: () => {
+                        const input = document.getElementById('involvedInFilter');
+                        const remaining = input.value.split(';').map(n => n.trim()).filter(n => n.length > 0 && n.toLowerCase() !== name.toLowerCase());
+                        input.value = remaining.join('; ');
+                        applyFilters();
+                    }});
+                });
             }
 
             const createdByFilter = document.getElementById('createdByFilter').value.trim();
@@ -3344,7 +3376,10 @@
                 segments.slice(0, -1).map(s => ADOSearch.normalize(s.trim())).filter(s => s.length > 0)
             );
 
-            const items = type === 'createdBy' ? Array.from(allAuthors) : type === 'assignedTo' ? Array.from(allReviewers) : Array.from(allCommentAuthors);
+            const items = type === 'createdBy' ? Array.from(allAuthors)
+                : type === 'assignedTo' ? Array.from(allReviewers)
+                : type === 'involvedIn' ? Array.from(new Set([...allAuthors, ...allReviewers, ...allCommentAuthors]))
+                : Array.from(allCommentAuthors);
             const filtered = items.filter(item =>
                 ADOSearch.normalize(item).includes(currentSegment) &&
                 !alreadySelected.has(ADOSearch.normalize(item))
@@ -3681,6 +3716,7 @@
         function clearFilters() {
             document.getElementById('prIdFilter').value = '';
             document.getElementById('titleFilter').value = '';
+            document.getElementById('involvedInFilter').value = '';
             document.getElementById('createdByFilter').value = '';
             document.getElementById('assignedToFilter').value = '';
             document.getElementById('commentAuthorFilter').value = '';

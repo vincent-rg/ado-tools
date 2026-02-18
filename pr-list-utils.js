@@ -130,6 +130,25 @@ const PRListUtils = {
             }
         }
 
+        // Involved in filter: OR across creator, reviewer, and comment author roles
+        // Semicolon-separated names; PR matches if the person appears in ANY role
+        if (filters.involvedIn) {
+            const names = filters.involvedIn.split(';').map(n => n.trim()).filter(n => n.length > 0);
+            if (names.length > 0) {
+                const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+                const cached = commentCounts && commentCounts[prKey];
+                const matchesAny = names.some(name => {
+                    if (normalize(pr.createdBy.displayName).includes(name)) return true;
+                    if (pr.reviewers.some(r => normalize(r.displayName).includes(name))) return true;
+                    if (cached && cached.authorObjects) {
+                        if (Object.values(cached.authorObjects).some(a => normalize(a.displayName).includes(name))) return true;
+                    }
+                    return false;
+                });
+                if (!matchesAny) return false;
+            }
+        }
+
         return true;
     }
 };
