@@ -956,6 +956,109 @@
             fill: #fff;
         }
 
+        /* Stack group — shown when 2+ threads are collapsed on the same line */
+        .diff-gutter-stack {
+            position: relative;
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+        /* Hidden state-tracking avatars inside a stack */
+        .diff-gutter-stack .diff-gutter-avatar {
+            position: absolute;
+            visibility: hidden;
+            pointer-events: none;
+            border: none;
+            box-shadow: none;
+        }
+        .diff-gutter-stack-trigger {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #6e40c9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+        }
+        .diff-gutter-stack-count {
+            color: #fff;
+            font-size: 8px;
+            font-weight: 700;
+            line-height: 1;
+            pointer-events: none;
+        }
+        /* .diff-gutter-stack-popover stays hidden — content is cloned into #gutter-stack-popup */
+        .diff-gutter-stack-popover { display: none; }
+
+        /* Singleton fixed-position popup (avoids overflow:hidden clipping in diff containers) */
+        #gutter-stack-popup {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            padding: 4px;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 160px;
+        }
+        .diff-gutter-stack-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .diff-gutter-stack-item:hover {
+            background: #f6f8fa;
+        }
+        .diff-gutter-stack-item.expanded {
+            opacity: 0.5;
+        }
+        /* Avatar in popup items: relative wrapper stacks placeholder + photo */
+        .popup-avatar-wrap {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        .popup-avatar-placeholder {
+            position: absolute;
+            inset: 0;
+            background: #0078d4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .popup-avatar-placeholder svg { width: 12px; height: 12px; fill: #fff; }
+        .popup-avatar-img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .popup-avatar-img.loaded { opacity: 1; }
+        .diff-gutter-stack-item span {
+            font-size: 11px;
+            color: #333;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* Comment bubble — fills the line-number cell on hover */
         .diff-comment-bubble {
             position: absolute;
@@ -5738,6 +5841,144 @@
             }
         }
 
+        // Builds gutter HTML for a list of thread-range objects on the same diff line.
+        // Single thread → one avatar. Multiple → a stack trigger with hover popover.
+        function buildGutterHtmlForLine(matchingRanges) {
+            if (matchingRanges.length === 0) return '';
+
+            function avatarInnerHtml(authorId, authorName, cachedUrl) {
+                if (cachedUrl) {
+                    return `<img src="${cachedUrl}" alt="${authorName}">`;
+                }
+                const placeholder = `<div class="gutter-avatar-placeholder"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
+                if (authorId) {
+                    return placeholder + `<img data-user-id="${authorId}" alt="${authorName}" class="avatar-pending">`;
+                }
+                return placeholder;
+            }
+
+            if (matchingRanges.length === 1) {
+                const tr = matchingRanges[0];
+                const thread = tr.thread;
+                const status = thread.status;
+                const isCollapsed = (status === 'fixed' || status === 'closed' || status === 'wontFix') || !tr.appliesToView;
+                const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
+                const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
+                const authorId = firstRealComment?.author?.id;
+                const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
+                const inner = avatarInnerHtml(authorId, authorName, cachedUrl);
+                const displayStyle = isCollapsed ? '' : ' style="display:none"';
+                return `<div class="diff-gutter-avatar" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})" title="${authorName}: click to expand thread"${displayStyle}>${inner}</div>`;
+            }
+
+            // Multiple threads → stack
+            let hiddenAvatars = '';
+            let popoverItems = '';
+            let initialCollapsedCount = 0;
+            for (const tr of matchingRanges) {
+                const thread = tr.thread;
+                const status = thread.status;
+                const isCollapsed = (status === 'fixed' || status === 'closed' || status === 'wontFix') || !tr.appliesToView;
+                const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
+                const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
+                const authorId = firstRealComment?.author?.id;
+                const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
+
+                // Hidden state-tracking avatar
+                const displayStyle = isCollapsed ? '' : ' style="display:none"';
+                hiddenAvatars += `<div class="diff-gutter-avatar" data-thread-id="${thread.id}"${displayStyle}></div>`;
+                if (isCollapsed) initialCollapsedCount++;
+
+                // Popover item (store author data for popup rebuild)
+                const expandedClass = isCollapsed ? '' : ' expanded';
+                const authorIdAttr = authorId ? ` data-author-id="${authorId}"` : '';
+                popoverItems += `<div class="diff-gutter-stack-item${expandedClass}" data-thread-id="${thread.id}"${authorIdAttr} data-author-name="${authorName}" onclick="gutterStackItemClick(event,${thread.id})"></div>`;
+            }
+
+            const stackDisplay = initialCollapsedCount === 0 ? ' style="display:none"' : '';
+            return `<div class="diff-gutter-stack"${stackDisplay}>${hiddenAvatars}<div class="diff-gutter-stack-trigger" title="${matchingRanges.length} threads — click to expand" onclick="toggleGutterStackPopup(event,this.parentElement)"><span class="diff-gutter-stack-count">${initialCollapsedCount}</span></div><div class="diff-gutter-stack-popover">${popoverItems}</div></div>`;
+        }
+
+        let _gutterStackPopupOwner = null;
+
+        function updateGutterStack(stack) {
+            const avatars = stack.querySelectorAll('.diff-gutter-avatar');
+            const collapsedCount = Array.from(avatars).filter(a => a.style.display !== 'none').length;
+            const countEl = stack.querySelector('.diff-gutter-stack-count');
+            if (countEl) countEl.textContent = collapsedCount;
+            stack.style.display = collapsedCount === 0 ? 'none' : '';
+            // Update expanded state on source popover items (used when popup is re-opened)
+            stack.querySelectorAll('.diff-gutter-stack-item').forEach(item => {
+                const avatar = stack.querySelector(`.diff-gutter-avatar[data-thread-id="${item.dataset.threadId}"]`);
+                item.classList.toggle('expanded', !!(avatar && avatar.style.display === 'none'));
+            });
+            // Also update live popup if open for this stack
+            if (_gutterStackPopupOwner === stack) {
+                const popup = document.getElementById('gutter-stack-popup');
+                if (popup) {
+                    popup.querySelectorAll('.diff-gutter-stack-item').forEach(item => {
+                        const avatar = stack.querySelector(`.diff-gutter-avatar[data-thread-id="${item.dataset.threadId}"]`);
+                        item.classList.toggle('expanded', !!(avatar && avatar.style.display === 'none'));
+                    });
+                }
+            }
+        }
+
+        function toggleGutterStackPopup(event, stackEl) {
+            event.stopPropagation();
+            const popup = document.getElementById('gutter-stack-popup');
+            if (!popup) return;
+            if (_gutterStackPopupOwner === stackEl && popup.style.display !== 'none') {
+                closeGutterStackPopup();
+                return;
+            }
+            // Rebuild popup items fresh (uses current avatar cache, avoids side-by-side placeholder+img issue)
+            const source = stackEl.querySelector('.diff-gutter-stack-popover');
+            if (!source) return;
+            const personIcon = `<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+            let popupHtml = '';
+            source.querySelectorAll('.diff-gutter-stack-item').forEach(srcItem => {
+                const threadId = srcItem.dataset.threadId;
+                const authorId = srcItem.dataset.authorId;
+                const authorName = srcItem.dataset.authorName || '';
+                const avatar = stackEl.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
+                const isExpanded = !!(avatar && avatar.style.display === 'none');
+                const expandedClass = isExpanded ? ' expanded' : '';
+                const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
+                const imgHtml = cachedUrl
+                    ? `<img src="${cachedUrl}" alt="${authorName}" class="popup-avatar-img loaded">`
+                    : authorId
+                        ? `<img data-user-id="${authorId}" alt="${authorName}" class="popup-avatar-img avatar-pending">`
+                        : '';
+                const avatarHtml = `<div class="popup-avatar-wrap"><div class="popup-avatar-placeholder">${personIcon}</div>${imgHtml}</div>`;
+                popupHtml += `<div class="diff-gutter-stack-item${expandedClass}" data-thread-id="${threadId}" onclick="gutterStackItemClick(event,${threadId})">${avatarHtml}<span>${authorName}</span></div>`;
+            });
+            popup.innerHTML = popupHtml;
+            AvatarLoader.loadPending(); // load any not-yet-cached avatars
+            // Position below the trigger, clamped to viewport
+            const rect = stackEl.getBoundingClientRect();
+            const popupWidth = 200;
+            let left = rect.left;
+            if (left + popupWidth > window.innerWidth - 8) left = window.innerWidth - popupWidth - 8;
+            popup.style.left = `${left}px`;
+            popup.style.top = `${rect.bottom + 4}px`;
+            popup.style.display = 'flex';
+            _gutterStackPopupOwner = stackEl;
+            // Close when clicking outside
+            setTimeout(() => document.addEventListener('click', closeGutterStackPopup, { once: true }), 0);
+        }
+
+        function closeGutterStackPopup() {
+            const popup = document.getElementById('gutter-stack-popup');
+            if (popup) popup.style.display = 'none';
+            _gutterStackPopupOwner = null;
+        }
+
+        function gutterStackItemClick(event, threadId) {
+            event.stopPropagation(); // keep popup open
+            toggleInlineThread(threadId);
+        }
+
         function toggleInlineThread(threadId) {
             const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
             if (!threadEl) return;
@@ -5745,7 +5986,11 @@
             threadEl.classList.toggle('collapsed');
             // Show/hide gutter avatar (visible when collapsed, hidden when expanded)
             const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
-            if (avatarEl) avatarEl.style.display = isCollapsed ? 'none' : '';
+            if (avatarEl) {
+                avatarEl.style.display = isCollapsed ? 'none' : '';
+                const stack = avatarEl.closest('.diff-gutter-stack');
+                if (stack) updateGutterStack(stack);
+            }
         }
 
         function scrollToThread(threadId) {
@@ -5755,7 +6000,11 @@
             if (threadEl.classList.contains('collapsed')) {
                 threadEl.classList.remove('collapsed');
                 const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
-                if (avatarEl) avatarEl.style.display = 'none';
+                if (avatarEl) {
+                    avatarEl.style.display = 'none';
+                    const stack = avatarEl.closest('.diff-gutter-stack');
+                    if (stack) updateGutterStack(stack);
+                }
             }
             threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             // Highlight focused thread (clear previous, apply fresh)
@@ -8469,27 +8718,11 @@
                     const threadRanges = fileThreads.map(thread => DiffUtils.buildThreadRange(thread, viewIterStart, viewIterEnd));
 
                     function getLinePrefix(newLineNum, oldLineNum) {
-                        let html = '';
-                        for (const tr of threadRanges) {
+                        const matching = threadRanges.filter(tr => {
                             const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                            if (lineNum == null || lineNum !== tr.startLine) continue;
-                            const thread = tr.thread;
-                            const status = thread.status;
-                            const isResolved = status === 'fixed' || status === 'closed' || status === 'wontFix';
-                            const isCollapsed = isResolved || !tr.appliesToView;
-                            const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
-                            const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
-                            const authorId = firstRealComment?.author?.id;
-                            const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
-                            const avatarInner = cachedUrl
-                                ? `<img src="${cachedUrl}" alt="${authorName}" title="${authorName}: click to expand thread">`
-                                : authorId
-                                    ? `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div><img data-user-id="${authorId}" alt="${authorName}" title="${authorName}: click to expand thread" class="avatar-pending">`
-                                    : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
-                            const displayStyle = isCollapsed ? '' : ' style="display:none"';
-                            html += `<div class="diff-gutter-avatar" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})"${displayStyle}>${avatarInner}</div>`;
-                        }
-                        return html;
+                            return lineNum != null && lineNum === tr.startLine;
+                        });
+                        return buildGutterHtmlForLine(matching);
                     }
 
                     function getLineSuffix(newLineNum, oldLineNum) {
@@ -8862,34 +9095,14 @@
 
             // Helper: get gutter avatars for threads starting at this line
             function getLinePrefix(newLineNum, oldLineNum) {
-                let html = '';
-                for (const tr of threadRanges) {
+                const matching = threadRanges.filter(tr => {
                     const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                    if (lineNum == null || lineNum !== tr.startLine) continue;
-                    if (tr.useRight && oldLineNum != null && newLineNum == null) continue;
-                    if (!tr.useRight && newLineNum != null && oldLineNum == null) continue;
-
-                    const thread = tr.thread;
-                    const status = thread.status;
-                    const isResolved = status === 'fixed' || status === 'closed' || status === 'wontFix';
-                    const isCollapsed = isResolved || !tr.appliesToView;
-
-                    const firstRealComment = thread.comments?.find(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted);
-                    const authorName = ADOContent.escapeHtml(firstRealComment?.author?.displayName || '?');
-                    const authorId = firstRealComment?.author?.id;
-                    const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
-
-                    const avatarInner = cachedUrl
-                        ? `<img src="${cachedUrl}" alt="${authorName}" title="${authorName}: click to expand thread">`
-                        : authorId
-                            ? `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div><img data-user-id="${authorId}" alt="${authorName}" title="${authorName}: click to expand thread" class="avatar-pending">`
-                            : `<div class="gutter-avatar-placeholder" title="${authorName}: click to expand thread"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></div>`;
-
-                    // Visible when collapsed, hidden when expanded
-                    const displayStyle = isCollapsed ? '' : ' style="display:none"';
-                    html += `<div class="diff-gutter-avatar" data-thread-id="${thread.id}" onclick="toggleInlineThread(${thread.id})"${displayStyle}>${avatarInner}</div>`;
-                }
-                return html;
+                    if (lineNum == null || lineNum !== tr.startLine) return false;
+                    if (tr.useRight && oldLineNum != null && newLineNum == null) return false;
+                    if (!tr.useRight && newLineNum != null && oldLineNum == null) return false;
+                    return true;
+                });
+                return buildGutterHtmlForLine(matching);
             }
 
             // Helper: get inline thread widgets to insert after this line
@@ -9544,5 +9757,7 @@
             <div class="pr-action-modal-footer" id="prActionModalFooter"></div>
         </div>
     </div>
+    <!-- Singleton popup for gutter thread stacks (fixed-position, avoids overflow clipping) -->
+    <div id="gutter-stack-popup"></div>
 </body>
 </html>
