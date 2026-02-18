@@ -17,6 +17,7 @@ diff-utils.js                       Extracted diff/thread utilities from ado-pr-
 pr-list-utils.js                    Extracted pure functions from ado-pr-list.html (filters, time, change detection)
 mention-utils.js                    @mention autocomplete utilities (context detection, text insertion)
 pr-threads-utils.js                 Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
+vitest.config.js                    Vitest configuration for unit tests
 index.html             (206 lines)  Landing page with tool cards
 ado-settings.html      (219 lines)  Settings form (serverUrl, org, project, repo, PAT)
 ado-pr-list.html      (4201 lines)  PR list browser (CSS: 1-1057, HTML: 1059-1221, JS: 1224-4199)
