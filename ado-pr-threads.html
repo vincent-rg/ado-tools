@@ -2673,16 +2673,46 @@
 
         .file-diff-body {
             flex: 1;
-            overflow: auto;
-        }
-        .file-diff-body:has(.sbs-scroll-track) {
             display: flex;
             flex-direction: column;
-            overflow-x: hidden;
+            overflow: hidden;
         }
         .file-diff-body .diff-scroll-area {
             flex: 1;
             overflow: auto;
+        }
+        .diff-scroll-row {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .diff-minimap-wrap {
+            width: 14px;
+            flex-shrink: 0;
+            position: relative;
+            background: #f0f0f0;
+            border-left: 1px solid #e1dfdd;
+            cursor: ns-resize;
+            overflow: hidden;
+            user-select: none;
+        }
+        .diff-minimap-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+        }
+        .diff-minimap-viewport {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background: rgba(100, 100, 100, 0.2);
+            border-top: 1px solid rgba(100, 100, 100, 0.35);
+            border-bottom: 1px solid rgba(100, 100, 100, 0.35);
+            pointer-events: none;
+            min-height: 4px;
         }
 
         .file-diff-body .diff-lines {
@@ -6043,25 +6073,15 @@
             document.querySelectorAll('.inline-thread.focused, .file-tree-thread.focused').forEach(el => el.classList.remove('focused'));
         }
 
-        // Save scroll positions of the diff panel's scrollable containers.
-        // Both .file-diff-body (inline mode) and .diff-scroll-area (SBS mode) are
-        // replaced by renderFileDiff() via innerHTML, so we capture both and restore both.
         function saveDiffScroll() {
-            const diffPanel = document.getElementById('fileDiffPanel');
-            if (!diffPanel) return null;
-            const body = diffPanel.querySelector('.file-diff-body');
-            const area = diffPanel.querySelector('.diff-scroll-area');
-            return { body: body ? body.scrollTop : 0, area: area ? area.scrollTop : 0 };
+            const area = document.querySelector('#fileDiffPanel .diff-scroll-area');
+            return area ? area.scrollTop : 0;
         }
 
         function restoreDiffScroll(saved) {
-            if (!saved) return;
-            const diffPanel = document.getElementById('fileDiffPanel');
-            if (!diffPanel) return;
-            const body = diffPanel.querySelector('.file-diff-body');
-            const area = diffPanel.querySelector('.diff-scroll-area');
-            if (body) body.scrollTop = saved.body;
-            if (area) area.scrollTop = saved.area;
+            if (!saved && saved !== 0) return;
+            const area = document.querySelector('#fileDiffPanel .diff-scroll-area');
+            if (area) area.scrollTop = saved;
         }
 
         // Thread jump navigation — sorted thread IDs for the current file
@@ -8796,8 +8816,14 @@
                             <span style="font-size: 12px; color: #a19f9d;">(unchanged file)</span>
                         </div>
                         <div class="file-diff-body">
-                            <div class="diff-scroll-area">
-                                <div class="diff-lines">${diffHtml}</div>
+                            <div class="diff-scroll-row">
+                                <div class="diff-scroll-area">
+                                    <div class="diff-lines">${diffHtml}</div>
+                                </div>
+                                <div class="diff-minimap-wrap">
+                                    <canvas class="diff-minimap-canvas"></canvas>
+                                    <div class="diff-minimap-viewport"></div>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -8807,6 +8833,7 @@
                     // interactions use inline logic even when user preference is side-by-side
                     diffPanel.setAttribute('data-render-mode', 'inline');
                     injectCommentBubbles(filePath);
+                    setupDiffMinimap(diffPanel);
                     return;
                 }
 
@@ -8994,6 +9021,88 @@
                     container.classList.add('selecting-right');
                 }
             });
+        }
+
+        function setupDiffMinimap(diffPanel) {
+            const scrollArea = diffPanel.querySelector('.diff-scroll-area');
+            const minimapWrap = diffPanel.querySelector('.diff-minimap-wrap');
+            if (!scrollArea || !minimapWrap) return;
+
+            const canvas = minimapWrap.querySelector('.diff-minimap-canvas');
+            const viewport = minimapWrap.querySelector('.diff-minimap-viewport');
+            const diffContainer = scrollArea.querySelector('.diff-lines');
+            if (!diffContainer) return;
+
+            // Collect line colors — skip thread rows and hunk separators
+            const lineColors = [];
+            for (const child of diffContainer.children) {
+                if (child.classList.contains('inline-thread') ||
+                    child.classList.contains('sbs-thread-row') ||
+                    child.classList.contains('diff-hunk-separator')) continue;
+                if (child.classList.contains('diff-added')) lineColors.push('#3fb950');
+                else if (child.classList.contains('diff-removed')) lineColors.push('#f85149');
+                else if (child.classList.contains('sbs-row')) {
+                    // SBS mode: diff-added/diff-removed live on the child panes
+                    const removed = child.querySelector('.sbs-left.diff-removed');
+                    const added = child.querySelector('.sbs-right.diff-added');
+                    if (removed && added) lineColors.push('#e3b341'); // modified — amber
+                    else if (removed) lineColors.push('#f85149');
+                    else if (added) lineColors.push('#3fb950');
+                    else lineColors.push(null);
+                } else lineColors.push(null); // unchanged — transparent
+            }
+
+            if (lineColors.length === 0) return;
+
+            function draw() {
+                const h = minimapWrap.clientHeight;
+                const w = minimapWrap.clientWidth;
+                if (h === 0 || w === 0) return;
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, w, h);
+                const itemH = h / lineColors.length;
+                for (let i = 0; i < lineColors.length; i++) {
+                    if (!lineColors[i]) continue;
+                    ctx.fillStyle = lineColors[i];
+                    ctx.fillRect(1, Math.floor(i * itemH), w - 2, Math.max(Math.ceil(itemH), 1));
+                }
+                updateViewport();
+            }
+
+            function updateViewport() {
+                const totalH = scrollArea.scrollHeight;
+                const clientH = scrollArea.clientHeight;
+                const minimapH = minimapWrap.clientHeight;
+                if (totalH <= clientH) { viewport.style.display = 'none'; return; }
+                viewport.style.display = 'block';
+                viewport.style.top = (scrollArea.scrollTop / totalH * minimapH) + 'px';
+                viewport.style.height = Math.max(clientH / totalH * minimapH, 6) + 'px';
+            }
+
+            scrollArea.addEventListener('scroll', updateViewport);
+
+            minimapWrap.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const scrollTo = (clientY) => {
+                    const rect = minimapWrap.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+                    scrollArea.scrollTop = ratio * (scrollArea.scrollHeight - scrollArea.clientHeight);
+                };
+                scrollTo(e.clientY);
+                const onMove = (e) => scrollTo(e.clientY);
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+
+            const ro = new ResizeObserver(() => draw());
+            ro.observe(minimapWrap);
+            requestAnimationFrame(draw);
         }
 
         function setupSbsScrollSync(diffPanel) {
@@ -9244,8 +9353,14 @@
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
-                    <div class="diff-scroll-area">
-                        <div class="diff-lines${sbsClass}">${diffHtml}</div>
+                    <div class="diff-scroll-row">
+                        <div class="diff-scroll-area">
+                            <div class="diff-lines${sbsClass}">${diffHtml}</div>
+                        </div>
+                        <div class="diff-minimap-wrap">
+                            <canvas class="diff-minimap-canvas"></canvas>
+                            <div class="diff-minimap-viewport"></div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -9261,6 +9376,8 @@
                 setupSbsScrollSync(diffPanel);
                 setupSbsSelectionLock(diffPanel);
             }
+
+            setupDiffMinimap(diffPanel);
         }
 
         // File tree panel resize functionality
