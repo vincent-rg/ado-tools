@@ -3967,7 +3967,9 @@
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
                 hideFileCommentForm();
+                const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
+                restoreDiffScroll(saved);
             } catch (err) {
                 console.error('Failed to create file comment:', err);
                 alert('Failed to create comment: ' + err.message);
@@ -4151,7 +4153,9 @@
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
                 hideLineCommentForm();
+                const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
+                restoreDiffScroll(saved);
             } catch (err) {
                 console.error('Failed to create line comment:', err);
                 alert('Failed to create comment: ' + err.message);
@@ -5615,7 +5619,9 @@
 
             try {
                 await ADOAPI.addComment(currentConfig, currentPRId, threadId, content);
+                const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
+                restoreDiffScroll(saved);
             } catch (error) {
                 console.error('Failed to add reply:', error);
                 alert(`Failed to add reply: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
@@ -5839,7 +5845,9 @@
 
             try {
                 await ADOAPI.deleteComment(currentConfig, currentPRId, threadId, commentId);
+                const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
+                restoreDiffScroll(saved);
             } catch (error) {
                 console.error('Failed to delete comment:', error);
                 alert(`Failed to delete comment: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
@@ -6033,6 +6041,27 @@
 
         function clearThreadFocus() {
             document.querySelectorAll('.inline-thread.focused, .file-tree-thread.focused').forEach(el => el.classList.remove('focused'));
+        }
+
+        // Save scroll positions of the diff panel's scrollable containers.
+        // Both .file-diff-body (inline mode) and .diff-scroll-area (SBS mode) are
+        // replaced by renderFileDiff() via innerHTML, so we capture both and restore both.
+        function saveDiffScroll() {
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return null;
+            const body = diffPanel.querySelector('.file-diff-body');
+            const area = diffPanel.querySelector('.diff-scroll-area');
+            return { body: body ? body.scrollTop : 0, area: area ? area.scrollTop : 0 };
+        }
+
+        function restoreDiffScroll(saved) {
+            if (!saved) return;
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+            const body = diffPanel.querySelector('.file-diff-body');
+            const area = diffPanel.querySelector('.diff-scroll-area');
+            if (body) body.scrollTop = saved.body;
+            if (area) area.scrollTop = saved.area;
         }
 
         // Thread jump navigation — sorted thread IDs for the current file
@@ -9677,7 +9706,9 @@
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
                 hideSelectionCommentForm();
+                const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
+                restoreDiffScroll(saved);
             } catch (err) {
                 console.error('Failed to create selection comment:', err);
                 alert('Failed to create comment: ' + err.message);
