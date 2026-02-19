@@ -2937,13 +2937,16 @@
                     ADOAPI.getIterations(config, pr._project, pr._repo.id, pr.pullRequestId).catch(() => ({ value: [] }))
                 ]);
 
-                const allThreads = (threads.value || []).filter(thread => !thread.isDeleted);
+                // Align with PRThreadsUtils.isThreadDeleted: exclude threads where the first comment is deleted
+                const allThreads = (threads.value || []).filter(thread =>
+                    !thread.isDeleted && !thread.comments?.[0]?.isDeleted
+                );
                 const activeThreads = allThreads.filter(thread =>
                     thread.status === 'active' || thread.status === 'Active' || thread.status === 1
                 );
                 const activeCount = activeThreads.length;
 
-                // Collect ALL thread authors (for display in "other authors" column)
+                // Collect thread creators from ALL threads (for display in "other authors" column)
                 // Skip system (3/'system') and codeChange (2/'codeChange') threads
                 const authorObjects = {};
                 allThreads.forEach(thread => {
@@ -2956,7 +2959,7 @@
                     }
                 });
 
-                // Count ACTIVE threads per author (for badges)
+                // Count active threads CREATED by each user (threads where they wrote the first comment)
                 // Skip system and codeChange threads
                 const authorCounts = {};
                 activeThreads.forEach(thread => {
@@ -3065,7 +3068,7 @@
                     const badge = document.createElement('span');
                     badge.className = 'reviewer-thread-badge';
                     badge.textContent = threadCount;
-                    badge.title = `${threadCount} active thread${threadCount > 1 ? 's' : ''}`;
+                    badge.title = `${threadCount} active thread${threadCount > 1 ? 's' : ''} started`;
                     wrapper.appendChild(badge);
                 }
             });
@@ -3096,7 +3099,7 @@
                 const displayName = ADOContent.escapeHtml(author.displayName || 'Unknown');
                 const threadCount = authorCounts[author.id] || 0;
                 const title = threadCount > 0
-                    ? `${displayName} - ${threadCount} active thread${threadCount > 1 ? 's' : ''}`
+                    ? `${displayName} - ${threadCount} active thread${threadCount > 1 ? 's' : ''} started`
                     : displayName;
 
                 let avatarHtml;
