@@ -4322,7 +4322,7 @@
             const otherAuthors = new Map();
 
             threads.forEach(thread => {
-                if (thread.isDeleted) return;
+                if (PRThreadsUtils.isThreadDeleted(thread)) return;
                 const firstComment = thread.comments && thread.comments[0];
                 const author = firstComment?.author;
                 const commentType = firstComment?.commentType;
@@ -4450,7 +4450,7 @@
             if (!container) return;
 
             const statusCounts = allThreads.reduce((acc, thread) => {
-                if (thread.isDeleted === true) {
+                if (PRThreadsUtils.isThreadDeleted(thread)) {
                     acc.deleted = (acc.deleted || 0) + 1;
                 } else if (thread.status === undefined) {
                     acc.noStatus = (acc.noStatus || 0) + 1;
@@ -7493,7 +7493,7 @@
                 threads.forEach((thread, index) => {
                     const hasStatus = thread.status !== undefined;
                     const status = thread.status; // Keep actual status value (could be undefined, 'unknown', 'active', etc.)
-                    const isThreadDeleted = thread.isDeleted === true;
+                    const isThreadDeleted = PRThreadsUtils.isThreadDeleted(thread);
 
                     const statusClass = ADOUI.getStatusBadgeClass(status, isThreadDeleted);
                     const statusText = ADOUI.getStatusText(status, isThreadDeleted);
@@ -8848,7 +8848,7 @@
         function renderInlineThread(thread, appliesToView = true) {
             const threadId = thread.id;
             const status = thread.status;
-            const isThreadDeleted = thread.isDeleted === true;
+            const isThreadDeleted = PRThreadsUtils.isThreadDeleted(thread);
             const statusClass = ADOUI.getStatusBadgeClass(status, isThreadDeleted);
             const statusText = ADOUI.getStatusText(status, isThreadDeleted);
             const hasStatus = status !== undefined;

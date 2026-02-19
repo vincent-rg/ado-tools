@@ -142,6 +142,15 @@ describe('PRThreadsUtils', () => {
             expect(PRThreadsUtils.getActiveThreadCounts(threads)).toEqual({});
         });
 
+        it('ignores threads whose first comment is deleted', () => {
+            const threads = [{
+                status: 'active',
+                isDeleted: false,
+                comments: [{ author: { id: 'u1' }, commentType: 'text', isDeleted: true }]
+            }];
+            expect(PRThreadsUtils.getActiveThreadCounts(threads)).toEqual({});
+        });
+
         it('ignores threads with no author id', () => {
             const threads = [{
                 status: 'active',
@@ -629,6 +638,32 @@ describe('PRThreadsUtils', () => {
         });
     });
 
+    describe('isThreadDeleted', () => {
+        it('returns false for a normal thread', () => {
+            expect(PRThreadsUtils.isThreadDeleted({ isDeleted: false, comments: [{ isDeleted: false }] })).toBe(false);
+        });
+
+        it('returns true when thread.isDeleted is true', () => {
+            expect(PRThreadsUtils.isThreadDeleted({ isDeleted: true, comments: [] })).toBe(true);
+        });
+
+        it('returns true when first comment is deleted', () => {
+            expect(PRThreadsUtils.isThreadDeleted({ isDeleted: false, comments: [{ isDeleted: true }] })).toBe(true);
+        });
+
+        it('returns false when first comment is not deleted', () => {
+            expect(PRThreadsUtils.isThreadDeleted({ isDeleted: false, comments: [{ isDeleted: false }] })).toBe(false);
+        });
+
+        it('returns false when thread has no comments', () => {
+            expect(PRThreadsUtils.isThreadDeleted({ isDeleted: false, comments: [] })).toBe(false);
+        });
+
+        it('returns true when thread.isDeleted is true even with non-deleted first comment', () => {
+            expect(PRThreadsUtils.isThreadDeleted({ isDeleted: true, comments: [{ isDeleted: false }] })).toBe(true);
+        });
+    });
+
     describe('threadMatchesFilters', () => {
         // Identity normalize: no accent folding needed for these tests
         const deps = { normalize: s => s.toLowerCase() };
@@ -668,6 +703,20 @@ describe('PRThreadsUtils', () => {
             it('shows non-deleted threads regardless of showDeleted', () => {
                 expect(PRThreadsUtils.threadMatchesFilters(makeThread(), { ...emptyFilters, showDeleted: false }, deps)).toBe(true);
                 expect(PRThreadsUtils.threadMatchesFilters(makeThread(), { ...emptyFilters, showDeleted: true }, deps)).toBe(true);
+            });
+
+            it('hides threads whose first comment is deleted when showDeleted is false', () => {
+                const filters = { ...emptyFilters, showDeleted: false };
+                const thread = makeThread();
+                thread.comments[0].isDeleted = true;
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(false);
+            });
+
+            it('shows threads whose first comment is deleted when showDeleted is true', () => {
+                const filters = { ...emptyFilters, showDeleted: true };
+                const thread = makeThread();
+                thread.comments[0].isDeleted = true;
+                expect(PRThreadsUtils.threadMatchesFilters(thread, filters, deps)).toBe(true);
             });
         });
 

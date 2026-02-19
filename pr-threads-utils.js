@@ -38,6 +38,16 @@ const PRThreadsUtils = {
     },
 
     /**
+     * Returns true if a thread should be treated as deleted.
+     * A thread is deleted if thread.isDeleted is true, or if its first comment is deleted.
+     * @param {object} thread - Thread object from ADO API
+     * @returns {boolean}
+     */
+    isThreadDeleted(thread) {
+        return thread.isDeleted === true || (thread.comments && thread.comments[0]?.isDeleted === true);
+    },
+
+    /**
      * Count active threads grouped by first comment author ID
      * @param {Array} threads - Thread objects from ADO API
      * @returns {object} Map of authorId -> count
@@ -45,7 +55,7 @@ const PRThreadsUtils = {
     getActiveThreadCounts(threads) {
         const counts = {};
         threads.forEach(thread => {
-            if (thread.isDeleted) return;
+            if (PRThreadsUtils.isThreadDeleted(thread)) return;
             const status = thread.status;
             if (status === 'active' || status === 'Active' || status === 1) {
                 const firstComment = thread.comments && thread.comments[0];
@@ -221,7 +231,7 @@ const PRThreadsUtils = {
         const { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText } = filters;
         const { normalize } = deps;
 
-        if (!showDeleted && thread.isDeleted === true) {
+        if (!showDeleted && PRThreadsUtils.isThreadDeleted(thread)) {
             return false;
         }
 
