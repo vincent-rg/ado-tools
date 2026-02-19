@@ -1223,6 +1223,11 @@
             padding-left: 8px;
             white-space: pre;
         }
+        /* Prevent cross-side text selection in side-by-side mode */
+        .diff-lines-sbs.selecting-left .sbs-right .diff-content,
+        .diff-lines-sbs.selecting-left .sbs-right .diff-avatar-slot { user-select: none; }
+        .diff-lines-sbs.selecting-right .sbs-left .diff-content,
+        .diff-lines-sbs.selecting-right .sbs-left .diff-avatar-slot { user-select: none; }
         .sbs-left .diff-line-number, .sbs-right .diff-line-number {
             color: #6e7681;
             text-align: right;
@@ -8945,6 +8950,24 @@
             return html;
         }
 
+        function setupSbsSelectionLock(diffPanel) {
+            const container = diffPanel.querySelector('.diff-lines-sbs');
+            if (!container) return;
+            // On each mousedown, lock selection to the clicked side by disabling
+            // user-select on the other side. The class is NOT removed on mouseup —
+            // removing it then lets the browser re-expand the highlight to the full
+            // DOM range (which spans both sides). The next mousedown resets it before
+            // any new selection starts.
+            container.addEventListener('mousedown', (e) => {
+                container.classList.remove('selecting-left', 'selecting-right');
+                if (e.target.closest('.sbs-left')) {
+                    container.classList.add('selecting-left');
+                } else if (e.target.closest('.sbs-right')) {
+                    container.classList.add('selecting-right');
+                }
+            });
+        }
+
         function setupSbsScrollSync(diffPanel) {
             const body = diffPanel.querySelector('.file-diff-body');
             if (!body) return;
@@ -9206,9 +9229,10 @@
             // Inject comment bubbles for line-level commenting
             injectCommentBubbles(filePath);
 
-            // Set up horizontal scroll sync for SBS mode
+            // Set up horizontal scroll sync and selection lock for SBS mode
             if (fileDiffDisplayMode === 'side-by-side') {
                 setupSbsScrollSync(diffPanel);
+                setupSbsSelectionLock(diffPanel);
             }
         }
 
