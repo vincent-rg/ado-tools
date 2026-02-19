@@ -2665,6 +2665,63 @@
             white-space: nowrap;
         }
 
+        /* Go-to-line widget */
+        .goto-line-widget {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 8px;
+            flex-shrink: 0;
+            background: #fff;
+            border: 1px solid #0078d4;
+            border-radius: 4px;
+            padding: 2px 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        }
+        .goto-line-label {
+            font-size: 12px;
+            color: #605e5c;
+            white-space: nowrap;
+        }
+        .goto-line-side-btn {
+            font-size: 11px;
+            background: #f0f6ff;
+            border: 1px solid #0078d4;
+            border-radius: 3px;
+            color: #0078d4;
+            cursor: pointer;
+            padding: 1px 5px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .goto-line-side-btn:hover { background: #e0eeff; }
+        .goto-line-input {
+            width: 60px;
+            border: none;
+            outline: none;
+            font-size: 12px;
+            font-family: monospace;
+            padding: 1px 2px;
+            background: transparent;
+        }
+        .goto-line-input::-webkit-inner-spin-button,
+        .goto-line-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .goto-line-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #8a8886;
+            padding: 0 2px;
+            line-height: 1;
+        }
+        .goto-line-close:hover { color: #323130; }
+        @keyframes goto-line-flash {
+            0%   { background-color: rgba(0, 120, 212, 0.25); }
+            100% { background-color: transparent; }
+        }
+        .goto-line-flash { animation: goto-line-flash 1.2s ease-out; }
+
         .file-diff-rename-info {
             font-size: 12px;
             color: #8250df;
@@ -3409,6 +3466,7 @@
         let urlRepo = null;     // Saved from initial URL
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
         let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
+        let goToLineSide = 'new'; // 'old' or 'new'; which version's line numbers to navigate
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -4887,6 +4945,18 @@
                 if (e.key === 'Escape' && document.getElementById('prActionModal')?.classList.contains('show')) {
                     closePRActionModal();
                 }
+                // Go-to-line input: handle Enter/Escape, consume all other keys
+                if (e.target.id === 'gotoLineInput') {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const lineNum = parseInt(e.target.value);
+                        if (lineNum > 0) goToLine(lineNum, goToLineSide);
+                        closeGoToLine();
+                    } else if (e.key === 'Escape') {
+                        closeGoToLine();
+                    }
+                    return;
+                }
                 // Jump navigation in files view
                 if (currentView === 'files' && e.altKey && !e.ctrlKey && !e.metaKey) {
                     // Alt+Up/Down: thread navigation
@@ -4895,6 +4965,13 @@
                     // Alt+Left/Right: hunk (modification) navigation
                     else if (e.key === 'ArrowRight') { e.preventDefault(); jumpToNextHunk(); }
                     else if (e.key === 'ArrowLeft') { e.preventDefault(); jumpToPrevHunk(); }
+                }
+                // Ctrl+G: open go-to-line widget (files view, not when typing in inputs)
+                if (currentView === 'files' && e.ctrlKey && !e.altKey && !e.metaKey && e.key === 'g') {
+                    const tag = document.activeElement?.tagName;
+                    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+                    e.preventDefault();
+                    openGoToLine();
                 }
             });
 
@@ -6190,6 +6267,61 @@
             currentHunkIndex = prevIndex;
             scrollToHunk(prevIndex);
             updateHunkNav(prevIndex);
+        }
+
+        // --- Go-to-line (Ctrl+G) ---
+
+        function openGoToLine() {
+            const widget = document.getElementById('gotoLineWidget');
+            if (!widget) return;
+            const btn = document.getElementById('gotoLineSideBtn');
+            if (btn) btn.textContent = goToLineSide === 'new' ? 'New' : 'Old';
+            widget.style.display = 'flex';
+            const input = document.getElementById('gotoLineInput');
+            if (input) { input.focus(); input.select(); }
+        }
+
+        function closeGoToLine() {
+            const widget = document.getElementById('gotoLineWidget');
+            if (widget) widget.style.display = 'none';
+        }
+
+        function toggleGoToLineSide() {
+            goToLineSide = goToLineSide === 'new' ? 'old' : 'new';
+            const btn = document.getElementById('gotoLineSideBtn');
+            if (btn) btn.textContent = goToLineSide === 'new' ? 'New' : 'Old';
+            document.getElementById('gotoLineInput')?.focus();
+        }
+
+        function goToLine(lineNum, side) {
+            if (!lineNum || lineNum < 1) return;
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+            const effectiveMode = getEffectiveDisplayMode();
+            let targetEl = null;
+
+            if (effectiveMode === 'side-by-side') {
+                const paneSelector = side === 'old' ? '.sbs-left' : '.sbs-right';
+                for (const row of diffPanel.querySelectorAll('.sbs-row')) {
+                    const numEl = row.querySelector(`${paneSelector} .diff-line-number`);
+                    if (numEl?.textContent.trim() === String(lineNum)) { targetEl = row; break; }
+                }
+            } else {
+                // Inline: each .diff-line has two .diff-line-number spans: [0]=old, [1]=new
+                for (const row of diffPanel.querySelectorAll('.diff-line')) {
+                    const spans = row.querySelectorAll('.diff-line-number');
+                    if (spans.length < 2) continue;
+                    const span = side === 'old' ? spans[0] : spans[1];
+                    if (span.textContent.trim() === String(lineNum)) { targetEl = row; break; }
+                }
+            }
+
+            if (!targetEl) return;
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.remove('goto-line-flash');
+            void targetEl.offsetWidth; // force reflow to restart animation
+            targetEl.classList.add('goto-line-flash');
+            targetEl.addEventListener('animationend', () => targetEl.classList.remove('goto-line-flash'), { once: true });
         }
 
         function updateFileTreeThreadInfo() {
@@ -9229,6 +9361,12 @@
                         <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
                         <span class="thread-nav-label" id="threadNavLabel"></span>
                         <button class="thread-nav-btn" id="threadNavNext" onclick="jumpToNextThread()" title="Next thread (Alt+Down)">&#9660;</button>
+                    </div>
+                    <div class="goto-line-widget" id="gotoLineWidget" style="display:none;">
+                        <span class="goto-line-label">Go to line</span>
+                        <button class="goto-line-side-btn" id="gotoLineSideBtn" onclick="toggleGoToLineSide()" title="Toggle old/new version">New</button>
+                        <input class="goto-line-input" id="gotoLineInput" type="number" min="1" placeholder="…">
+                        <button class="goto-line-close" onclick="closeGoToLine()" title="Close (Esc)">&#x2715;</button>
                     </div>
                     ${renameInfo}
                 </div>
