@@ -2309,6 +2309,36 @@
             display: flex;
         }
 
+        /* Folder kebab */
+        .file-tree-dir-kebab {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+            color: #605e5c;
+            line-height: 1;
+            display: none;
+            align-items: center;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .file-tree-dir-kebab:hover {
+            background: #e1dfdd;
+            color: #323130;
+        }
+
+        .file-tree-dir-kebab svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .file-tree-dir-label:hover .file-tree-dir-kebab,
+        .file-tree-dir-label .file-tree-dir-kebab.active {
+            display: flex;
+        }
+
         .file-tree-context-menu {
             display: none;
             position: absolute;
@@ -2499,6 +2529,7 @@
             font-size: 13px;
             color: #323130;
             gap: 4px;
+            position: relative;
         }
 
         .file-tree-dir-label:hover {
@@ -4001,7 +4032,23 @@
                 `</button>` +
                 `<div class="file-tree-context-menu">` +
                 `<button onclick="showFileCommentForm(event, '${escaped}')">Add comment</button>` +
+                `<button onclick="setFileThreadsCollapsed(event, '${escaped}', false)">Expand comments</button>` +
+                `<button onclick="setFileThreadsCollapsed(event, '${escaped}', true)">Collapse comments</button>` +
                 `</div>`;
+        }
+
+        function setFileThreadsCollapsed(event, filePath, collapse) {
+            event.stopPropagation();
+            document.querySelectorAll('.file-tree-context-menu.open').forEach(m => m.classList.remove('open'));
+            document.querySelectorAll('.file-tree-kebab.active').forEach(b => b.classList.remove('active'));
+
+            const fileRow = document.querySelector(`.file-tree-file[data-path="${CSS.escape(filePath)}"]`);
+            if (!fileRow) return;
+            const threadList = fileRow.nextElementSibling;
+            if (!threadList || !threadList.classList.contains('file-tree-threads')) return;
+            threadList.classList.toggle('collapsed', collapse);
+            const badge = fileRow.querySelector('.file-thread-count');
+            if (badge) badge.classList.toggle('expanded', !collapse);
         }
 
         function toggleFileContextMenu(event, filePath) {
@@ -4031,6 +4078,62 @@
                 };
                 setTimeout(() => document.addEventListener('click', closeHandler), 0);
             }
+        }
+
+        function getFolderKebabHtml(dirId) {
+            const escapedId = ADOContent.escapeJs(dirId);
+            return `<button class="file-tree-dir-kebab" onclick="toggleFolderContextMenu(event, '${escapedId}')" title="Folder actions">` +
+                `<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>` +
+                `</button>` +
+                `<div class="file-tree-context-menu">` +
+                `<button onclick="setAllFileThreadsInDir(event, '${escapedId}', false)">Expand all comments</button>` +
+                `<button onclick="setAllFileThreadsInDir(event, '${escapedId}', true)">Collapse all comments</button>` +
+                `</div>`;
+        }
+
+        function toggleFolderContextMenu(event, dirId) {
+            event.stopPropagation();
+            const btn = event.currentTarget;
+            const menu = btn.nextElementSibling;
+            if (!menu) return;
+
+            document.querySelectorAll('.file-tree-context-menu.open').forEach(m => {
+                if (m !== menu) m.classList.remove('open');
+            });
+            document.querySelectorAll('.file-tree-dir-kebab.active, .file-tree-kebab.active').forEach(b => {
+                if (b !== btn) b.classList.remove('active');
+            });
+
+            menu.classList.toggle('open');
+            btn.classList.toggle('active', menu.classList.contains('open'));
+
+            if (menu.classList.contains('open')) {
+                const closeHandler = (e) => {
+                    if (!menu.contains(e.target) && e.target !== btn) {
+                        menu.classList.remove('open');
+                        btn.classList.remove('active');
+                        document.removeEventListener('click', closeHandler);
+                    }
+                };
+                setTimeout(() => document.addEventListener('click', closeHandler), 0);
+            }
+        }
+
+        function setAllFileThreadsInDir(event, dirId, collapse) {
+            event.stopPropagation();
+            document.querySelectorAll('.file-tree-context-menu.open').forEach(m => m.classList.remove('open'));
+            document.querySelectorAll('.file-tree-dir-kebab.active, .file-tree-kebab.active').forEach(b => b.classList.remove('active'));
+
+            const dir = document.getElementById(dirId);
+            if (!dir) return;
+            dir.querySelectorAll('.file-tree-threads').forEach(threadList => {
+                threadList.classList.toggle('collapsed', collapse);
+                const fileRow = threadList.previousElementSibling;
+                if (fileRow && fileRow.classList.contains('file-tree-file')) {
+                    const badge = fileRow.querySelector('.file-thread-count');
+                    if (badge) badge.classList.toggle('expanded', !collapse);
+                }
+            });
         }
 
         function showFileCommentForm(event, filePath) {
@@ -8558,6 +8661,7 @@
                     html += `<span class="file-tree-toggle">▼</span>`;
                     html += `<span class="file-tree-dir-name">${ADOContent.escapeHtml(dir.name)}</span>`;
                     html += indicators;
+                    html += getFolderKebabHtml(dirId);
                     html += `</div>`;
                     html += `<div class="file-tree-dir-children">`;
                     html += renderNode(dir, depth + 1);
@@ -8638,6 +8742,7 @@
                 html += `<span class="file-tree-toggle">▶</span>`;
                 html += `<span class="file-tree-dir-name">${ADOContent.escapeHtml(dirName)}</span>`;
                 html += indicators;
+                html += getFolderKebabHtml(dirId);
                 html += `</div>`;
                 html += `<div class="file-tree-dir-children"></div>`;
                 html += `</div>`;
