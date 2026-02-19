@@ -37,6 +37,14 @@ body {
     padding: 0 4px;
 }
 
+/* Page title toad icon */
+.page-title-icon {
+    height: 1.6em;
+    width: 1.6em;
+    vertical-align: -0.4em;
+    margin-right: 0.25em;
+}
+
 /* Typography */
 h1 {
     color: #0078d4;
