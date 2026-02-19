@@ -6184,6 +6184,7 @@
                 const stack = avatarEl.closest('.diff-gutter-stack');
                 if (stack) updateGutterStack(stack);
             }
+            diffMinimapDraw?.();
         }
 
         function scrollToThread(threadId) {
@@ -6198,6 +6199,7 @@
                     const stack = avatarEl.closest('.diff-gutter-stack');
                     if (stack) updateGutterStack(stack);
                 }
+                diffMinimapDraw?.();
             }
             threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             // Highlight focused thread (clear previous, apply fresh)
@@ -9412,52 +9414,64 @@
             const diffContainer = scrollArea.querySelector('.diff-lines');
             if (!diffContainer) return;
 
-            // Collect line colors — skip thread rows and hunk separators
-            const lineColors = [];
+            // Collect line elements and colors — skip thread rows and hunk separators
+            const lineItems = []; // {el, color}
             for (const child of diffContainer.children) {
                 if (child.classList.contains('inline-thread') ||
                     child.classList.contains('sbs-thread-row') ||
                     child.classList.contains('diff-hunk-separator')) continue;
-                if (child.classList.contains('diff-added')) lineColors.push('#3fb950');
-                else if (child.classList.contains('diff-removed')) lineColors.push('#f85149');
+                let color = null;
+                if (child.classList.contains('diff-added')) color = '#3fb950';
+                else if (child.classList.contains('diff-removed')) color = '#f85149';
                 else if (child.classList.contains('sbs-row')) {
                     // SBS mode: diff-added/diff-removed live on the child panes
                     const removed = child.querySelector('.sbs-left.diff-removed');
                     const added = child.querySelector('.sbs-right.diff-added');
-                    if (removed && added) lineColors.push('#e3b341'); // modified — amber
-                    else if (removed) lineColors.push('#f85149');
-                    else if (added) lineColors.push('#3fb950');
-                    else lineColors.push(null);
-                } else lineColors.push(null); // unchanged — transparent
+                    if (removed && added) color = '#e3b341'; // modified — amber
+                    else if (removed) color = '#f85149';
+                    else if (added) color = '#3fb950';
+                }
+                lineItems.push({ el: child, color });
             }
 
-            if (lineColors.length === 0) return;
+            if (lineItems.length === 0) return;
 
             function draw() {
                 const h = minimapWrap.clientHeight;
                 const w = minimapWrap.clientWidth;
                 if (h === 0 || w === 0) return;
+                const totalH = scrollArea.scrollHeight;
+                if (totalH === 0) return;
                 canvas.width = w;
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, w, h);
-                const itemH = h / lineColors.length;
-                for (let i = 0; i < lineColors.length; i++) {
-                    if (!lineColors[i]) continue;
-                    ctx.fillStyle = lineColors[i];
-                    ctx.fillRect(1, Math.floor(i * itemH), w - 2, Math.max(Math.ceil(itemH), 1));
+                // Use actual DOM positions so expanded thread panels shift the minimap correctly
+                const saRect = scrollArea.getBoundingClientRect();
+                for (let i = 0; i < lineItems.length; i++) {
+                    const { el, color } = lineItems[i];
+                    if (!color) continue;
+                    const elRect = el.getBoundingClientRect();
+                    const elTop = elRect.top - saRect.top + scrollArea.scrollTop;
+                    const elH = elRect.height;
+                    ctx.fillStyle = color;
+                    ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 1));
                 }
                 // Overlay search markers
-                if (fileSearchHitLineIndices.length > 0 && lineColors.length > 0) {
+                if (fileSearchHitLineIndices.length > 0 && lineItems.length > 0) {
                     const hitSet = new Map(); // visibleIdx -> isCurrent
                     for (const {visibleIdx, markIdx} of fileSearchHitLineIndices) {
                         const isCurrent = (markIdx === fileSearchIndex);
                         if (isCurrent || !hitSet.has(visibleIdx)) hitSet.set(visibleIdx, isCurrent);
                     }
                     for (const [idx, isCurrent] of hitSet) {
-                        if (idx >= lineColors.length) continue;
+                        if (idx >= lineItems.length) continue;
+                        const el = lineItems[idx].el;
+                        const elRect = el.getBoundingClientRect();
+                        const elTop = elRect.top - saRect.top + scrollArea.scrollTop;
+                        const elH = elRect.height;
                         ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
-                        ctx.fillRect(1, Math.floor(idx * itemH), w - 2, Math.max(Math.ceil(itemH), 2));
+                        ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 2));
                     }
                 }
                 updateViewport();
