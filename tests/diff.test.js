@@ -105,6 +105,53 @@ describe('HistogramDiff', () => {
         });
     });
 
+    describe('moved line', () => {
+        // When a single line is moved N positions down, the expected diff is:
+        //   - stable lines before/after the move: unchanged
+        //   - the moved line: removed from old position, added at new position
+
+        it('handles a moved line correctly when region is small (LCS path)', () => {
+            // After 'alpha' there are 4+4=8 lines total ≤ 10 → _simpleLCS is used, which is correct
+            const old = 'alpha\nMOVED\nbeta\ngamma\ndelta';
+            const neu = 'alpha\nbeta\ngamma\ndelta\nMOVED';
+            const result = HistogramDiff.diff(old, neu);
+
+            const unchanged = result.filter(e => e.type === 'unchanged').map(e => e.content);
+            const removed   = result.filter(e => e.type === 'removed').map(e => e.content);
+            const added     = result.filter(e => e.type === 'added').map(e => e.content);
+
+            expect(unchanged).toContain('alpha');
+            expect(unchanged).toContain('beta');
+            expect(unchanged).toContain('gamma');
+            expect(unchanged).toContain('delta');
+            expect(removed).toEqual(['MOVED']);
+            expect(added).toEqual(['MOVED']);
+        });
+
+        it('handles a moved line correctly when region is large (histogram path)', () => {
+            // After 'alpha' there are 10+10=20 lines total > 10 → _findAnchor is used.
+            // Bug: the histogram picks MOVED as the anchor (it's unique in both, score=1,
+            // and encountered first in Map insertion order). This causes the 9 stable
+            // lines to show as added before the anchor and removed after it, rather than
+            // showing MOVED as removed+added with stable lines unchanged.
+            const stable = 'beta\ngamma\ndelta\nepsilon\nzeta\neta\ntheta\niota\nkappa';
+            const old = `alpha\nMOVED\n${stable}`;
+            const neu = `alpha\n${stable}\nMOVED`;
+            const result = HistogramDiff.diff(old, neu);
+
+            const unchanged = result.filter(e => e.type === 'unchanged').map(e => e.content);
+            const removed   = result.filter(e => e.type === 'removed').map(e => e.content);
+            const added     = result.filter(e => e.type === 'added').map(e => e.content);
+
+            expect(unchanged).toContain('alpha');
+            expect(unchanged).toContain('beta');
+            expect(unchanged).toContain('gamma');
+            expect(unchanged).toContain('kappa');
+            expect(removed).toEqual(['MOVED']);
+            expect(added).toEqual(['MOVED']);
+        });
+    });
+
     describe('stats', () => {
         it('counts added and removed lines', () => {
             const result = HistogramDiff.stats('a\nb\nc', 'a\nx\ny\nc');

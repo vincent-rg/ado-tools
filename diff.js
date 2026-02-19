@@ -127,7 +127,15 @@ const HistogramDiff = {
             entry.indices.push(j);
         }
 
-        // Find line with lowest occurrence in both files
+        const oldLen = oldEnd - oldStart;
+        const newLen = newEnd - newStart;
+
+        // Find line with lowest occurrence in both files.
+        // Among equal-score candidates, prefer the anchor whose relative position
+        // in the old region is closest to its relative position in the new region.
+        // This avoids picking a moved line as anchor (it would have a large positional
+        // delta), which would incorrectly mark all stable lines as added/removed.
+        let bestPosDelta = Infinity;
         for (const [line, oldEntry] of oldHist) {
             // Skip empty or whitespace-only lines as anchors
             if (!line.trim()) continue;
@@ -138,18 +146,18 @@ const HistogramDiff = {
             // Score = product of occurrences (lower is better, 1 = unique in both)
             const score = oldEntry.count * newEntry.count;
 
-            if (score < bestScore) {
-                bestScore = score;
-                // Use first occurrence in each
-                bestAnchor = {
-                    line,
-                    oldIndex: oldEntry.indices[0],
-                    newIndex: newEntry.indices[0]
-                };
+            if (score <= bestScore) {
+                const oldIndex = oldEntry.indices[0];
+                const newIndex = newEntry.indices[0];
+                const posDelta = Math.abs(
+                    (oldIndex - oldStart) / oldLen - (newIndex - newStart) / newLen
+                );
+                if (score < bestScore || posDelta < bestPosDelta) {
+                    bestScore = score;
+                    bestPosDelta = posDelta;
+                    bestAnchor = { line, oldIndex, newIndex };
+                }
             }
-
-            // Perfect anchor found (unique in both)
-            if (score === 1) break;
         }
 
         return bestAnchor;
