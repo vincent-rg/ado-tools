@@ -1212,7 +1212,7 @@
             display: flex;
             min-width: 0;
             flex-basis: 50%;
-            overflow-x: hidden;
+            overflow-x: clip;
             overflow-y: clip;
         }
         .sbs-left {
@@ -3577,6 +3577,7 @@
         let fileSearchWholeWord = false;
         let fileSearchHitLineIndices = []; // [{visibleIdx, markIdx}]
         let diffMinimapDraw = null;   // reference to current minimap draw fn
+        let sbsScrollSync = null;     // { applyScroll, scrollRange, paneClientWidth, getCurrentOffset } set by setupSbsScrollSync
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -6672,7 +6673,24 @@
 
         function scrollToCurrentSearchResult() {
             if (fileSearchIndex < 0 || fileSearchIndex >= fileSearchResults.length) return;
-            fileSearchResults[fileSearchIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const mark = fileSearchResults[fileSearchIndex];
+            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // In SBS mode, horizontal scroll is handled via custom scrollbar (transforms),
+            // not native scrollLeft — scrollIntoView can't reach it, so we apply it manually.
+            if (sbsScrollSync) {
+                const { applyScroll, scrollRange, paneClientWidth, getCurrentOffset } = sbsScrollSync;
+                const pane = mark.closest('.sbs-left, .sbs-right');
+                if (pane) {
+                    const markRect = mark.getBoundingClientRect();
+                    const paneRect = pane.getBoundingClientRect();
+                    // Mark's left position in untransformed content coordinates
+                    const markLeft = markRect.left - paneRect.left + getCurrentOffset();
+                    // Scroll so the mark is centered horizontally in the pane
+                    const desiredOffset = markLeft - paneClientWidth / 2 + markRect.width / 2;
+                    const clampedOffset = Math.max(0, Math.min(scrollRange, desiredOffset));
+                    applyScroll(scrollRange > 0 ? clampedOffset / scrollRange : 0);
+                }
+            }
         }
 
         // --- Go-to-line (Ctrl+G) ---
@@ -9674,6 +9692,7 @@
         }
 
         function setupSbsScrollSync(diffPanel) {
+            sbsScrollSync = null;
             const body = diffPanel.querySelector('.file-diff-body');
             if (!body) return;
             const panes = body.querySelectorAll('.sbs-left, .sbs-right');
@@ -9715,6 +9734,8 @@
                     el.style.transform = `translateX(-${currentOffset}px)`;
                 }
             }
+
+            sbsScrollSync = { applyScroll, scrollRange, paneClientWidth, getCurrentOffset: () => currentOffset };
 
             // Drag thumb
             let dragging = false, dragStartX = 0, dragStartLeft = 0;
