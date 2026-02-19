@@ -9454,16 +9454,27 @@
             if (existing) existing.remove();
 
             const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+            const rangeRect = range.getBoundingClientRect();
             const diffBody = document.querySelector('.file-diff-body');
             if (!diffBody) return;
             const bodyRect = diffBody.getBoundingClientRect();
 
+            // In SBS flex layout, range.getBoundingClientRect().left can be wrong
+            // (returns left edge of the row instead of the pane). Use the pane's
+            // own bounding rect for left positioning.
+            let leftPos = rangeRect.left - bodyRect.left;
+            if (parsed.endRow) {
+                const paneEl = parsed.endRow.querySelector(
+                    parsed.side === 'right' ? '.sbs-right' : '.sbs-left'
+                );
+                if (paneEl) leftPos = paneEl.getBoundingClientRect().left - bodyRect.left;
+            }
+
             const btn = document.createElement('button');
             btn.className = 'selection-comment-btn';
             btn.innerHTML = COMMENT_BUBBLE_SVG + ' Comment';
-            btn.style.top = (rect.bottom - bodyRect.top + 4) + 'px';
-            btn.style.left = (rect.left - bodyRect.left) + 'px';
+            btn.style.top = (rangeRect.bottom - bodyRect.top + 4) + 'px';
+            btn.style.left = leftPos + 'px';
 
             btn.addEventListener('mousedown', (e) => {
                 e.preventDefault();
