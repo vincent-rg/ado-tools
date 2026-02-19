@@ -924,6 +924,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
+            z-index: 2;         /* Above translateX-scrolled diff-content (z-index: 0) */
+            background: inherit; /* Mask scrolled content bleeding through */
         }
         .diff-gutter-avatar {
             position: relative;
