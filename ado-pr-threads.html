@@ -2722,6 +2722,49 @@
         }
         .goto-line-flash { animation: goto-line-flash 1.2s ease-out; }
 
+        /* File search widget */
+        .file-search-widget {
+            display: flex; align-items: center; gap: 4px;
+            background: #fff; border: 1px solid #0078d4;
+            border-radius: 4px; padding: 3px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-shrink: 0; margin-left: 8px;
+        }
+        .file-search-input {
+            width: 180px; border: none; outline: none;
+            font-size: 12px; padding: 1px 4px; background: transparent;
+        }
+        .file-search-option-btn {
+            background: none; border: 1px solid transparent;
+            border-radius: 3px; padding: 1px 5px; cursor: pointer;
+            font-size: 11px; color: #605e5c; line-height: 1.4;
+        }
+        .file-search-option-btn:hover { background: #f3f2f1; }
+        .file-search-option-btn.active { background: #e1dfdd; border-color: #c8c6c4; color: #0078d4; }
+        .file-search-count {
+            font-size: 11px; color: #605e5c; white-space: nowrap; min-width: 48px; text-align: center;
+        }
+        .file-search-nav-btn {
+            background: none; border: none; cursor: pointer; padding: 2px 5px;
+            border-radius: 3px; font-size: 13px; color: #605e5c; line-height: 1;
+        }
+        .file-search-nav-btn:hover { background: #f3f2f1; }
+        .file-search-nav-btn:disabled { opacity: 0.4; cursor: default; }
+        .file-search-close {
+            background: none; border: none; cursor: pointer;
+            font-size: 14px; color: #8a8886; padding: 0 2px; line-height: 1;
+        }
+        .file-search-close:hover { color: #323130; }
+        /* Search result highlights in diff content */
+        mark.search-highlight {
+            background: rgba(255, 152, 0, 0.4);
+            color: inherit; border-radius: 2px; padding: 0;
+        }
+        mark.search-highlight.current {
+            background: rgba(255, 100, 0, 0.65);
+            outline: 1px solid rgba(255, 80, 0, 0.8);
+        }
+
         .file-diff-rename-info {
             font-size: 12px;
             color: #8250df;
@@ -3467,6 +3510,14 @@
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
         let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
         let goToLineSide = 'new'; // 'old' or 'new'; which version's line numbers to navigate
+        let fileSearchActive = false;
+        let fileSearchQuery = '';
+        let fileSearchResults = [];   // <mark> elements
+        let fileSearchIndex = -1;
+        let fileSearchCaseSensitive = false;
+        let fileSearchWholeWord = false;
+        let fileSearchHitLineIndices = []; // [{visibleIdx, markIdx}]
+        let diffMinimapDraw = null;   // reference to current minimap draw fn
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -4945,6 +4996,16 @@
                 if (e.key === 'Escape' && document.getElementById('prActionModal')?.classList.contains('show')) {
                     closePRActionModal();
                 }
+                // File search input: handle Enter/Escape
+                if (e.target.id === 'fileSearchInput') {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        navigateFileSearch(e.shiftKey ? -1 : 1);
+                    } else if (e.key === 'Escape') {
+                        closeFileSearch();
+                    }
+                    return;
+                }
                 // Go-to-line input: handle Enter/Escape, consume all other keys
                 if (e.target.id === 'gotoLineInput') {
                     if (e.key === 'Enter') {
@@ -4965,6 +5026,11 @@
                     // Alt+Left/Right: hunk (modification) navigation
                     else if (e.key === 'ArrowRight') { e.preventDefault(); jumpToNextHunk(); }
                     else if (e.key === 'ArrowLeft') { e.preventDefault(); jumpToPrevHunk(); }
+                    // Alt+C / Alt+W: search option toggles (when search widget is open)
+                    else if (document.getElementById('fileSearchWidget')?.style.display !== 'none') {
+                        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); toggleFileSearchCase(); }
+                        else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); toggleFileSearchWord(); }
+                    }
                 }
                 // Ctrl+G: open go-to-line widget (files view, not when typing in inputs)
                 if (currentView === 'files' && e.ctrlKey && !e.altKey && !e.metaKey && e.key === 'g') {
@@ -4972,6 +5038,13 @@
                     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
                     e.preventDefault();
                     openGoToLine();
+                }
+                // Ctrl+F: open file search (files view, not when typing in inputs)
+                if (currentView === 'files' && e.ctrlKey && !e.altKey && !e.metaKey && e.key === 'f') {
+                    const tag = document.activeElement?.tagName;
+                    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+                    e.preventDefault();
+                    openFileSearch();
                 }
             });
 
@@ -6267,6 +6340,178 @@
             currentHunkIndex = prevIndex;
             scrollToHunk(prevIndex);
             updateHunkNav(prevIndex);
+        }
+
+        // --- File search (Ctrl+F) ---
+
+        let _fileSearchDebounceTimer = null;
+
+        function fileSearchInputChanged() {
+            clearTimeout(_fileSearchDebounceTimer);
+            _fileSearchDebounceTimer = setTimeout(runFileSearch, 150);
+        }
+
+        function openFileSearch() {
+            fileSearchActive = true;
+            const widget = document.getElementById('fileSearchWidget');
+            if (!widget) return;
+            widget.style.display = 'flex';
+            // Restore option button states
+            document.getElementById('fileSearchCaseBtn')?.classList.toggle('active', fileSearchCaseSensitive);
+            document.getElementById('fileSearchWordBtn')?.classList.toggle('active', fileSearchWholeWord);
+            const input = document.getElementById('fileSearchInput');
+            if (!input) return;
+            // Pre-fill with selection if no existing query
+            if (!fileSearchQuery) {
+                const sel = window.getSelection()?.toString().trim();
+                if (sel && !sel.includes('\n')) fileSearchQuery = sel;
+            }
+            input.value = fileSearchQuery;
+            input.focus();
+            input.select();
+            if (fileSearchQuery) runFileSearch();
+        }
+
+        function closeFileSearch() {
+            fileSearchActive = false;
+            const widget = document.getElementById('fileSearchWidget');
+            if (widget) widget.style.display = 'none';
+            clearFileSearchHighlights();
+            fileSearchResults = [];
+            fileSearchIndex = -1;
+            fileSearchQuery = '';
+            fileSearchHitLineIndices = [];
+            diffMinimapDraw?.();
+        }
+
+        function toggleFileSearchCase() {
+            fileSearchCaseSensitive = !fileSearchCaseSensitive;
+            document.getElementById('fileSearchCaseBtn')?.classList.toggle('active', fileSearchCaseSensitive);
+            runFileSearch();
+        }
+
+        function toggleFileSearchWord() {
+            fileSearchWholeWord = !fileSearchWholeWord;
+            document.getElementById('fileSearchWordBtn')?.classList.toggle('active', fileSearchWholeWord);
+            runFileSearch();
+        }
+
+        function clearFileSearchHighlights() {
+            for (const mark of document.querySelectorAll('mark.search-highlight')) {
+                const parent = mark.parentNode;
+                if (!parent) continue;
+                parent.replaceChild(document.createTextNode(mark.textContent), mark);
+                parent.normalize();
+            }
+        }
+
+        function runFileSearch() {
+            clearFileSearchHighlights();
+            fileSearchResults = [];
+            fileSearchHitLineIndices = [];
+
+            const input = document.getElementById('fileSearchInput');
+            fileSearchQuery = input?.value || '';
+
+            if (!fileSearchQuery) {
+                updateFileSearchCount();
+                diffMinimapDraw?.();
+                return;
+            }
+
+            let flags = fileSearchCaseSensitive ? 'g' : 'gi';
+            let pattern = fileSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (fileSearchWholeWord) pattern = `\\b${pattern}\\b`;
+            let regex;
+            try { regex = new RegExp(pattern, flags); } catch { updateFileSearchCount(); return; }
+
+            const diffPanel = document.getElementById('fileDiffPanel');
+            if (!diffPanel) return;
+            const diffContainer = diffPanel.querySelector('.diff-lines');
+            if (!diffContainer) { updateFileSearchCount(); return; }
+
+            // Build visible row index map (mirrors minimap logic)
+            const visibleRows = [...diffContainer.children].filter(c =>
+                !c.classList.contains('inline-thread') &&
+                !c.classList.contains('sbs-thread-row') &&
+                !c.classList.contains('diff-hunk-separator')
+            );
+
+            for (const cell of diffContainer.querySelectorAll('.diff-content')) {
+                const rowEl = cell.closest('.diff-line, .sbs-row');
+                const visibleIdx = rowEl ? visibleRows.indexOf(rowEl) : -1;
+
+                const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+                const textNodes = [];
+                let node;
+                while ((node = walker.nextNode())) textNodes.push(node);
+
+                for (const textNode of textNodes) {
+                    const text = textNode.textContent;
+                    const parts = [];
+                    let lastIndex = 0;
+                    regex.lastIndex = 0;
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                        if (match.index > lastIndex)
+                            parts.push(document.createTextNode(text.slice(lastIndex, match.index)));
+                        const mark = document.createElement('mark');
+                        mark.className = 'search-highlight';
+                        mark.textContent = match[0];
+                        parts.push(mark);
+                        fileSearchResults.push(mark);
+                        if (visibleIdx >= 0)
+                            fileSearchHitLineIndices.push({ visibleIdx, markIdx: fileSearchResults.length - 1 });
+                        lastIndex = match.index + match[0].length;
+                        if (match[0].length === 0) { regex.lastIndex++; break; }
+                    }
+                    if (parts.length > 0) {
+                        if (lastIndex < text.length)
+                            parts.push(document.createTextNode(text.slice(lastIndex)));
+                        const parent = textNode.parentNode;
+                        for (const part of parts) parent.insertBefore(part, textNode);
+                        parent.removeChild(textNode);
+                    }
+                }
+            }
+
+            fileSearchIndex = fileSearchResults.length > 0 ? 0 : -1;
+            updateFileSearchHighlightCurrent();
+            updateFileSearchCount();
+            scrollToCurrentSearchResult();
+            diffMinimapDraw?.();
+        }
+
+        function updateFileSearchHighlightCurrent() {
+            for (let i = 0; i < fileSearchResults.length; i++)
+                fileSearchResults[i].classList.toggle('current', i === fileSearchIndex);
+        }
+
+        function updateFileSearchCount() {
+            const el = document.getElementById('fileSearchCount');
+            if (!el) return;
+            const prevBtn = document.getElementById('fileSearchPrevBtn');
+            const nextBtn = document.getElementById('fileSearchNextBtn');
+            const hasResults = fileSearchResults.length > 0;
+            if (!fileSearchQuery) el.textContent = '';
+            else if (!hasResults) el.textContent = 'No results';
+            else el.textContent = `${fileSearchIndex + 1} / ${fileSearchResults.length}`;
+            if (prevBtn) prevBtn.disabled = !hasResults;
+            if (nextBtn) nextBtn.disabled = !hasResults;
+        }
+
+        function navigateFileSearch(delta) {
+            if (fileSearchResults.length === 0) return;
+            fileSearchIndex = (fileSearchIndex + delta + fileSearchResults.length) % fileSearchResults.length;
+            updateFileSearchHighlightCurrent();
+            updateFileSearchCount();
+            scrollToCurrentSearchResult();
+            diffMinimapDraw?.();
+        }
+
+        function scrollToCurrentSearchResult() {
+            if (fileSearchIndex < 0 || fileSearchIndex >= fileSearchResults.length) return;
+            fileSearchResults[fileSearchIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         // --- Go-to-line (Ctrl+G) ---
@@ -8966,6 +9211,7 @@
                     diffPanel.setAttribute('data-render-mode', 'inline');
                     injectCommentBubbles(filePath);
                     setupDiffMinimap(diffPanel);
+                    if (fileSearchActive) openFileSearch();
                     return;
                 }
 
@@ -9156,6 +9402,7 @@
         }
 
         function setupDiffMinimap(diffPanel) {
+            diffMinimapDraw = null;
             const scrollArea = diffPanel.querySelector('.diff-scroll-area');
             const minimapWrap = diffPanel.querySelector('.diff-minimap-wrap');
             if (!scrollArea || !minimapWrap) return;
@@ -9200,6 +9447,19 @@
                     ctx.fillStyle = lineColors[i];
                     ctx.fillRect(1, Math.floor(i * itemH), w - 2, Math.max(Math.ceil(itemH), 1));
                 }
+                // Overlay search markers
+                if (fileSearchHitLineIndices.length > 0 && lineColors.length > 0) {
+                    const hitSet = new Map(); // visibleIdx -> isCurrent
+                    for (const {visibleIdx, markIdx} of fileSearchHitLineIndices) {
+                        const isCurrent = (markIdx === fileSearchIndex);
+                        if (isCurrent || !hitSet.has(visibleIdx)) hitSet.set(visibleIdx, isCurrent);
+                    }
+                    for (const [idx, isCurrent] of hitSet) {
+                        if (idx >= lineColors.length) continue;
+                        ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
+                        ctx.fillRect(1, Math.floor(idx * itemH), w - 2, Math.max(Math.ceil(itemH), 2));
+                    }
+                }
                 updateViewport();
             }
 
@@ -9235,6 +9495,7 @@
             const ro = new ResizeObserver(() => draw());
             ro.observe(minimapWrap);
             requestAnimationFrame(draw);
+            diffMinimapDraw = draw;
         }
 
         function setupSbsScrollSync(diffPanel) {
@@ -9367,6 +9628,21 @@
                         <button class="goto-line-side-btn" id="gotoLineSideBtn" onclick="toggleGoToLineSide()" title="Toggle old/new version">New</button>
                         <input class="goto-line-input" id="gotoLineInput" type="number" min="1" placeholder="…">
                         <button class="goto-line-close" onclick="closeGoToLine()" title="Close (Esc)">&#x2715;</button>
+                    </div>
+                    <div class="file-search-widget" id="fileSearchWidget" style="display:none;">
+                        <input class="file-search-input" id="fileSearchInput" type="text"
+                               placeholder="Search in diff…" autocomplete="off" spellcheck="false"
+                               oninput="fileSearchInputChanged()">
+                        <button class="file-search-option-btn" id="fileSearchCaseBtn"
+                                onclick="toggleFileSearchCase()" title="Match case (Alt+C)">Aa</button>
+                        <button class="file-search-option-btn" id="fileSearchWordBtn"
+                                onclick="toggleFileSearchWord()" title="Whole word (Alt+W)">W</button>
+                        <span class="file-search-count" id="fileSearchCount"></span>
+                        <button class="file-search-nav-btn" id="fileSearchPrevBtn"
+                                onclick="navigateFileSearch(-1)" title="Previous (Shift+Enter)">↑</button>
+                        <button class="file-search-nav-btn" id="fileSearchNextBtn"
+                                onclick="navigateFileSearch(1)" title="Next (Enter)">↓</button>
+                        <button class="file-search-close" onclick="closeFileSearch()" title="Close (Escape)">&#x2715;</button>
                     </div>
                     ${renameInfo}
                 </div>
@@ -9516,6 +9792,7 @@
             }
 
             setupDiffMinimap(diffPanel);
+            if (fileSearchActive) openFileSearch();
         }
 
         // File tree panel resize functionality
