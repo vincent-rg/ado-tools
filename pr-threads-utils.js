@@ -164,7 +164,6 @@ const PRThreadsUtils = {
         const { oldToNew, newToOld } = renameMaps;
 
         for (const thread of allThreads) {
-            if (thread.isDeleted) continue;
             const fp = thread.threadContext?.filePath;
             if (!fp) continue;
             const hasRealComment = thread.comments?.some(c => c.commentType !== 'system');
@@ -194,6 +193,8 @@ const PRThreadsUtils = {
 
         for (const fp of threadsByFilePath.keys()) {
             if (changedFilePaths.has(fp)) continue;
+            // Only mark as commented if there's at least one non-deleted thread
+            if (!threadsByFilePath.get(fp).some(t => !t.isDeleted)) continue;
             const renamedTo = oldToNew.get(fp);
             const renamedFrom = newToOld.get(fp);
             if ((renamedTo && changedFilePaths.has(renamedTo)) || (renamedFrom && changedFilePaths.has(renamedFrom))) continue;

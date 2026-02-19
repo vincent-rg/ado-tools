@@ -514,10 +514,17 @@ describe('PRThreadsUtils', () => {
             expect(result.commentedFilePaths.has('/src/readme.md')).toBe(true);
         });
 
-        it('skips deleted threads', () => {
+        it('includes deleted threads in threadsByFilePath (filter handled by filteredThreadIds)', () => {
             const thread = makeThread('/src/a.js', { isDeleted: true });
             const result = PRThreadsUtils.buildThreadsByFilePath([thread], [], emptyMaps);
-            expect(result.threadsByFilePath.size).toBe(0);
+            expect(result.threadsByFilePath.size).toBe(1);
+            expect(result.threadsByFilePath.get('/src/a.js')).toHaveLength(1);
+        });
+
+        it('excludes deleted-only files from commentedFilePaths', () => {
+            const thread = makeThread('/src/a.js', { isDeleted: true });
+            const result = PRThreadsUtils.buildThreadsByFilePath([thread], [], emptyMaps);
+            expect(result.commentedFilePaths.has('/src/a.js')).toBe(false);
         });
 
         it('skips threads without filePath', () => {

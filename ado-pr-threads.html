@@ -8738,7 +8738,6 @@
 
                     // Gather threads for this file (applying active overview filters)
                     const fileThreads = getVisibleThreadsForFile(filePath).filter(thread => {
-                        if (thread.isDeleted) return false;
                         if (!thread.threadContext) return false;
                         return thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
                     }).sort((a, b) => {
@@ -9128,7 +9127,6 @@
 
             // Gather threads for this file (applying active overview filters), sorted by start line
             const fileThreads = getVisibleThreadsForFile(filePath).filter(thread => {
-                if (thread.isDeleted) return false;
                 if (!thread.threadContext) return false;
                 const hasRealComment = thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
                 return hasRealComment;
