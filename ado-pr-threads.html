@@ -2696,6 +2696,34 @@
             white-space: nowrap;
         }
 
+        .thread-collapse-all-bar {
+            display: flex;
+            flex-shrink: 0;
+        }
+        .thread-collapse-all-bar .thread-collapse-all-btn:first-child {
+            border-radius: 3px 0 0 3px;
+        }
+        .thread-collapse-all-bar .thread-collapse-all-btn:last-child {
+            border-radius: 0 3px 3px 0;
+            border-left: none;
+        }
+        .thread-collapse-all-btn {
+            background: none;
+            border: 1px solid #d1d5db;
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 2px 7px;
+            font-size: 11px;
+            color: #605e5c;
+            line-height: 18px;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .thread-collapse-all-btn:hover {
+            background: #f3f2f1;
+            color: #323130;
+        }
+
         /* Go-to-line widget */
         .goto-line-widget {
             display: flex;
@@ -6290,6 +6318,31 @@
             diffMinimapDraw?.();
         }
 
+        function setAllInlineThreadsCollapsed(collapse) {
+            document.querySelectorAll('.inline-thread').forEach(threadEl => {
+                const threadId = parseInt(threadEl.getAttribute('data-thread-id'));
+                const isCollapsed = threadEl.classList.contains('collapsed');
+                if (collapse && !isCollapsed) {
+                    threadEl.classList.add('collapsed');
+                    const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
+                    if (avatarEl) {
+                        avatarEl.style.display = '';
+                        const stack = avatarEl.closest('.diff-gutter-stack');
+                        if (stack) updateGutterStack(stack);
+                    }
+                } else if (!collapse && isCollapsed) {
+                    threadEl.classList.remove('collapsed');
+                    const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
+                    if (avatarEl) {
+                        avatarEl.style.display = 'none';
+                        const stack = avatarEl.closest('.diff-gutter-stack');
+                        if (stack) updateGutterStack(stack);
+                    }
+                }
+            });
+            diffMinimapDraw?.();
+        }
+
         function scrollToThread(threadId) {
             const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
             if (!threadEl) return;
@@ -6363,12 +6416,15 @@
         function updateThreadNav(jumpedToId) {
             currentFileThreadIds = getSortedFileThreadIds();
             const nav = document.getElementById('threadNav');
+            const collapseBar = document.getElementById('threadCollapseAllBar');
             if (!nav) return;
             if (currentFileThreadIds.length === 0) {
                 nav.style.display = 'none';
+                if (collapseBar) collapseBar.style.display = 'none';
                 return;
             }
             nav.style.display = 'flex';
+            if (collapseBar) collapseBar.style.display = '';
             if (jumpedToId !== undefined) {
                 currentThreadNavIndex = currentFileThreadIds.indexOf(jumpedToId);
             }
@@ -9741,6 +9797,10 @@
                         <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
                         <span class="thread-nav-label" id="threadNavLabel"></span>
                         <button class="thread-nav-btn" id="threadNavNext" onclick="jumpToNextThread()" title="Next thread (Alt+Down)">&#9660;</button>
+                    </div>
+                    <div class="thread-collapse-all-bar" id="threadCollapseAllBar" style="display:none;">
+                        <button class="thread-collapse-all-btn" onclick="setAllInlineThreadsCollapsed(true)" title="Collapse all threads">Collapse all</button>
+                        <button class="thread-collapse-all-btn" onclick="setAllInlineThreadsCollapsed(false)" title="Expand all threads">Expand all</button>
                     </div>
                     <div class="goto-line-widget" id="gotoLineWidget" style="display:none;">
                         <span class="goto-line-label">Go to line</span>
