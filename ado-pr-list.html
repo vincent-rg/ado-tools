@@ -94,6 +94,27 @@
             transition: width 0.2s ease;
         }
 
+        /* PR load progress bar */
+        .load-progress {
+            text-align: center;
+            padding: 40px;
+            color: #605e5c;
+        }
+
+        .load-progress-inner {
+            display: inline-block;
+            width: 320px;
+            text-align: left;
+        }
+
+        .load-progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #605e5c;
+            margin-bottom: 6px;
+        }
+
         /* Bulk action buttons */
         .bulk-actions {
             display: flex;
@@ -1894,21 +1915,45 @@
                 return;
             }
 
-            ADOUI.showLoading('results', `Loading Pull Requests from ${reposToLoad.length} new repositories...`);
+            const totalRepos = reposToLoad.length;
+            let completedRepos = 0;
+
+            function showLoadProgress(repoName) {
+                completedRepos++;
+                const pct = Math.round(completedRepos / totalRepos * 100);
+                const textEl = document.getElementById('loadProgressText');
+                const countEl = document.getElementById('loadProgressCount');
+                const barEl = document.getElementById('loadProgressBar');
+                if (textEl) textEl.textContent = repoName;
+                if (countEl) countEl.textContent = `${completedRepos} / ${totalRepos}`;
+                if (barEl) barEl.style.width = `${pct}%`;
+            }
+
+            document.getElementById('results').innerHTML = `
+                <div class="load-progress">
+                    <div class="load-progress-inner">
+                        <div class="load-progress-label">
+                            <span id="loadProgressText">Loading Pull Requests...</span>
+                            <span id="loadProgressCount">0 / ${totalRepos}</span>
+                        </div>
+                        <div class="filter-progress-track">
+                            <div id="loadProgressBar" class="filter-progress-bar"></div>
+                        </div>
+                    </div>
+                </div>`;
 
             try {
                 // Load PRs from new repos only
                 const prPromises = reposToLoad.map(repo =>
                     ADOAPI.getPRs(config, repo.projectName, repo.name, 'all')
-                        .then(data => ({
-                            repo: repo,
-                            prs: data.value || []
-                        }))
-                        .catch(error => ({
-                            repo: repo,
-                            prs: [],
-                            error: error.message
-                        }))
+                        .then(data => {
+                            showLoadProgress(repo.name);
+                            return { repo, prs: data.value || [] };
+                        })
+                        .catch(error => {
+                            showLoadProgress(repo.name);
+                            return { repo, prs: [], error: error.message };
+                        })
                 );
 
                 const prResults = await Promise.all(prPromises);
