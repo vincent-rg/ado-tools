@@ -1192,6 +1192,15 @@ const ADOContent = {
             return createPlaceholder(html);
         });
 
+        // 7b. Auto-link bare URLs (https?://) not already converted to placeholders
+        result = result.replace(/(https?:\/\/[^\s〔〕]+)/g, (match, url) => {
+            // Strip trailing sentence punctuation unlikely to be part of the URL
+            const stripped = url.replace(/[.,!?;:'"]+$/, '');
+            const rest = url.slice(stripped.length);
+            const html = `<a href="${stripped}" target="_blank" rel="noopener noreferrer">${stripped}</a>`;
+            return createPlaceholder(html) + rest;
+        });
+
         // 8. Restore placeholders
         result = restorePlaceholders(result);
 

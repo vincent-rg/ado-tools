@@ -61,6 +61,29 @@ describe('ADOContent', () => {
             expect(result).toContain('>text</a>');
         });
 
+        it('auto-links bare http URLs', () => {
+            const result = ADOContent.parseMarkdownLinks('see http://www.foo.com for details');
+            expect(result).toContain('href="http://www.foo.com"');
+            expect(result).toContain('>http://www.foo.com</a>');
+        });
+
+        it('auto-links bare https URLs', () => {
+            const result = ADOContent.parseMarkdownLinks('https://example.com/path?a=1');
+            expect(result).toContain('href="https://example.com/path?a=1"');
+        });
+
+        it('auto-link strips trailing sentence punctuation', () => {
+            const result = ADOContent.parseMarkdownLinks('see http://foo.com.');
+            expect(result).toContain('href="http://foo.com"');
+            expect(result).not.toContain('href="http://foo.com."');
+        });
+
+        it('does not double-link markdown links', () => {
+            const result = ADOContent.parseMarkdownLinks('[text](http://example.com)');
+            const count = (result.match(/<a /g) || []).length;
+            expect(count).toBe(1);
+        });
+
         it('parses headers', () => {
             const result = ADOContent.parseMarkdownLinks('## Title\n');
             expect(result).toContain('<h2');
