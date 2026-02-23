@@ -265,6 +265,20 @@ describe('PRThreadsUtils', () => {
             expect(result[1].type).toBe('policy');
         });
 
+        it('skips blocking "Require a merge strategy" policies', () => {
+            const result = PRThreadsUtils.getCompletionBlockers(
+                {
+                    policies: [{
+                        configuration: { isBlocking: true, type: { displayName: 'Require a merge strategy' }, settings: {} },
+                        status: 'rejected'
+                    }]
+                },
+                { mergeStatus: 'succeeded' },
+                deps
+            );
+            expect(result).toEqual([]);
+        });
+
         it('handles null checksData gracefully', () => {
             const result = PRThreadsUtils.getCompletionBlockers(null, { mergeStatus: 'succeeded' }, deps);
             expect(result).toEqual([]);

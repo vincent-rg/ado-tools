@@ -7272,6 +7272,9 @@
                     throw new Error('Cannot determine source commit for completion. The PR may need to be re-queued for merge.');
                 }
 
+                // Pre-set completionOptions on the PR to satisfy "Require a merge strategy" policy
+                await ADOAPI.setCompletionOptions(currentConfig, currentPRId, completionOptions);
+
                 const updatedPR = await ADOAPI.completePR(
                     currentConfig,
                     currentPRId,

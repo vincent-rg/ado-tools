@@ -679,6 +679,29 @@ const ADOAPI = {
     },
 
     /**
+     * Set completion options on a PR without triggering auto-complete.
+     * Satisfies the "Require a merge strategy" policy before completing.
+     * @param {object} config - ADO configuration
+     * @param {number} prId - Pull request ID
+     * @param {object} completionOptions - { mergeStrategy, deleteSourceBranch, mergeCommitMessage }
+     */
+    async setCompletionOptions(config, prId, completionOptions) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}?api-version=6.0`;
+
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'PATCH',
+            body: JSON.stringify({ completionOptions })
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to set completion options: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
      * Remove auto-complete from a PR
      * @param {object} config - ADO configuration
      * @param {number} prId - Pull request ID

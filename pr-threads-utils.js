@@ -97,6 +97,10 @@ const PRThreadsUtils = {
                 const isBlocking = p.configuration?.isBlocking;
                 const status = p.status;
 
+                // Skip "Require a merge strategy" — our completion flow always sets one
+                const typeName = (p.configuration?.type?.displayName || '').toLowerCase();
+                if (typeName.includes('merge strategy')) return;
+
                 if (isBlocking && status !== 'approved') {
                     const { label } = formatPolicy(p);
                     blockers.push({
