@@ -820,6 +820,18 @@ const ADOAPI = {
         return;
     },
 
+    async likeComment(config, prId, threadId, commentId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}/comments/${commentId}/likes?api-version=5.1-preview`;
+        const response = await this.fetchWithAuth(url, config.pat, { method: 'POST' });
+        if (!response.ok) throw new Error(`Failed to like comment: ${response.status}`);
+    },
+
+    async unlikeComment(config, prId, threadId, commentId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/threads/${threadId}/comments/${commentId}/likes?api-version=5.1-preview`;
+        const response = await this.fetchWithAuth(url, config.pat, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`Failed to unlike comment: ${response.status}`);
+    },
+
     /**
      * Add or update a reviewer on a PR
      * @param {object} config - ADO configuration

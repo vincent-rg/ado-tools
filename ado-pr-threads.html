@@ -508,6 +508,33 @@
             color: #a4262c;
         }
 
+        .comment-like-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            background: none;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #605e5c;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .comment-like-btn:hover {
+            background: #f3f2f1;
+            border-color: #c8c6c4;
+        }
+        .comment-like-btn.liked {
+            color: #0078d4;
+            border-color: #0078d4;
+            background: #eff6fc;
+        }
+        .comment-like-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Thread controls in first comment header (after edit/delete buttons) */
         .thread-controls {
             display: inline-flex;
@@ -6270,6 +6297,26 @@
             }
         }
 
+        async function toggleCommentLike(threadId, commentId, currentlyLiked) {
+            const btn = document.querySelector(
+                `.comment[data-thread-id="${threadId}"][data-comment-id="${commentId}"] .comment-like-btn`
+            );
+            if (btn) btn.disabled = true;
+            try {
+                if (currentlyLiked) {
+                    await ADOAPI.unlikeComment(currentConfig, currentPRId, threadId, commentId);
+                } else {
+                    await ADOAPI.likeComment(currentConfig, currentPRId, threadId, commentId);
+                }
+                const saved = saveDiffScroll();
+                await refreshThreadsFromAPI();
+                restoreDiffScroll(saved);
+            } catch (e) {
+                ADOUI.showError('Failed to update like: ' + e.message);
+                if (btn) btn.disabled = false;
+            }
+        }
+
         // Builds gutter HTML for a list of thread-range objects on the same diff line.
         // Single thread → one avatar. Multiple → a stack trigger with hover popover.
         function buildGutterHtmlForLine(matchingRanges) {
@@ -8432,6 +8479,20 @@
                                 </span>
                             ` : '';
 
+                            // Like button
+                            const likedUsers = comment.usersLiked || [];
+                            const likeCount = likedUsers.length;
+                            const userLiked = likedUsers.some(u => u.id === currentUserId);
+                            const likeBtnHtml = showCommentActions ? `<button class="comment-like-btn${userLiked ? ' liked' : ''}"
+                                onclick="toggleCommentLike(${threadId}, ${comment.id}, ${userLiked})"
+                                title="${userLiked ? 'Unlike' : 'Like'}">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+                                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                                </svg>
+                                ${likeCount > 0 ? `<span>${likeCount}</span>` : ''}
+                            </button>` : '';
+
                             const threadControls = isFirstComment ? `
                                 <span class="thread-controls">
                                     <a href="${threadHeaderData.threadUrl}" target="_blank" class="thread-link" title="Open thread in Azure DevOps (${threadHeaderData.hasFileContext ? 'files tab' : 'overview tab'})">🔗</a>
@@ -8456,6 +8517,7 @@
                                         ` : ''}
                                         ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
                                     </span>
+                                    ${likeBtnHtml}
                                     ${editDeleteButtons}
                                     ${threadControls}
                                 </div>`;
@@ -9642,6 +9704,19 @@
                         </span>
                     ` : '';
 
+                    const inlineLikedUsers = comment.usersLiked || [];
+                    const inlineLikeCount = inlineLikedUsers.length;
+                    const inlineUserLiked = inlineLikedUsers.some(u => u.id === currentUserId);
+                    const inlineLikeBtnHtml = showActions ? `<button class="comment-like-btn${inlineUserLiked ? ' liked' : ''}"
+                        onclick="toggleCommentLike(${threadId}, ${comment.id}, ${inlineUserLiked})"
+                        title="${inlineUserLiked ? 'Unlike' : 'Like'}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="${inlineUserLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+                            <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                        </svg>
+                        ${inlineLikeCount > 0 ? `<span>${inlineLikeCount}</span>` : ''}
+                    </button>` : '';
+
                     html += `
                         <div class="comment" data-thread-id="${threadId}" data-comment-id="${comment.id}" data-comment-content="${escapedRaw}">
                             <div class="comment-header">
@@ -9650,6 +9725,7 @@
                                     <span style="font-weight: 600; font-size: 12px;">${ADOContent.escapeHtml(comment.author?.displayName || 'Unknown')}</span>
                                     <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
                                 </span>
+                                ${inlineLikeBtnHtml}
                                 ${editDeleteBtns}
                             </div>
                             <div class="comment-content-wrapper" id="inline-comment-content-${threadId}-${comment.id}">
