@@ -1755,6 +1755,7 @@
         .vote-select.vote-active-suggestions { border-color: #107c10; color: #107c10; font-weight: 600; }
         .vote-select.vote-active-waiting { border-color: #ca5010; color: #ca5010; font-weight: 600; }
         .vote-select.vote-active-rejected { border-color: #a4262c; color: #a4262c; font-weight: 600; }
+        .vote-select.vote-not-reviewer { border-style: dashed; opacity: 0.8; }
 
         /* PR title avatar */
         .pr-title-avatar {
@@ -7429,12 +7430,18 @@
                 // Refresh PR data to get updated reviewers list
                 currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
 
-                // Update reviewers display
+                // Update reviewers display and vote dropdown (removing self resets vote)
                 updateReviewersDisplay();
+                updateVoteDropdown();
 
             } catch (error) {
                 alert(`Failed to remove reviewer: ${error.message}\n\nNote: This requires a PAT with appropriate permissions.`);
             }
+        }
+
+        function isCurrentUserReviewer() {
+            if (!currentUserId || !currentPRData?.reviewers) return false;
+            return currentPRData.reviewers.some(r => r.id === currentUserId);
         }
 
         function renderVoteDropdown(currentVote) {
@@ -7450,30 +7457,34 @@
 
             const activeOption = voteOptions.find(o => o.value === currentVote) || voteOptions[0];
             const selectClass = activeOption.cls ? ` ${activeOption.cls}` : '';
+            const notReviewer = !isCurrentUserReviewer();
+            const notReviewerClass = notReviewer ? ' vote-not-reviewer' : '';
+            const notReviewerTitle = notReviewer ? ' title="Voting will add you as an optional reviewer"' : '';
 
             const optionsHtml = voteOptions.map(opt => {
                 const selected = opt.value === currentVote ? ' selected' : '';
                 return `<option value="${opt.value}"${selected}>${opt.label}</option>`;
             }).join('');
 
-            return `<select id="voteDropdown" class="vote-select${selectClass}" onchange="setOwnVote(parseInt(this.value))">${optionsHtml}</select>`;
+            return `<select id="voteDropdown" class="vote-select${selectClass}${notReviewerClass}"${notReviewerTitle} onchange="setOwnVote(parseInt(this.value))">${optionsHtml}</select>`;
         }
 
         function getCurrentUserVote() {
             if (!currentUserId || !currentPRData?.reviewers) return 0;
             const self = currentPRData.reviewers.find(r => r.id === currentUserId);
-            return self ? (self.vote || 0) : null;
+            return self ? (self.vote || 0) : 0;
         }
 
         function updateVoteDropdown() {
             const container = document.getElementById('voteDropdownContainer');
             if (!container) return;
-            const vote = getCurrentUserVote();
-            container.innerHTML = vote !== null ? renderVoteDropdown(vote) : '';
+            container.innerHTML = renderVoteDropdown(getCurrentUserVote());
         }
 
         async function setOwnVote(vote) {
             if (!currentUserId) return;
+            // If the user isn't a reviewer yet and selects "No vote", there's nothing to do
+            if (vote === 0 && !isCurrentUserReviewer()) return;
             const select = document.getElementById('voteDropdown');
             if (select) select.disabled = true;
             try {
@@ -7488,10 +7499,7 @@
             } catch (error) {
                 alert(`Failed to set vote: ${error.message}\n\nNote: This requires a PAT with appropriate permissions.`);
                 // Revert select to previous value
-                if (select) {
-                    const currentVote = getCurrentUserVote();
-                    if (currentVote !== null) select.value = currentVote;
-                }
+                if (select) select.value = getCurrentUserVote();
             } finally {
                 if (select) select.disabled = false;
             }
@@ -8075,8 +8083,7 @@
 
             // PR title bar HTML (sticky, rendered outside #results)
             const fileCount = allChangeEntries.length;
-            const ownVote = getCurrentUserVote();
-            const voteDropdownHtml = ownVote !== null ? renderVoteDropdown(ownVote) : '';
+            const voteDropdownHtml = renderVoteDropdown(getCurrentUserVote());
             const titleBarHtml = `
                 <div class="pr-title-bar">
                     <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
