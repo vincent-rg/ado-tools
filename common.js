@@ -948,6 +948,22 @@ const ADOAPI = {
             displayName: identity.displayName,
             mail: identity.mail || identity.signInAddress || ''
         }));
+    },
+
+    async uploadAttachment(config, prId, fileName, blob) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prId}/attachments/${encodeURIComponent(fileName)}?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: blob
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to upload attachment: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
     }
 };
 

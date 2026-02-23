@@ -40,6 +40,8 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_avatar_proxy()
         elif self.path.startswith('/identity-resolve?'):
             self.handle_identity_resolve_proxy()
+        elif self.path.startswith('/attachment?'):
+            self.handle_attachment_proxy()
         else:
             super().do_GET()
 
@@ -86,6 +88,40 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', content_type)
                 self.send_header('Content-Length', len(image_data))
                 self.send_header('Cache-Control', 'max-age=604800')  # Cache avatars for 1 week
+                self.end_headers()
+                self.wfile.write(image_data)
+
+        except urllib.error.HTTPError as e:
+            self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
+        except urllib.error.URLError as e:
+            self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
+        except Exception as e:
+            self.send_error(500, f'Proxy error: {str(e)}')
+
+    def handle_attachment_proxy(self):
+        """Proxy ADO PR attachment image requests with PAT authentication"""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        attachment_url = params.get('url', [None])[0]
+        pat = self.headers.get('X-ADO-PAT', '')
+
+        if not attachment_url or not pat:
+            self.send_error(400, 'Missing required parameters (url) or X-ADO-PAT header')
+            return
+
+        try:
+            auth_string = base64.b64encode(f":{pat}".encode()).decode()
+            req = urllib.request.Request(attachment_url)
+            req.add_header('Authorization', f'Basic {auth_string}')
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                image_data = response.read()
+                content_type = response.headers.get('Content-Type', 'application/octet-stream')
+
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Length', len(image_data))
                 self.end_headers()
                 self.wfile.write(image_data)
 
