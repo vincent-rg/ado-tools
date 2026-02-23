@@ -560,6 +560,7 @@ summary:hover {
     border: 1px solid #d1d1d1;
     object-fit: cover;
     cursor: pointer;
+    vertical-align: top;
     transition: transform 0.2s, border-color 0.2s;
 }
 
