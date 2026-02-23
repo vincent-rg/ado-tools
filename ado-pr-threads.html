@@ -518,6 +518,7 @@
             border-radius: 12px;
             cursor: pointer;
             font-size: 12px;
+            line-height: 1;
             color: #605e5c;
             transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
@@ -8472,26 +8473,17 @@
                             const escapedContent = (comment.content || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
                             // Build the comment header - first comment has thread controls after edit/delete
-                            const editDeleteButtons = showCommentActions ? `
-                                <span class="comment-actions">
-                                    <button class="comment-action-btn" onclick="startEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
-                                    <button class="comment-action-btn delete" onclick="deleteComment(${threadId}, ${comment.id})" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
-                                </span>
-                            ` : '';
-
                             // Like button
                             const likedUsers = comment.usersLiked || [];
                             const likeCount = likedUsers.length;
                             const userLiked = likedUsers.some(u => u.id === currentUserId);
-                            const likeBtnHtml = showCommentActions ? `<button class="comment-like-btn${userLiked ? ' liked' : ''}"
-                                onclick="toggleCommentLike(${threadId}, ${comment.id}, ${userLiked})"
-                                title="${userLiked ? 'Unlike' : 'Like'}">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-                                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
-                                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
-                                </svg>
-                                ${likeCount > 0 ? `<span>${likeCount}</span>` : ''}
-                            </button>` : '';
+                            const editDeleteButtons = showCommentActions ? `
+                                <span class="comment-actions">
+                                    <button class="comment-like-btn${userLiked ? ' liked' : ''}" onclick="toggleCommentLike(${threadId}, ${comment.id}, ${userLiked})" title="${userLiked ? 'Unlike' : 'Like'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>${likeCount > 0 ? `<span>${likeCount}</span>` : ''}</button>
+                                    <button class="comment-action-btn" onclick="startEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+                                    <button class="comment-action-btn delete" onclick="deleteComment(${threadId}, ${comment.id})" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+                                </span>
+                            ` : '';
 
                             const threadControls = isFirstComment ? `
                                 <span class="thread-controls">
@@ -8517,7 +8509,6 @@
                                         ` : ''}
                                         ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
                                     </span>
-                                    ${likeBtnHtml}
                                     ${editDeleteButtons}
                                     ${threadControls}
                                 </div>`;
@@ -9697,25 +9688,17 @@
                     }
 
                     const showActions = !comment.isDeleted && !isSystem;
-                    const editDeleteBtns = showActions ? `
-                        <span class="comment-actions">
-                            <button class="comment-action-btn" onclick="startInlineEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
-                            <button class="comment-action-btn delete" onclick="deleteInlineComment(${threadId}, ${comment.id})" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
-                        </span>
-                    ` : '';
 
                     const inlineLikedUsers = comment.usersLiked || [];
                     const inlineLikeCount = inlineLikedUsers.length;
                     const inlineUserLiked = inlineLikedUsers.some(u => u.id === currentUserId);
-                    const inlineLikeBtnHtml = showActions ? `<button class="comment-like-btn${inlineUserLiked ? ' liked' : ''}"
-                        onclick="toggleCommentLike(${threadId}, ${comment.id}, ${inlineUserLiked})"
-                        title="${inlineUserLiked ? 'Unlike' : 'Like'}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="${inlineUserLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
-                            <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
-                        </svg>
-                        ${inlineLikeCount > 0 ? `<span>${inlineLikeCount}</span>` : ''}
-                    </button>` : '';
+                    const inlineActionBtns = showActions ? `
+                        <span class="comment-actions">
+                            <button class="comment-like-btn${inlineUserLiked ? ' liked' : ''}" onclick="toggleCommentLike(${threadId}, ${comment.id}, ${inlineUserLiked})" title="${inlineUserLiked ? 'Unlike' : 'Like'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="${inlineUserLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>${inlineLikeCount > 0 ? `<span>${inlineLikeCount}</span>` : ''}</button>
+                            <button class="comment-action-btn" onclick="startInlineEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+                            <button class="comment-action-btn delete" onclick="deleteInlineComment(${threadId}, ${comment.id})" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+                        </span>
+                    ` : '';
 
                     html += `
                         <div class="comment" data-thread-id="${threadId}" data-comment-id="${comment.id}" data-comment-content="${escapedRaw}">
@@ -9725,8 +9708,7 @@
                                     <span style="font-weight: 600; font-size: 12px;">${ADOContent.escapeHtml(comment.author?.displayName || 'Unknown')}</span>
                                     <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
                                 </span>
-                                ${inlineLikeBtnHtml}
-                                ${editDeleteBtns}
+                                ${inlineActionBtns}
                             </div>
                             <div class="comment-content-wrapper" id="inline-comment-content-${threadId}-${comment.id}">
                                 <div class="comment-content">${resolvedContent}</div>
