@@ -930,7 +930,7 @@
         .diff-line {
             display: flex;
             font-family: monospace;
-            font-size: 12px;
+            font-size: var(--diff-font-size, 12px);
             line-height: 1.5;
             position: relative;
         }
@@ -1231,7 +1231,6 @@
         .sbs-row {
             display: flex;
             font-family: monospace;
-            font-size: 12px;
             line-height: 1.5;
             position: relative;
         }
@@ -2943,7 +2942,7 @@
 
         .file-diff-body .diff-lines {
             margin: 0;
-            font-size: 12px;
+            font-size: var(--diff-font-size, 12px);
         }
         .file-diff-body .diff-lines:not(.diff-lines-sbs) {
             width: fit-content;
@@ -3272,6 +3271,47 @@
 
         .file-view-mode-btn.active + .file-view-mode-btn {
             border-left: 1px solid #c8c6c4;
+        }
+
+        .diff-font-size-control {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            margin-left: 4px;
+        }
+
+        .diff-font-size-btn {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #c8c6c4;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            color: #605e5c;
+            line-height: 1;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 3px;
+        }
+
+        .diff-font-size-btn:hover {
+            background: #f3f2f1;
+            color: #323130;
+        }
+
+        .diff-font-size-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        .diff-font-size-label {
+            font-size: 11px;
+            color: #605e5c;
+            min-width: 26px;
+            text-align: center;
+            user-select: none;
         }
 
         /* Thread count badge on files */
@@ -3635,6 +3675,7 @@
         let urlRepo = null;     // Saved from initial URL
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
         let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
+        let diffFontSize = parseInt(localStorage.getItem('diffFontSize') || '12', 10);
         let goToLineSide = 'new'; // 'old' or 'new'; which version's line numbers to navigate
         let fileSearchActive = false;
         let fileSearchQuery = '';
@@ -6226,6 +6267,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             attachmentImageObserver.observe(document.body, { childList: true, subtree: true });
+            applyDiffFontSize();
         });
 
         function cancelEditDescription() {
@@ -8780,6 +8822,25 @@
             if (selectedFilePath) refreshInlineThreadsIfNeeded();
         }
 
+        function applyDiffFontSize() {
+            document.documentElement.style.setProperty('--diff-font-size', diffFontSize + 'px');
+        }
+
+        function adjustDiffFontSize(delta) {
+            const newSize = Math.max(8, Math.min(24, diffFontSize + delta));
+            if (newSize === diffFontSize) return;
+            diffFontSize = newSize;
+            localStorage.setItem('diffFontSize', diffFontSize);
+            applyDiffFontSize();
+            // Update label and button states in any rendered header
+            const label = document.getElementById('diffFontSizeLabel');
+            if (label) label.textContent = diffFontSize + 'px';
+            document.querySelectorAll('.diff-font-size-btn').forEach(btn => {
+                const isDecrement = btn.textContent.trim() === '−';
+                btn.disabled = isDecrement ? diffFontSize <= 8 : diffFontSize >= 24;
+            });
+        }
+
         function addFileToTree(root, filePath, changeType, sourceServerItem) {
             const parts = filePath.split('/').filter(p => p);
             if (parts.length === 0) return;
@@ -10090,6 +10151,11 @@
                     <div class="diff-display-mode-bar">
                         <button class="file-view-mode-btn${inlineActive}" onclick="setDiffDisplayMode('inline')">Inline</button>
                         <button class="file-view-mode-btn${sbsActive}" onclick="setDiffDisplayMode('side-by-side')">Side by Side</button>
+                    </div>
+                    <div class="diff-font-size-control">
+                        <button class="diff-font-size-btn" onclick="adjustDiffFontSize(-1)" title="Decrease font size" ${diffFontSize <= 8 ? 'disabled' : ''}>−</button>
+                        <span class="diff-font-size-label" id="diffFontSizeLabel">${diffFontSize}px</span>
+                        <button class="diff-font-size-btn" onclick="adjustDiffFontSize(1)" title="Increase font size" ${diffFontSize >= 24 ? 'disabled' : ''}>+</button>
                     </div>
                     <div class="file-diff-stats">
                         <span class="stat-added">+${addedCount}</span>
