@@ -4419,7 +4419,7 @@
             hideLineCommentForm();
             hideSelectionCommentForm();
             const escapedFile = ADOContent.escapeJs(filePath);
-            const endOffset = Math.max(1, lineLen);
+            const endOffset = lineLen + 1;
 
             // Highlight the line content with <mark>
             const effectiveMode = getEffectiveDisplayMode();
