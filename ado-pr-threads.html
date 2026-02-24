@@ -2873,6 +2873,10 @@
         .file-diff-body .diff-scroll-area {
             flex: 1;
             overflow: auto;
+            scrollbar-width: none; /* hide vertical scrollbar (replaced by minimap); hides both in Firefox */
+        }
+        .file-diff-body .diff-scroll-area::-webkit-scrollbar:vertical {
+            display: none; /* hide only vertical scrollbar in Chrome/Edge/Safari */
         }
         .diff-scroll-row {
             flex: 1;
