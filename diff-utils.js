@@ -359,7 +359,7 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
         else if (entry.type === 'removed') removedCount++;
     }
 
-    const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed };
+    const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldContent, newContent };
     if (!oldFetchFailed && !newFetchFailed) {
         cache.set(cacheKey, result);
     }

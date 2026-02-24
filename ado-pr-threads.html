@@ -2949,6 +2949,74 @@
             min-width: 100%;
         }
 
+        /* Sticky scope lines bar */
+        .sticky-lines-bar {
+            display: flex;
+            flex-shrink: 0;
+            border-bottom: 1px solid #d1d5db;
+            background: #f6f8fa;
+            font-family: monospace;
+            font-size: var(--diff-font-size, 12px);
+            overflow: hidden;
+        }
+        .sticky-lines-diff-part {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            min-width: 0;
+        }
+        .sticky-pane {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+        .sticky-pane-left {
+            flex: 0 0 var(--sbs-left-pct, 50%);
+            border-right: 1px solid #e1dfdd;
+        }
+        .sticky-pane-right, .sticky-pane-single { flex: 1; }
+        .sticky-lines-minimap-spacer {
+            width: 14px;
+            flex-shrink: 0;
+            border-left: 1px solid #e1dfdd;
+        }
+        .sticky-line {
+            display: flex;
+            align-items: baseline;
+            cursor: pointer;
+            white-space: pre;
+            line-height: 1.5;
+        }
+        .sticky-line:hover { background: #ddf4ff; }
+        .sticky-avatar-spacer {
+            width: 20px;
+            min-width: 20px;
+            flex-shrink: 0;
+        }
+        .sticky-line-num {
+            width: 40px;
+            min-width: 40px;
+            padding: 0 4px;
+            text-align: right;
+            color: #6e7681;
+            background: rgba(0, 0, 0, 0.05);
+            box-sizing: border-box;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .sticky-indicator-spacer {
+            width: 20px;
+            min-width: 20px;
+            flex-shrink: 0;
+        }
+        .sticky-line-content {
+            color: #24292f;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 4px;
+        }
+
         .file-diff-empty {
             display: flex;
             align-items: center;
@@ -7040,7 +7108,7 @@
             const cached = fileDiffCache.get(cacheKey);
             if (cached) {
                 const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
-                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem);
+                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent);
             }
         }
 
@@ -9426,6 +9494,7 @@
             // Reset diff panel
             const diffPanel = document.getElementById('fileDiffPanel');
             if (diffPanel) {
+                StickyLines.destroy();
                 diffPanel.innerHTML = '<div class="file-diff-empty">Select a file to view changes</div>';
             }
 
@@ -9553,6 +9622,7 @@
             if (!diffPanel) return;
 
             // Show loading
+            StickyLines.destroy();
             diffPanel.innerHTML = '<div class="file-diff-loading">Loading diff...</div>';
 
             try {
@@ -9656,6 +9726,7 @@
                     diffPanel.setAttribute('data-render-mode', 'inline');
                     injectCommentBubbles(filePath);
                     setupDiffMinimap(diffPanel);
+                    StickyLines.init(diffPanel, null, content, filePath, false);
                     if (fileSearchActive) openFileSearch();
                     return;
                 }
@@ -9683,7 +9754,7 @@
                 const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff });
                 if (selectedFilePath !== filePath) return;
 
-                renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem);
+                renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent);
                 updateHunkNav();
                 updateThreadNav(scrollToThreadId);
                 if (scrollToThreadId) scrollToThread(scrollToThreadId);
@@ -9974,6 +10045,7 @@
                 const availableWidth = scrollRow.offsetWidth - minimapWidth;
                 resizer.style.left = (availableWidth * splitPct / 100) + 'px';
                 diffLines.style.setProperty('--sbs-left-pct', splitPct + '%');
+                diffPanel.style.setProperty('--sbs-left-pct', splitPct + '%');
             }
 
             applyResizerPosition();
@@ -10131,7 +10203,306 @@
             }
         }
 
-        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem) {
+        // ==================== Sticky Lines ====================
+        const StickyLines = (() => {
+            const MAX_LINES = 5;
+            let _scrollArea = null;
+            let _scrollHandler = null;
+            let _oldTree = null;
+            let _newTree = null;
+            let _bar = null;
+            let _isSbs = false;
+            let _rafPending = false;
+
+            function getLanguage(filePath) {
+                const ext = (filePath.split('.').pop() || '').toLowerCase();
+                if (['py', 'pyw'].includes(ext)) return 'python';
+                if (['c', 'h', 'cpp', 'cc', 'cxx', 'hpp', 'hh', 'hxx', 'cs', 'java',
+                     'js', 'jsx', 'ts', 'tsx', 'go', 'rs', 'kt', 'kts', 'swift',
+                     'm', 'mm', 'php', 'rb', 'scala', 'groovy'].includes(ext)) return 'brace';
+                return null;
+            }
+
+            function isStructuralLine(line) {
+                const t = line.trimStart();
+                if (!t.includes('{')) return false;
+                if (/^(if|else|for|while|do\b|switch|try|catch|finally|with|using)\b/.test(t)) return false;
+                if (/\b(class|struct|interface|enum|union|namespace|record|module|impl|trait|object)\b/.test(t)) return true;
+                if (/\b(function|fn|func)\s+\w/.test(t)) return true;
+                if (/\(.*\).*\{/.test(t) && /^[A-Za-z_~]/.test(t)) return true;
+                return false;
+            }
+
+            // Detects the scope-opening signature for a line that contains '{'.
+            // Handles multi-line signatures where the return type, name, params, and
+            // opening brace may each be on different lines.
+            // Returns { startIdx (0-based), content } or null if not a structural scope.
+            function findExtendedSignature(lines, i) {
+                const trimmed = lines[i].trim();
+                if (!trimmed.includes('{')) return null;
+
+                // Walk back from the current line to find the closing ) of a param list.
+                let paramEndIdx = -1;
+                for (let j = i; j >= Math.max(0, i - 6); j--) {
+                    const t = lines[j].trim();
+                    if (!t) continue;
+                    if (j < i && (/[;{}]$/.test(t) || t === '};')) break;
+                    if (t.includes(')')) { paramEndIdx = j; break; }
+                }
+
+                if (paramEndIdx === -1) {
+                    // No param list — fall back to class/namespace/etc. detection
+                    if (isStructuralLine(lines[i])) {
+                        return { startIdx: i, content: trimmed.replace(/\s*\{.*$/, '').trim() || trimmed };
+                    }
+                    return null;
+                }
+
+                // Walk back from paramEndIdx to find the opening (.
+                let paramStartIdx = paramEndIdx;
+                for (let j = paramEndIdx; j >= Math.max(0, paramEndIdx - 6); j--) {
+                    const t = lines[j].trim();
+                    if (t.endsWith(';') || t === '}' || t === '};') break;
+                    if (t.includes('(')) { paramStartIdx = j; break; }
+                }
+
+                // Verify the function-name line looks like a declaration, not a control-flow keyword.
+                const funcTrimmed = lines[paramStartIdx].trimStart();
+                if (/^(if|else|for|while|do\b|switch|try|catch|finally|return|with|#)/.test(funcTrimmed)) return null;
+                if (!/^[A-Za-z_~*]/.test(funcTrimmed)) return null;
+
+                // Check if the line before the function name is a return type / modifier prefix.
+                let signatureStart = paramStartIdx;
+                if (paramStartIdx > 0) {
+                    const prev = lines[paramStartIdx - 1].trim();
+                    if (prev && prev.length < 80 &&
+                        !/[;{}]$/.test(prev) &&
+                        !/^(if|else|for|while|do\b|switch|try|catch|finally|return|#|\/\/)/.test(prev)) {
+                        signatureStart = paramStartIdx - 1;
+                    }
+                }
+
+                // Build the display content: join lines from signatureStart to paramEndIdx,
+                // stripping any trailing '{' from the last included line.
+                const parts = [];
+                for (let k = signatureStart; k <= paramEndIdx; k++) {
+                    let t = lines[k].trim();
+                    if (k === paramEndIdx) t = t.replace(/\s*\{.*$/, '').trim();
+                    if (t) parts.push(t);
+                }
+
+                if (!parts.length) return null;
+                return { startIdx: signatureStart, content: parts.join(' ') };
+            }
+
+            function buildBraceTree(lines) {
+                const tree = new Map();
+                const stack = []; // {lineNum, content, startDepth}
+                let depth = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    const lineNum = i + 1;
+                    const line = lines[i];
+                    let opens = 0, closes = 0;
+                    for (const ch of line) {
+                        if (ch === '{') opens++;
+                        else if (ch === '}') closes++;
+                    }
+                    const depthBefore = depth;
+                    depth = Math.max(0, depth + opens - closes);
+                    while (stack.length > 0 && depth <= stack[stack.length - 1].startDepth) {
+                        stack.pop();
+                    }
+                    tree.set(lineNum, stack.map(s => ({ lineNum: s.lineNum, content: s.content })));
+                    if (opens > 0) {
+                        const sig = findExtendedSignature(lines, i);
+                        if (sig) {
+                            stack.push({ lineNum: sig.startIdx + 1, content: sig.content, startDepth: depthBefore });
+                        }
+                    }
+                }
+                return tree;
+            }
+
+            function buildPythonTree(lines) {
+                const tree = new Map();
+                const stack = []; // {lineNum, content, indent}
+                for (let i = 0; i < lines.length; i++) {
+                    const lineNum = i + 1;
+                    const line = lines[i];
+                    const trimmed = line.trim();
+                    if (!trimmed) {
+                        tree.set(lineNum, stack.map(s => ({ lineNum: s.lineNum, content: s.content })));
+                        continue;
+                    }
+                    const indent = line.length - line.trimStart().length;
+                    while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+                        stack.pop();
+                    }
+                    tree.set(lineNum, stack.map(s => ({ lineNum: s.lineNum, content: s.content })));
+                    if (/^(def|class|async\s+def)\s+\w/.test(trimmed)) {
+                        stack.push({ lineNum, content: trimmed, indent });
+                    }
+                }
+                return tree;
+            }
+
+            function buildTree(content, filePath) {
+                const lang = getLanguage(filePath);
+                if (!lang) return null;
+                const lines = content.split('\n');
+                return lang === 'python' ? buildPythonTree(lines) : buildBraceTree(lines);
+            }
+
+            function getTopLineNum(paneSelector) {
+                if (!_scrollArea) return null;
+                const topY = _scrollArea.getBoundingClientRect().top;
+                if (_isSbs) {
+                    for (const row of _scrollArea.querySelectorAll('.sbs-row')) {
+                        if (row.getBoundingClientRect().bottom <= topY) continue;
+                        const pane = row.querySelector(paneSelector);
+                        const n = pane?.querySelector('.diff-line-number')?.textContent?.trim();
+                        if (n) return parseInt(n, 10);
+                        return null;
+                    }
+                } else {
+                    for (const row of _scrollArea.querySelectorAll('.diff-line')) {
+                        if (row.getBoundingClientRect().bottom <= topY) continue;
+                        const spans = row.querySelectorAll('.diff-line-number');
+                        const n = spans[1]?.textContent?.trim() || spans[0]?.textContent?.trim();
+                        if (n) return parseInt(n, 10);
+                        return null;
+                    }
+                }
+                return null;
+            }
+
+            function renderPane(paneEl, ancestors, side) {
+                if (!paneEl) return;
+                if (!ancestors || !ancestors.length) { paneEl.innerHTML = ''; return; }
+                const shown = ancestors.slice(-MAX_LINES);
+                paneEl.innerHTML = shown.map(a => {
+                    const cols = _isSbs
+                        ? `<span class="sticky-avatar-spacer"></span>` +
+                          `<span class="sticky-line-num">${a.lineNum}</span>`
+                        : `<span class="sticky-avatar-spacer"></span>` +
+                          `<span class="sticky-line-num"></span>` +
+                          `<span class="sticky-line-num">${a.lineNum}</span>` +
+                          `<span class="sticky-indicator-spacer"></span>`;
+                    return `<div class="sticky-line" data-line="${a.lineNum}" data-side="${side}">` +
+                        cols +
+                        `<span class="sticky-line-content">${ADOContent.escapeHtml(a.content)}</span>` +
+                        `</div>`;
+                }).join('');
+            }
+
+            function scrollToLine(lineNum, side) {
+                if (!_scrollArea) return;
+                let target = null;
+                if (_isSbs) {
+                    const sel = side === 'left' ? '.sbs-left' : '.sbs-right';
+                    for (const row of _scrollArea.querySelectorAll('.sbs-row')) {
+                        const n = row.querySelector(`${sel} .diff-line-number`)?.textContent?.trim();
+                        if (n && parseInt(n, 10) === lineNum) { target = row; break; }
+                    }
+                } else {
+                    for (const row of _scrollArea.querySelectorAll('.diff-line')) {
+                        const spans = row.querySelectorAll('.diff-line-number');
+                        const n = spans[1]?.textContent?.trim() || spans[0]?.textContent?.trim();
+                        if (n && parseInt(n, 10) === lineNum) { target = row; break; }
+                    }
+                }
+                if (target) _scrollArea.scrollTop = target.offsetTop;
+            }
+
+            function update() {
+                if (!_bar || !_scrollArea) return;
+                if (_rafPending) return;
+                _rafPending = true;
+                requestAnimationFrame(() => {
+                    _rafPending = false;
+                    if (!_bar || !_scrollArea) return;
+                    if (_isSbs) {
+                        const lPane = _bar.querySelector('.sticky-pane-left');
+                        const rPane = _bar.querySelector('.sticky-pane-right');
+                        const lLine = getTopLineNum('.sbs-left');
+                        const rLine = getTopLineNum('.sbs-right');
+                        const lAnc = (lLine && _oldTree) ? (_oldTree.get(lLine) || null) : null;
+                        const rAnc = (rLine && _newTree) ? (_newTree.get(rLine) || null) : null;
+                        renderPane(lPane, lAnc, 'left');
+                        renderPane(rPane, rAnc, 'right');
+                        _bar.style.display = ((lAnc?.length || 0) + (rAnc?.length || 0)) > 0 ? '' : 'none';
+                    } else {
+                        const sPane = _bar.querySelector('.sticky-pane-single');
+                        const line = getTopLineNum(null);
+                        const anc = (line && _newTree) ? (_newTree.get(line) || null) : null;
+                        renderPane(sPane, anc, 'right');
+                        _bar.style.display = (anc?.length || 0) > 0 ? '' : 'none';
+                    }
+                });
+            }
+
+            function destroy() {
+                if (_scrollArea && _scrollHandler) {
+                    _scrollArea.removeEventListener('scroll', _scrollHandler);
+                }
+                _scrollArea = null;
+                _scrollHandler = null;
+                _oldTree = null;
+                _newTree = null;
+                _bar = null;
+                _isSbs = false;
+                _rafPending = false;
+            }
+
+            function init(diffPanel, oldContent, newContent, filePath, isSbs) {
+                destroy();
+                if (!getLanguage(filePath)) return;
+                _isSbs = isSbs;
+                _oldTree = oldContent ? buildTree(oldContent, filePath) : null;
+                _newTree = newContent ? buildTree(newContent, filePath) : null;
+                if (!_oldTree && !_newTree) return;
+                if (!isSbs && !_newTree) return;
+
+                const body = diffPanel.querySelector('.file-diff-body');
+                if (!body) return;
+
+                const bar = document.createElement('div');
+                bar.className = 'sticky-lines-bar';
+                bar.style.display = 'none';
+                if (isSbs) {
+                    bar.innerHTML =
+                        '<div class="sticky-lines-diff-part">' +
+                        '<div class="sticky-pane sticky-pane-left"></div>' +
+                        '<div class="sticky-pane sticky-pane-right"></div>' +
+                        '</div>' +
+                        '<div class="sticky-lines-minimap-spacer"></div>';
+                } else {
+                    bar.innerHTML =
+                        '<div class="sticky-lines-diff-part">' +
+                        '<div class="sticky-pane sticky-pane-single"></div>' +
+                        '</div>' +
+                        '<div class="sticky-lines-minimap-spacer"></div>';
+                }
+                bar.addEventListener('click', e => {
+                    const el = e.target.closest('.sticky-line');
+                    if (!el) return;
+                    scrollToLine(parseInt(el.dataset.line, 10), el.dataset.side);
+                });
+
+                body.insertBefore(bar, body.querySelector('.diff-scroll-row'));
+                _bar = bar;
+
+                _scrollArea = diffPanel.querySelector('.diff-scroll-area');
+                if (!_scrollArea) return;
+                _scrollHandler = () => update();
+                _scrollArea.addEventListener('scroll', _scrollHandler, { passive: true });
+                update();
+            }
+
+            return { init, destroy };
+        })();
+
+        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem, oldContent, newContent) {
             clearSelectionComment();
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
@@ -10352,6 +10723,7 @@
             }
 
             setupDiffMinimap(diffPanel);
+            StickyLines.init(diffPanel, oldContent || null, newContent || null, filePath, fileDiffDisplayMode === 'side-by-side');
             if (fileSearchActive) openFileSearch();
         }
 
