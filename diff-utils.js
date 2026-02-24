@@ -81,14 +81,29 @@ function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges) {
 
 function buildThreadRange(thread, viewIterStart, viewIterEnd) {
     const ctx = thread.threadContext;
-    const useRight = !!ctx.rightFileStart;
-    const startLine = (useRight ? ctx.rightFileStart?.line : ctx.leftFileStart?.line) || 0;
-    const endLine = (useRight ? (ctx.rightFileEnd?.line || ctx.rightFileStart?.line) : (ctx.leftFileEnd?.line || ctx.leftFileStart?.line)) || startLine;
-    const startOffset = (useRight ? ctx.rightFileStart?.offset : ctx.leftFileStart?.offset) || 0;
-    const endOffset = (useRight ? ctx.rightFileEnd?.offset : ctx.leftFileEnd?.offset) || 0;
+    const storedUseRight = !!ctx.rightFileStart;
+    const startLine = (storedUseRight ? ctx.rightFileStart?.line : ctx.leftFileStart?.line) || 0;
+    const endLine = (storedUseRight ? (ctx.rightFileEnd?.line || ctx.rightFileStart?.line) : (ctx.leftFileEnd?.line || ctx.leftFileStart?.line)) || startLine;
+    const startOffset = (storedUseRight ? ctx.rightFileStart?.offset : ctx.leftFileStart?.offset) || 0;
+    const endOffset = (storedUseRight ? ctx.rightFileEnd?.offset : ctx.leftFileEnd?.offset) || 0;
 
     const threadIter = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
-    const appliesToView = !threadIter || (threadIter >= viewIterStart && threadIter <= viewIterEnd);
+
+    // threadIter === viewIterStart - 1: the thread's iteration is exactly the left (base) side
+    // of the current diff. e.g. comment on iter2 right pane, viewing iter3 (left=iter2, right=iter3).
+    const isLeftSideOfCurrentDiff = threadIter != null && threadIter === viewIterStart - 1;
+
+    // threadIter < viewIterStart: the thread is at or older than the left side — still belongs
+    // on the left pane (greyed out) rather than the right, since its content is "older" content.
+    const isAtOrBeforeLeftSide = threadIter != null && threadIter < viewIterStart;
+
+    const appliesToView = !threadIter
+        || isLeftSideOfCurrentDiff
+        || (threadIter >= viewIterStart && threadIter <= viewIterEnd);
+
+    // If the thread was on the right side but its iteration is now at or before the left pane,
+    // flip to left so it doesn't appear against newer code it was never about.
+    const useRight = storedUseRight && isAtOrBeforeLeftSide ? false : storedUseRight;
 
     return { thread, startLine, endLine, startOffset, endOffset, useRight, appliesToView, inserted: false };
 }

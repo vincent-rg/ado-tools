@@ -70,6 +70,38 @@ describe('buildThreadRange', () => {
         expect(range.appliesToView).toBe(true);
     });
 
+    it('flips right-side thread to left pane when its iteration becomes the base of the current view', () => {
+        // Comment created on iter2 right pane; now viewing iter3 (left=iter2, right=iter3)
+        const thread = makeRightThread(10, 10, 0, 0, 2);
+        const range = DiffUtils.buildThreadRange(thread, 3, 3); // viewIterStart=3 → left side = iter2
+        expect(range.useRight).toBe(false);
+        expect(range.appliesToView).toBe(true);
+        expect(range.startLine).toBe(10); // line number preserved
+    });
+
+    it('keeps right-side thread on the right when viewing its own iteration', () => {
+        const thread = makeRightThread(10, 10, 0, 0, 2);
+        const range = DiffUtils.buildThreadRange(thread, 2, 2); // viewing iter2 itself
+        expect(range.useRight).toBe(true);
+        expect(range.appliesToView).toBe(true);
+    });
+
+    it('flips to left pane and marks outdated when thread is older than the left side', () => {
+        // iter2 comment, viewing iter4 (left=iter3, right=iter4) — iter2 not in view at all
+        const thread = makeRightThread(1, 1, 0, 0, 2);
+        const range = DiffUtils.buildThreadRange(thread, 4, 4);
+        expect(range.useRight).toBe(false); // flip: iter2 is older than the left side (iter3)
+        expect(range.appliesToView).toBe(false); // outdated / greyed
+    });
+
+    it('flips right-side thread to left pane for a multi-iteration range where it is the base', () => {
+        // iter2 comment, viewing range 3/4 (left=iter2, right=iter4)
+        const thread = makeRightThread(5, 5, 0, 0, 2);
+        const range = DiffUtils.buildThreadRange(thread, 3, 4);
+        expect(range.useRight).toBe(false);
+        expect(range.appliesToView).toBe(true);
+    });
+
     it('uses startLine as endLine fallback', () => {
         const thread = {
             id: 1,
