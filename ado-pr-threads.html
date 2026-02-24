@@ -9280,15 +9280,19 @@
             event.preventDefault();
             event.stopPropagation();
 
-            const isStart = iterNum === selectedIterationStart;
-            const isEnd = iterNum === selectedIterationEnd;
+            // Resolve effective start/end: null means "all" (1 to last iteration)
+            const effectiveStart = selectedIterationStart !== null ? selectedIterationStart : 1;
+            const effectiveEnd = selectedIterationEnd !== null ? selectedIterationEnd : allIterations.length;
+
+            const isStart = iterNum === effectiveStart;
+            const isEnd = iterNum === effectiveEnd;
             // Determine which handle: if both (single selection), decide by drag direction later
             // For now, track both possibilities
             iterationDragState = {
                 handle: isStart && isEnd ? 'both' : (isStart ? 'start' : 'end'),
                 originalStart: selectedIterationStart,
                 originalEnd: selectedIterationEnd,
-                anchorIteration: isStart && isEnd ? iterNum : (isStart ? selectedIterationEnd : selectedIterationStart),
+                anchorIteration: isStart && isEnd ? iterNum : (isStart ? effectiveEnd : effectiveStart),
                 initialY: event.clientY
             };
 
