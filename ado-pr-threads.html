@@ -1241,15 +1241,17 @@
             color: #24292f;
         }
         .sbs-left, .sbs-right {
-            flex: 1;
             display: flex;
             min-width: 0;
-            flex-basis: 50%;
             overflow-x: clip;
             overflow-y: clip;
         }
         .sbs-left {
+            flex: 0 0 var(--sbs-left-pct, 50%);
             border-right: 1px solid #d8dee4;
+        }
+        .sbs-right {
+            flex: 1 1 0;
         }
         .sbs-left .diff-content, .sbs-right .diff-content {
             flex: 1;
@@ -1309,6 +1311,7 @@
             min-width: 0;
         }
         .sbs-thread-side.sbs-thread-left {
+            flex: 0 0 var(--sbs-left-pct, 50%);
             border-right: 1px solid #d8dee4;
         }
         .sbs-thread-spacer {
@@ -1323,6 +1326,7 @@
             );
         }
         .sbs-thread-row .sbs-thread-spacer.sbs-thread-left {
+            flex: 0 0 var(--sbs-left-pct, 50%);
             border-right: 1px solid #d8dee4;
         }
         .sbs-thread-side .inline-thread {
@@ -1352,6 +1356,30 @@
         .sbs-scroll-thumb.dragging {
             background: #666;
             cursor: grabbing;
+        }
+        .sbs-resizer {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            background: transparent;
+            cursor: col-resize;
+            z-index: 30;
+            transform: translateX(-50%);
+        }
+        .sbs-resizer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 3px;
+            transform: translateX(-50%);
+            background: transparent;
+            transition: background 0.15s;
+        }
+        .sbs-resizer:hover::after, .sbs-resizer.dragging::after {
+            background: #0969da;
         }
         .diff-display-mode-bar {
             display: flex;
@@ -2884,6 +2912,7 @@
             flex-direction: row;
             overflow: hidden;
             min-height: 0;
+            position: relative;
         }
         .diff-minimap-wrap {
             width: 14px;
@@ -3615,7 +3644,7 @@
         let fileSearchWholeWord = false;
         let fileSearchHitLineIndices = []; // [{visibleIdx, markIdx}]
         let diffMinimapDraw = null;   // reference to current minimap draw fn
-        let sbsScrollSync = null;     // { applyScroll, scrollRange, paneClientWidth, getCurrentOffset } set by setupSbsScrollSync
+        let sbsScrollSync = null;     // { applyScroll, scrollRange, getCurrentOffset } set by setupSbsScrollSync
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -6834,15 +6863,15 @@
             // In SBS mode, horizontal scroll is handled via custom scrollbar (transforms),
             // not native scrollLeft — scrollIntoView can't reach it, so we apply it manually.
             if (sbsScrollSync) {
-                const { applyScroll, scrollRange, paneClientWidth, getCurrentOffset } = sbsScrollSync;
+                const { applyScroll, scrollRange, getCurrentOffset } = sbsScrollSync;
                 const pane = mark.closest('.sbs-left, .sbs-right');
                 if (pane) {
                     const markRect = mark.getBoundingClientRect();
                     const paneRect = pane.getBoundingClientRect();
                     // Mark's left position in untransformed content coordinates
                     const markLeft = markRect.left - paneRect.left + getCurrentOffset();
-                    // Scroll so the mark is centered horizontally in the pane
-                    const desiredOffset = markLeft - paneClientWidth / 2 + markRect.width / 2;
+                    // Scroll so the mark is centered horizontally in its actual pane
+                    const desiredOffset = markLeft - pane.clientWidth / 2 + markRect.width / 2;
                     const clampedOffset = Math.max(0, Math.min(scrollRange, desiredOffset));
                     applyScroll(scrollRange > 0 ? clampedOffset / scrollRange : 0);
                 }
@@ -9866,23 +9895,100 @@
             diffMinimapDraw = draw;
         }
 
+        function setupSbsResizer(diffPanel) {
+            const resizer = diffPanel.querySelector('.sbs-resizer');
+            const scrollRow = diffPanel.querySelector('.diff-scroll-row');
+            const minimap = diffPanel.querySelector('.diff-minimap-wrap');
+            const diffLines = diffPanel.querySelector('.diff-lines-sbs');
+            if (!resizer || !scrollRow || !diffLines) return;
+
+            let splitPct = parseFloat(localStorage.getItem('sbsSplitPct') || '50');
+
+            function applyResizerPosition() {
+                const minimapWidth = minimap ? minimap.offsetWidth : 0;
+                const availableWidth = scrollRow.offsetWidth - minimapWidth;
+                resizer.style.left = (availableWidth * splitPct / 100) + 'px';
+                diffLines.style.setProperty('--sbs-left-pct', splitPct + '%');
+            }
+
+            applyResizerPosition();
+
+            let dragging = false, startX = 0, startPct = 0;
+
+            resizer.addEventListener('mousedown', (e) => {
+                dragging = true;
+                startX = e.clientX;
+                startPct = splitPct;
+                resizer.classList.add('dragging');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const minimapWidth = minimap ? minimap.offsetWidth : 0;
+                const availableWidth = scrollRow.offsetWidth - minimapWidth;
+                if (availableWidth <= 0) return;
+                const dx = e.clientX - startX;
+                splitPct = Math.max(20, Math.min(80, startPct + (dx / availableWidth) * 100));
+                applyResizerPosition();
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (!dragging) return;
+                dragging = false;
+                resizer.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                localStorage.setItem('sbsSplitPct', splitPct.toFixed(1));
+                // Rebuild scrollbar with updated pane widths
+                setupSbsScrollSync(diffPanel);
+            });
+
+            resizer.addEventListener('dblclick', () => {
+                splitPct = 50;
+                applyResizerPosition();
+                localStorage.setItem('sbsSplitPct', '50');
+                setupSbsScrollSync(diffPanel);
+            });
+
+            const ro = new ResizeObserver(() => applyResizerPosition());
+            ro.observe(scrollRow);
+        }
+
         function setupSbsScrollSync(diffPanel) {
+            // Capture previous offset before resetting, so we can restore it (clamped) after reinit.
+            const previousOffset = sbsScrollSync ? sbsScrollSync.getCurrentOffset() : 0;
             sbsScrollSync = null;
             const body = diffPanel.querySelector('.file-diff-body');
             if (!body) return;
+            // Remove any existing scrollbar (safe to call multiple times, e.g. after resizer drag)
+            body.querySelector('.sbs-scroll-track')?.remove();
+            // Clear transforms so content isn't phantom-shifted if there's no longer any overflow.
+            for (const el of body.querySelectorAll('.diff-lines-sbs .diff-content')) {
+                el.style.transform = '';
+            }
             const panes = body.querySelectorAll('.sbs-left, .sbs-right');
             if (panes.length === 0) return;
 
-            // Measure the max content overflow across all panes
-            let maxScrollWidth = 0;
-            let paneClientWidth = 0;
+            // Measure max scroll range per pane (content overflow = scrollWidth - clientWidth).
+            // We must not mix widths across panes: a narrow pane with wide content needs a
+            // larger scroll range than a wide pane with the same content.
+            let maxScrollRange = 0;
+            let limitingScrollWidth = 0;
+            let limitingClientWidth = 0;
             for (const pane of panes) {
-                if (pane.scrollWidth > maxScrollWidth) maxScrollWidth = pane.scrollWidth;
-                if (pane.clientWidth > paneClientWidth) paneClientWidth = pane.clientWidth;
+                const range = pane.scrollWidth - pane.clientWidth;
+                if (range > maxScrollRange) {
+                    maxScrollRange = range;
+                    limitingScrollWidth = pane.scrollWidth;
+                    limitingClientWidth = pane.clientWidth;
+                }
             }
 
             // No overflow — no scrollbar needed
-            if (maxScrollWidth <= paneClientWidth) return;
+            if (maxScrollRange <= 0) return;
 
             // Build custom scrollbar (no native overlay issues)
             const track = document.createElement('div');
@@ -9892,9 +9998,9 @@
             track.appendChild(thumb);
             body.appendChild(track);
 
-            const scrollRange = maxScrollWidth - paneClientWidth;
+            const scrollRange = maxScrollRange;
             const trackWidth = track.clientWidth;
-            const thumbWidth = Math.max(30, trackWidth * (paneClientWidth / maxScrollWidth));
+            const thumbWidth = Math.max(30, trackWidth * (limitingClientWidth / limitingScrollWidth));
             thumb.style.width = thumbWidth + 'px';
             const maxThumbLeft = trackWidth - thumbWidth;
 
@@ -9910,7 +10016,12 @@
                 }
             }
 
-            sbsScrollSync = { applyScroll, scrollRange, paneClientWidth, getCurrentOffset: () => currentOffset };
+            sbsScrollSync = { applyScroll, scrollRange, getCurrentOffset: () => currentOffset };
+
+            // Restore previous scroll position clamped to new range (e.g. after pane resize)
+            if (previousOffset > 0) {
+                applyScroll(Math.min(previousOffset, scrollRange) / scrollRange);
+            }
 
             // Drag thumb
             let dragging = false, dragStartX = 0, dragStartLeft = 0;
@@ -10139,10 +10250,12 @@
             }
 
             const sbsClass = fileDiffDisplayMode === 'side-by-side' ? ' diff-lines-sbs' : '';
+            const resizerHtml = fileDiffDisplayMode === 'side-by-side' ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
                     <div class="diff-scroll-row">
+                        ${resizerHtml}
                         <div class="diff-scroll-area">
                             <div class="diff-lines${sbsClass}">${diffHtml}</div>
                         </div>
@@ -10160,10 +10273,12 @@
             // Inject comment bubbles for line-level commenting
             injectCommentBubbles(filePath);
 
-            // Set up horizontal scroll sync and selection lock for SBS mode
+            // Set up horizontal scroll sync, selection lock, and resizer for SBS mode.
+            // Resizer must run first so it applies --sbs-left-pct before scroll sync measures widths.
             if (fileDiffDisplayMode === 'side-by-side') {
-                setupSbsScrollSync(diffPanel);
+                setupSbsResizer(diffPanel);
                 setupSbsSelectionLock(diffPanel);
+                setupSbsScrollSync(diffPanel);
             }
 
             setupDiffMinimap(diffPanel);
