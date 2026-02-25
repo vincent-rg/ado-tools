@@ -10209,7 +10209,7 @@
         // ==================== Sticky Lines ====================
         const StickyLines = (() => {
             const MAX_LINES = 5;
-            const MIN_BLOCK_LINES = 5; // Minimum rendered rows a block must span to appear in sticky bar
+            const MIN_BLOCK_LINES = 8; // Minimum source lines a block must span to appear in sticky bar
             let _scrollArea = null;
             let _scrollHandler = null;
             let _oldTree = null; // { tree: Map<lineNum, ancestor[]>, blockEndLines: Map<lineNum, endLineNum> }
@@ -10222,54 +10222,16 @@
             const getLanguage = StickyLinesUtils.getLanguage;
             const buildTree = StickyLinesUtils.buildTree;
 
-            // Count the number of rendered diff rows (source lines + inline thread panels)
-            // that fall within [startLine, endLine] inclusive on the given side.
-            // Includes thread-panel rows that appear inside the range but stops counting
-            // non-numbered rows once the closing line has been passed.
-            function countRenderedRows(startLine, endLine, side) {
-                if (!_scrollArea || !endLine || endLine < startLine) return endLine - startLine;
-                let count = 0;
-                let inside = false;
-                let doneWithEnd = false;
-                if (_isSbs) {
-                    const lineNumSel = side === 'left'
-                        ? '.sbs-left .diff-line-number'
-                        : '.sbs-right .diff-line-number';
-                    for (const row of _scrollArea.querySelectorAll('.sbs-row')) {
-                        const el = row.querySelector(lineNumSel);
-                        const lineNum = el ? parseInt(el.textContent?.trim(), 10) : NaN;
-                        if (!isNaN(lineNum)) {
-                            if (lineNum < startLine) { inside = false; doneWithEnd = false; }
-                            else if (lineNum <= endLine) {
-                                inside = true; count++;
-                                if (lineNum === endLine) doneWithEnd = true;
-                            } else { break; }
-                        } else if (inside && !doneWithEnd) { count++; }
-                    }
-                } else {
-                    for (const row of _scrollArea.querySelectorAll('.diff-line')) {
-                        const spans = row.querySelectorAll('.diff-line-number');
-                        const raw = spans[1]?.textContent?.trim() || spans[0]?.textContent?.trim();
-                        const lineNum = raw ? parseInt(raw, 10) : NaN;
-                        if (!isNaN(lineNum)) {
-                            if (lineNum < startLine) { inside = false; doneWithEnd = false; }
-                            else if (lineNum <= endLine) {
-                                inside = true; count++;
-                                if (lineNum === endLine) doneWithEnd = true;
-                            } else { break; }
-                        } else if (inside && !doneWithEnd) { count++; }
-                    }
-                }
-                return count;
-            }
-
-            // Filter ancestors to only those whose block spans >= MIN_BLOCK_LINES rendered rows.
-            function filterAncestors(ancestors, blockEndLines, side) {
+            // Filter ancestors to only those whose block spans >= MIN_BLOCK_LINES source lines.
+            // Uses source line count (endLine - startLine + 1) rather than DOM row count:
+            // in inline mode, diff-removed rows expose *old* line numbers via spans[0], which
+            // can collide with the new-file range and inflate the count past the threshold.
+            function filterAncestors(ancestors, blockEndLines) {
                 if (!ancestors || !ancestors.length) return ancestors;
                 return ancestors.filter(a => {
                     const endLine = blockEndLines?.get(a.lineNum);
                     if (!endLine) return true; // unknown end → always show
-                    return countRenderedRows(a.lineNum, endLine, side) >= MIN_BLOCK_LINES;
+                    return (endLine - a.lineNum + 1) >= MIN_BLOCK_LINES;
                 });
             }
 
@@ -10348,8 +10310,8 @@
                         const rLine = getTopLineNum('.sbs-right');
                         const lAnc = (lLine && _oldTree) ? (_oldTree.tree.get(lLine) || null) : null;
                         const rAnc = (rLine && _newTree) ? (_newTree.tree.get(rLine) || null) : null;
-                        const filteredL = filterAncestors(lAnc, _oldTree?.blockEndLines, 'left');
-                        const filteredR = filterAncestors(rAnc, _newTree?.blockEndLines, 'right');
+                        const filteredL = filterAncestors(lAnc, _oldTree?.blockEndLines);
+                        const filteredR = filterAncestors(rAnc, _newTree?.blockEndLines);
                         renderPane(lPane, filteredL, 'left');
                         renderPane(rPane, filteredR, 'right');
                         _bar.style.display = ((filteredL?.length || 0) + (filteredR?.length || 0)) > 0 ? '' : 'none';
@@ -10357,7 +10319,7 @@
                         const sPane = _bar.querySelector('.sticky-pane-single');
                         const line = getTopLineNum(null);
                         const anc = (line && _newTree) ? (_newTree.tree.get(line) || null) : null;
-                        const filtered = filterAncestors(anc, _newTree?.blockEndLines, 'right');
+                        const filtered = filterAncestors(anc, _newTree?.blockEndLines);
                         renderPane(sPane, filtered, 'right');
                         _bar.style.display = (filtered?.length || 0) > 0 ? '' : 'none';
                     }

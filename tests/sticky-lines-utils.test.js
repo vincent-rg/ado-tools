@@ -430,9 +430,16 @@ describe('buildTree', () => {
 });
 
 // ─── MIN_BLOCK_LINES filter (blockEndLines) ──────────────────────────────────
+// filterAncestors uses (endLine - sigLine + 1) >= MIN_BLOCK_LINES (currently 8).
+// Allman-style braces add an extra line to the span vs K&R style, so the threshold
+// needs to be large enough to filter small Allman blocks too.
+//   K&R  2-body: sig=1 end=4 → span=4  (filtered at MIN=8)
+//   K&R  6-body: sig=1 end=8 → span=8  (shown    at MIN=8)
+//   Allman 2-body: sig=1 end=5 → span=5 (filtered at MIN=8)
+//   Allman 5-body: sig=1 end=8 → span=8 (shown    at MIN=8)
 
 describe('blockEndLines spans', () => {
-    it('small block (< 5 source lines) has correct endLine', () => {
+    it('small block (< 8 source lines) has correct endLine', () => {
         const src = [
             'void f() {',    // 1
             '    if (x) {',  // 2
@@ -442,9 +449,9 @@ describe('blockEndLines spans', () => {
         ].join('\n');
         const lines = src.split('\n');
         const { blockEndLines } = buildBraceTree(lines);
-        // The 'if' block: sigLine = 2, endLine = 4 → span = 3 rows
+        // The 'if' block: sigLine = 2, endLine = 4 → span = 4-2+1 = 3 → filtered (< 8)
         expect(blockEndLines.get(2)).toBe(4);
-        // The 'f' block: sigLine = 1, endLine = 5 → span = 5 rows
+        // The 'f' block: sigLine = 1, endLine = 5 → span = 5-1+1 = 5 → filtered (< 8)
         expect(blockEndLines.get(1)).toBe(5);
     });
 
@@ -453,20 +460,20 @@ describe('blockEndLines spans', () => {
             'void big() {',         // 1
             '    if (cond) {',      // 2
             '        a();',         // 3
-            '    }',                // 4  (if block: lines 2-4 = 3 rows)
+            '    }',                // 4  (if block: lines 2-4, span=3 → filtered)
             '    for (;;) {',       // 5
             '        b();',         // 6
             '        c();',         // 7
             '        d();',         // 8
             '        e();',         // 9
-            '    }',                // 10 (for block: lines 5-10 = 6 rows)
+            '    }',                // 10 (for block: lines 5-10, span=6 → filtered at MIN=8)
             '}',                    // 11
         ].join('\n');
         const lines = src.split('\n');
         const { blockEndLines } = buildBraceTree(lines);
-        const ifSpan = blockEndLines.get(2) - 2 + 1;   // 4 - 2 + 1 = 3
+        const ifSpan  = blockEndLines.get(2) - 2 + 1;  // 4 - 2 + 1 = 3
         const forSpan = blockEndLines.get(5) - 5 + 1;  // 10 - 5 + 1 = 6
-        expect(ifSpan).toBe(3);   // small → would be filtered at MIN_BLOCK_LINES=5
-        expect(forSpan).toBe(6);  // large → would be shown
+        expect(ifSpan).toBe(3);
+        expect(forSpan).toBe(6);
     });
 });
