@@ -1227,6 +1227,92 @@ const ADOContent = {
             return createPlaceholder(`<ol style="margin:0.3em 0;padding-left:1.5em;">${items}</ol>\n`);
         });
 
+        // 4e. Emoji shortcodes (:smile:, :+1:, etc.) and text emoticons (:) :D etc.)
+        const EMOJI_SHORTCODES = {
+            // Faces — happy
+            ':smile:':'😄', ':grin:':'😁', ':laughing:':'😆', ':joy:':'😂', ':rofl:':'🤣',
+            ':slightly_smiling_face:':'🙂', ':wink:':'😉', ':blush:':'😊', ':innocent:':'😇',
+            ':heart_eyes:':'😍', ':kissing_heart:':'😘', ':stuck_out_tongue:':'😛',
+            ':stuck_out_tongue_winking_eye:':'😜', ':zany_face:':'🤪',
+            // Faces — neutral / expressive
+            ':thinking:':'🤔', ':neutral_face:':'😐', ':expressionless:':'😑',
+            ':unamused:':'😒', ':roll_eyes:':'🙄', ':grimacing:':'😬', ':relieved:':'😌',
+            ':pensive:':'😔', ':sleeping:':'😴', ':sunglasses:':'😎', ':nerd_face:':'🤓',
+            ':confused:':'😕', ':worried:':'😟', ':open_mouth:':'😮', ':flushed:':'😳',
+            ':cowboy_hat_face:':'🤠', ':partying_face:':'🥳', ':monocle_face:':'🧐',
+            // Faces — sad / negative
+            ':pleading_face:':'🥺', ':cry:':'😢', ':sob:':'😭', ':scream:':'😱',
+            ':disappointed:':'😞', ':weary:':'😩', ':triumph:':'😤', ':rage:':'😡', ':angry:':'😠',
+            // Misc faces / objects
+            ':skull:':'💀', ':poop:':'💩', ':ghost:':'👻', ':robot:':'🤖',
+            // Hands / gestures
+            ':wave:':'👋', ':ok_hand:':'👌', ':v:':'✌️', ':crossed_fingers:':'🤞',
+            ':+1:':'👍', ':thumbsup:':'👍', ':-1:':'👎', ':thumbsdown:':'👎',
+            ':clap:':'👏', ':raised_hands:':'🙌', ':pray:':'🙏', ':muscle:':'💪', ':eyes:':'👀',
+            // Hearts / love
+            ':heart:':'❤️', ':orange_heart:':'🧡', ':yellow_heart:':'💛', ':green_heart:':'💚',
+            ':blue_heart:':'💙', ':purple_heart:':'💜', ':broken_heart:':'💔',
+            ':sparkling_heart:':'💖', ':two_hearts:':'💕',
+            // Celebration / stars
+            ':fire:':'🔥', ':star:':'⭐', ':star2:':'🌟', ':sparkles:':'✨', ':boom:':'💥',
+            ':tada:':'🎉', ':confetti_ball:':'🎊', ':trophy:':'🏆', ':zap:':'⚡',
+            ':1st_place_medal:':'🥇', ':2nd_place_medal:':'🥈', ':3rd_place_medal:':'🥉',
+            // Status / checks
+            ':white_check_mark:':'✅', ':heavy_check_mark:':'✔️', ':x:':'❌',
+            ':warning:':'⚠️', ':no_entry:':'⛔', ':stop_sign:':'🛑', ':no_entry_sign:':'🚫',
+            ':question:':'❓', ':exclamation:':'❗', ':100:':'💯',
+            // Dev / work
+            ':rocket:':'🚀', ':bug:':'🐛', ':construction:':'🚧', ':sos:':'🆘',
+            ':lock:':'🔒', ':unlock:':'🔓', ':key:':'🔑',
+            ':memo:':'📝', ':pencil:':'✏️', ':hammer:':'🔨', ':wrench:':'🔧',
+            ':hammer_and_wrench:':'🛠️', ':gear:':'⚙️', ':bulb:':'💡', ':link:':'🔗',
+            ':computer:':'💻', ':desktop_computer:':'🖥️', ':phone:':'📱',
+            ':calendar:':'📅', ':books:':'📚', ':book:':'📖',
+            ':bar_chart:':'📊', ':chart_with_upwards_trend:':'📈', ':chart_with_downwards_trend:':'📉',
+            ':package:':'📦', ':label:':'🏷️', ':pushpin:':'📌', ':email:':'📧',
+            ':inbox_tray:':'📥', ':outbox_tray:':'📤', ':hourglass:':'⌛', ':hourglass_flowing_sand:':'⏳',
+            ':checkered_flag:':'🏁', ':rainbow:':'🌈',
+        };
+        result = result.replace(/(?<![a-zA-Z0-9_]):([\w+\-]+):/g, m => EMOJI_SHORTCODES[m] || m);
+        // Text emoticons — > and < are &gt;/&lt; in HTML-escaped text; process before blockquotes
+        // so that >:D at line start is an emoticon, not a blockquote
+        [   [/&gt;:-D|&gt;:D/g, '😆'],                              // >:D  evil grin
+            [/&gt;:-\)|&gt;:\)/g, '😈'],                             // >:)  imp
+            [/&gt;:-\(|&gt;:\(/g, '😠'],                             // >:(  angry
+            [/(?<![a-zA-Z])O:-?\)/g, '😇'],                          // O:)  angel
+            [/(?<![a-zA-Z])B:-?\)/g, '😎'],                          // B-)  cool
+            [/:'[-]?\(/g, '😢'],                                      // :'(  crying
+            [/:-\*|:\*/g, '😘'],                                      // :*   kiss
+            [/;-?\)/g, '😉'],                                         // ;)   wink
+            [/(?<!\w):-?D(?![:\w])|(?<!\w)=-?D(?![:\w])/g, '😄'],   // :D   big grin
+            [/:-?\)|=-?\)/g, '😊'],                                   // :)   smile
+            [/:-?\(|=-?\(/g, '😞'],                                   // :(   sad
+            [/:-?[Pp](?!:)|=-?[Pp](?!:)/g, '😛'],                    // :P   tongue
+            [/:-?[Oo](?![:\w])/g, '😮'],                              // :O   surprised
+            [/:-?\||=\|/g, '😐'],                                     // :|   neutral
+            [/&lt;3(?![\/0-9])/g, '❤️'],                              // <3   heart
+            [/&lt;\/3/g, '💔'],                                        // </3  broken heart
+            [/\bXD\b|\bxD\b/g, '😆'],                                 // XD
+        ].forEach(([re, emoji]) => { result = result.replace(re, emoji); });
+
+        // 4f. Parse blockquotes (lines starting with >).
+        // Lazy continuation: non-empty lines (including lone-backslash lines) following a
+        // > line are part of the same blockquote; only a truly empty line breaks the quote.
+        // Lone backslash lines (leading-spaces + "\" + nothing) render as blank lines inside
+        // the blockquote; they are applied here so they don't prematurely break continuation.
+        function loneBackslash(text) { return text.replace(/^[ \t]*\\$/gm, ''); }
+        function parseBlockquotes(text) {
+            return text.replace(/(?:^&gt; ?.*(?:\n|$))+(?:^(?!$)[^\n]*(?:\n|$))*/gm, (block) => {
+                const inner = loneBackslash(block.replace(/\n$/, '').split('\n')
+                    .map(line => line.replace(/^&gt; ?/, '')).join('\n'));
+                const innerHtml = parseBlockquotes(inner);
+                return createPlaceholder(`<blockquote style="margin:0.3em 0;padding:0.1em 0.8em;border-left:3px solid #888;opacity:0.85;">${innerHtml}</blockquote>\n`);
+            });
+        }
+        result = parseBlockquotes(result);
+        // Apply lone-backslash → empty for content outside blockquotes (which are now placeholders).
+        result = loneBackslash(result);
+
         // 5. Parse bold
         result = result.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
         // Only match __ for bold when not part of longer underscore sequences (word boundaries)

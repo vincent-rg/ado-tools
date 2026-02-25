@@ -117,6 +117,18 @@ describe('ADOContent', () => {
             expect(result).toContain('<li>first</li>');
         });
 
+        it('lone backslash line (nothing after) renders as empty line', () => {
+            expect(ADOContent.parseMarkdownLinks('\\')).toBe('');
+            expect(ADOContent.parseMarkdownLinks('  \\')).toBe('');  // leading spaces stripped
+            expect(ADOContent.parseMarkdownLinks('line1\n\\\nline2')).toBe('line1\n\nline2');
+        });
+
+        it('backslash with trailing content (even spaces) is NOT erased', () => {
+            expect(ADOContent.parseMarkdownLinks('\\ ')).toBe('\\ ');       // trailing space → kept
+            expect(ADOContent.parseMarkdownLinks('\\   ')).toBe('\\   ');   // trailing spaces → kept
+            expect(ADOContent.parseMarkdownLinks('\\ text')).toContain('\\ text'); // trailing text → kept
+        });
+
         it('handles backslash escapes', () => {
             const result = ADOContent.parseMarkdownLinks('\\*not italic\\*');
             expect(result).not.toContain('<em>');
@@ -133,6 +145,163 @@ describe('ADOContent', () => {
             const result = ADOContent.parseMarkdownLinks('![alt](http://img.png)');
             expect(result).toContain('<img');
             expect(result).toContain('src="http://img.png"');
+        });
+
+        describe('blockquotes', () => {
+            it('parses a simple blockquote', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; quoted text\n');
+                expect(result).toContain('<blockquote');
+                expect(result).toContain('quoted text');
+            });
+
+            it('parses multi-line blockquote as one block', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; line one\n&gt; line two\n');
+                expect(result).toContain('line one');
+                expect(result).toContain('line two');
+                expect((result.match(/<blockquote/g) || []).length).toBe(1);
+            });
+
+            it('breaks blockquote on empty line', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; first\n\n&gt; second\n');
+                expect((result.match(/<blockquote/g) || []).length).toBe(2);
+            });
+
+            it('parses nested blockquotes', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; outer\n&gt; &gt; inner\n');
+                expect((result.match(/<blockquote/g) || []).length).toBe(2);
+                expect(result).toContain('outer');
+                expect(result).toContain('inner');
+            });
+
+            it('processContent handles raw > input', () => {
+                const result = ADOContent.processContent('> quoted');
+                expect(result).toContain('<blockquote');
+                expect(result).toContain('quoted');
+            });
+
+            it('lazy continuation: non-empty lines following > are in the same blockquote', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; quote line\ncontinuation here\n');
+                expect(result).toContain('<blockquote');
+                expect(result).toContain('quote line');
+                expect(result).toContain('continuation here');
+                expect((result.match(/<blockquote/g) || []).length).toBe(1);
+            });
+
+            it('empty line breaks lazy continuation', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; quote\ncontinues\n\nnot in quote\n');
+                expect(result).toContain('<blockquote');
+                expect(result).toContain('quote');
+                expect(result).toContain('continues');
+                // "not in quote" must be outside the blockquote
+                const bqMatch = result.match(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/);
+                expect(bqMatch[1]).not.toContain('not in quote');
+                expect(result).toContain('not in quote');
+            });
+
+            it('empty line and backslash mix inside blockquote', () => {
+                const result = ADOContent.parseMarkdownLinks('&gt; quote\ncontinues\n\\\n    \\\n\\    \n\nnot in quote\n');
+                // following a line in a blockquote, "\" gives an empty line inside the blockquote and continues the blockquote
+                // following a line in a blockquote, "\ " gives a "\ " line inside the blockquote and continues the blockquote
+                // following a line in a blockquote, " \" gives an empty line inside the blockquote and continues the blockquote
+                // "not in quote" must be outside the blockquote
+                const bqMatch = result.match(/<blockquote[^>]*>quote\ncontinues\n\n\n\\    <\/blockquote>not in quote/);
+                expect(bqMatch).not.toBeNull();
+            });
+
+            it('>:D at line start is an emoticon, not a blockquote', () => {
+                const result = ADOContent.processContent('>:D great news\n');
+                expect(result).toContain('😆');
+                expect(result).not.toContain('<blockquote');
+            });
+        });
+
+        describe('emoji shortcodes', () => {
+            it('converts common shortcodes', () => {
+                expect(ADOContent.parseMarkdownLinks(':smile:')).toBe('😄');
+                expect(ADOContent.parseMarkdownLinks(':thumbsup:')).toBe('👍');
+                expect(ADOContent.parseMarkdownLinks(':+1:')).toBe('👍');
+                expect(ADOContent.parseMarkdownLinks(':fire:')).toBe('🔥');
+                expect(ADOContent.parseMarkdownLinks(':warning:')).toBe('⚠️');
+                expect(ADOContent.parseMarkdownLinks(':x:')).toBe('❌');
+            });
+
+            it('passes through unknown shortcodes unchanged', () => {
+                expect(ADOContent.parseMarkdownLinks(':notacode:')).toBe(':notacode:');
+            });
+
+            it('does not convert shortcode preceded by a word char', () => {
+                const result = ADOContent.parseMarkdownLinks('word:smile:');
+                expect(result).not.toContain('😄');
+                expect(result).toContain(':smile:');
+            });
+
+            it('does not convert shortcodes inside code spans', () => {
+                const result = ADOContent.parseMarkdownLinks('`:smile:`');
+                expect(result).toContain('<code>:smile:</code>');
+                expect(result).not.toContain('😄');
+            });
+        });
+
+        describe('text emoticons', () => {
+            it('converts :) and :-) to smile', () => {
+                expect(ADOContent.parseMarkdownLinks(':)')).toBe('😊');
+                expect(ADOContent.parseMarkdownLinks(':-)')).toBe('😊');
+            });
+
+            it('converts :D and :-D to big grin', () => {
+                expect(ADOContent.parseMarkdownLinks(':D')).toBe('😄');
+                expect(ADOContent.parseMarkdownLinks(':-D')).toBe('😄');
+            });
+
+            it('converts :( and :-( to sad', () => {
+                expect(ADOContent.parseMarkdownLinks(':(')).toBe('😞');
+                expect(ADOContent.parseMarkdownLinks(':-(')).toBe('😞');
+            });
+
+            it('converts :P to tongue', () => {
+                expect(ADOContent.parseMarkdownLinks(':P')).toBe('😛');
+                expect(ADOContent.parseMarkdownLinks(':p')).toBe('😛');
+            });
+
+            it('converts ;) to wink', () => {
+                expect(ADOContent.parseMarkdownLinks(';)')).toBe('😉');
+            });
+
+            it('converts :| to neutral', () => {
+                expect(ADOContent.parseMarkdownLinks(':|')).toBe('😐');
+            });
+
+            it("converts :'( to crying", () => {
+                expect(ADOContent.parseMarkdownLinks(":'(")).toBe('😢');
+            });
+
+            it('converts <3 to heart via processContent', () => {
+                expect(ADOContent.processContent('<3')).toContain('❤️');
+            });
+
+            it('converts </3 to broken heart via processContent', () => {
+                expect(ADOContent.processContent('</3')).toContain('💔');
+            });
+
+            it('converts >:D to evil grin via processContent', () => {
+                expect(ADOContent.processContent('>:D')).toContain('😆');
+            });
+
+            it('does not convert :D preceded by a word char', () => {
+                const result = ADOContent.parseMarkdownLinks('x:D');
+                expect(result).toContain(':D');
+                expect(result).not.toContain('😄');
+            });
+
+            it('does not convert emoticons inside code spans', () => {
+                const result = ADOContent.parseMarkdownLinks('`:)`');
+                expect(result).toContain('<code>');
+                expect(result).not.toContain('😊');
+            });
+
+            it('converts XD to laughing emoji', () => {
+                expect(ADOContent.parseMarkdownLinks('XD')).toBe('😆');
+            });
         });
     });
 
