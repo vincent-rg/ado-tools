@@ -7683,7 +7683,9 @@
             const select = document.getElementById('voteDropdown');
             if (select) select.disabled = true;
             try {
-                await ADOAPI.setReviewerVote(currentConfig, currentPRId, currentUserId, vote);
+                const selfReviewer = currentPRData?.reviewers?.find(r => r.id === currentUserId);
+                const isRequired = selfReviewer?.isRequired || false;
+                await ADOAPI.setReviewerVote(currentConfig, currentPRId, currentUserId, vote, isRequired);
 
                 // Refresh PR data to get updated reviewers list
                 currentPRData = await ADOAPI.getPR(currentConfig, currentPRId);
