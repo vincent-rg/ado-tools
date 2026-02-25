@@ -3451,10 +3451,12 @@
         }
 
         .thread-status-dot {
+            display: inline-block;
             width: 8px;
             height: 8px;
             border-radius: 50%;
             flex-shrink: 0;
+            vertical-align: middle;
         }
 
         .thread-status-dot.active {
@@ -3465,10 +3467,24 @@
             background: #ffaa44;
         }
 
-        .thread-status-dot.fixed,
-        .thread-status-dot.closed,
+        .thread-status-dot.fixed {
+            background: #107c10;
+        }
+
+        .thread-status-dot.closed {
+            background: #fff;
+            border: 2px solid #107c10;
+            box-sizing: border-box;
+        }
+
         .thread-status-dot.wontFix {
             background: #a19f9d;
+        }
+
+        .thread-status-dot.deleted {
+            background: #fff;
+            border: 2px solid #605e5c;
+            box-sizing: border-box;
         }
 
         .thread-status-dot.byDesign {
@@ -3480,6 +3496,22 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             min-width: 0;
+        }
+
+        .tree-thread-avatar-wrap {
+            position: relative;
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            --avatar-size: 16px;
+        }
+
+        .tree-thread-avatar-wrap > img {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
         }
 
         /* Directory indicators */
@@ -4912,12 +4944,12 @@
             }, {});
 
             container.innerHTML = `
-                <span title="Active">💬 <strong>${statusCounts.active || 0}</strong></span>
-                <span title="Resolved" style="color: #107c10;">✅ <strong>${statusCounts.fixed || 0}</strong></span>
-                <span title="Closed" style="color: #605e5c;">🔒 <strong>${statusCounts.closed || 0}</strong></span>
-                ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ <strong>${statusCounts.pending}</strong></span>` : ''}
-                ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 <strong>${statusCounts.wontFix}</strong></span>` : ''}
-                ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ <strong>${statusCounts.deleted}</strong></span>` : ''}
+                <span title="Active"><span class="thread-status-dot active"></span> <strong>${statusCounts.active || 0}</strong></span>
+                <span title="Resolved"><span class="thread-status-dot fixed"></span> <strong>${statusCounts.fixed || 0}</strong></span>
+                <span title="Closed"><span class="thread-status-dot closed"></span> <strong>${statusCounts.closed || 0}</strong></span>
+                ${statusCounts.pending ? `<span title="Pending"><span class="thread-status-dot pending"></span> <strong>${statusCounts.pending}</strong></span>` : ''}
+                ${statusCounts.wontFix ? `<span title="Won't Fix"><span class="thread-status-dot wontFix"></span> <strong>${statusCounts.wontFix}</strong></span>` : ''}
+                ${statusCounts.deleted ? `<span title="Deleted"><span class="thread-status-dot deleted"></span> <strong>${statusCounts.deleted}</strong></span>` : ''}
             `;
         }
 
@@ -7082,6 +7114,7 @@
                     fileEl.insertAdjacentHTML('afterend', newSubListHtml);
                 }
             });
+            AvatarLoader.loadPending();
         }
 
         function refreshInlineThreadsIfNeeded() {
@@ -8320,12 +8353,12 @@
             const statsHtml = `
                 <h4>Threads</h4>
                 <div id="threadStatsContainer" class="compact-stats">
-                    <span title="Active">💬 <strong>${statusCounts.active || 0}</strong></span>
-                    <span title="Resolved" style="color: #107c10;">✅ <strong>${statusCounts.fixed || 0}</strong></span>
-                    <span title="Closed" style="color: #605e5c;">🔒 <strong>${statusCounts.closed || 0}</strong></span>
-                    ${statusCounts.pending ? `<span title="Pending" style="color: #8a6d3b;">⏱️ <strong>${statusCounts.pending}</strong></span>` : ''}
-                    ${statusCounts.wontFix ? `<span title="Won't Fix" style="color: #605e5c;">🚫 <strong>${statusCounts.wontFix}</strong></span>` : ''}
-                    ${statusCounts.deleted ? `<span title="Deleted" style="color: #a4262c;">🗑️ <strong>${statusCounts.deleted}</strong></span>` : ''}
+                    <span title="Active"><span class="thread-status-dot active"></span> <strong>${statusCounts.active || 0}</strong></span>
+                    <span title="Resolved"><span class="thread-status-dot fixed"></span> <strong>${statusCounts.fixed || 0}</strong></span>
+                    <span title="Closed"><span class="thread-status-dot closed"></span> <strong>${statusCounts.closed || 0}</strong></span>
+                    ${statusCounts.pending ? `<span title="Pending"><span class="thread-status-dot pending"></span> <strong>${statusCounts.pending}</strong></span>` : ''}
+                    ${statusCounts.wontFix ? `<span title="Won't Fix"><span class="thread-status-dot wontFix"></span> <strong>${statusCounts.wontFix}</strong></span>` : ''}
+                    ${statusCounts.deleted ? `<span title="Deleted"><span class="thread-status-dot deleted"></span> <strong>${statusCounts.deleted}</strong></span>` : ''}
                 </div>
                 <div id="changeStatsContainer">
                 ${currentFileChangeStats ? `
@@ -8951,15 +8984,26 @@
             for (const thread of sorted) {
                 const firstComment = thread.comments?.find(c => c.commentType !== 'system');
                 if (!firstComment) continue;
-                const author = firstComment.author?.displayName || 'Unknown';
+                const authorName = ADOContent.escapeHtml(firstComment.author?.displayName || 'Unknown');
+                const authorId = firstComment.author?.id;
                 const content = stripMarkdown(firstComment.content || '');
                 const preview = content.length > 60 ? content.substring(0, 60) + '...' : content;
                 const statusCls = thread.status || 'active';
                 const lineInfo = thread.threadContext?.rightFileStart?.line || thread.threadContext?.leftFileStart?.line;
                 const lineLabel = lineInfo ? `L${lineInfo}: ` : '';
+                const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
+                let avatarHtml;
+                if (cachedUrl) {
+                    avatarHtml = `<span class="tree-thread-avatar-wrap"><img src="${cachedUrl}" alt="${authorName}" title="${authorName}"></span>`;
+                } else if (authorId) {
+                    avatarHtml = `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder" title="${authorName}"></span><img data-user-id="${authorId}" alt="${authorName}" title="${authorName}" class="avatar-pending"></span>`;
+                } else {
+                    avatarHtml = `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder" title="${authorName}"></span></span>`;
+                }
                 html += `<div class="file-tree-thread" data-thread-id="${thread.id}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
                 html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
-                html += `<span class="thread-preview">${lineLabel}${ADOContent.escapeHtml(author)}: ${ADOContent.escapeHtml(preview)}</span>`;
+                html += avatarHtml;
+                html += `<span class="thread-preview">${lineLabel}${ADOContent.escapeHtml(preview)}</span>`;
                 html += '</div>';
             }
             html += '</div>';
@@ -9093,6 +9137,7 @@
             }
 
             container.innerHTML = renderNode(root, 0);
+            AvatarLoader.loadPending();
         }
 
         function getSourceCommitVersion() {
@@ -9176,6 +9221,7 @@
             }
 
             container.innerHTML = html;
+            AvatarLoader.loadPending();
         }
 
         async function expandRepoDir(dirPath, dirId, depth) {
