@@ -1144,7 +1144,7 @@ const ADOContent = {
     /**
      * Parse markdown links and formatting
      */
-    parseMarkdownLinks(escapedHtml) {
+    parseMarkdown(escapedHtml) {
         if (!escapedHtml) return escapedHtml;
 
         let result = escapedHtml;
@@ -1356,7 +1356,7 @@ const ADOContent = {
         if (!content) return '';
         const escaped = this.escapeHtml(content);
         const withMentions = this.resolveMentionsInEscaped(escaped);
-        return this.parseMarkdownLinks(withMentions);
+        return this.parseMarkdown(withMentions);
     }
 };
 
