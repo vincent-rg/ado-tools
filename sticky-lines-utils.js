@@ -39,17 +39,31 @@ const StickyLinesUtils = (() => {
 
         const CONTROL_FLOW_RE = /^(if|else\s+if|else|for|while|do\b|switch|try|catch|finally)\b/;
 
-        // Walk back from the current line to find the closing ) of a param list,
-        // skipping C++ initializer-list entries (lines that start with ':' or ',').
-        // At line i itself, strip the '{' before checking to handle ': member_(x) {'.
+        // Walk back from the current line to find the closing ) of a param list.
+        // Tracks paren balance across ALL lines (including initializer-list entries
+        // starting with ':' or ',') so multi-line initializer items (e.g.
+        // ": CBase(\n  {bar(x)})" don't confuse the search.
+        // Lines starting with single ':' or ',' are counted for balance but never
+        // marked as paramEndIdx candidates.  Scans right-to-left within each line
+        // and keeps updating paramEndIdx — the last update (earliest in source)
+        // is the real function-param closing ')'.
         let paramEndIdx = -1;
-        for (let j = i; j >= Math.max(0, i - 10); j--) {
+        let parenDepth = 0;
+        for (let j = i; j >= Math.max(0, i - 20); j--) {
             const t = lines[j].trim();
             if (!t) continue;
             if (j < i && (/[;{}]$/.test(t) || t === '};')) break;
             const checkStr = j === i ? t.replace(/\s*\{.*$/, '').trim() : t;
-            if (/^:(?!:)/.test(checkStr) || /^,/.test(checkStr)) continue;
-            if (t.includes(')')) { paramEndIdx = j; break; }
+            const isSkipLine = /^:(?!:)/.test(checkStr) || /^,/.test(checkStr);
+            for (let k = checkStr.length - 1; k >= 0; k--) {
+                const ch = checkStr[k];
+                if (ch === ')') {
+                    if (!isSkipLine && parenDepth === 0) paramEndIdx = j;
+                    parenDepth++;
+                } else if (ch === '(') {
+                    if (parenDepth > 0) parenDepth--;
+                }
+            }
         }
 
         if (paramEndIdx === -1) {

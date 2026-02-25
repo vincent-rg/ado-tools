@@ -71,6 +71,25 @@ describe('findExtendedSignature', () => {
         expect(result.content).not.toContain('m2_');
     });
 
+    it('detects a C++ constructor with multi-line brace-initializer in init-list', () => {
+        const lines = [
+            'CFoo::CFoo()',
+            '    : CBase(',
+            '      someValue1,',
+            '      {bar(ns1::ns2::someValue2),',
+            '       bar(ns1::ns2::someValue3),',
+            '       bar(ns1::ns2::someValue4)})',
+            '    , someValue5(true)',
+            '{',
+        ];
+        const i = 7;
+        const result = findExtendedSignature(lines, i);
+        expect(result).not.toBeNull();
+        expect(result.content).toContain('CFoo');
+        expect(result.content).not.toContain('bar');
+        expect(result.content).not.toContain('someValue');
+    });
+
     it('detects a multi-line function signature', () => {
         const lines = [
             'void longFunction(',
@@ -260,6 +279,27 @@ describe('buildBraceTree', () => {
         expect(a).toHaveLength(1);
         expect(a[0].content).toContain('MyClass');
         expect(a[0].content).not.toContain('member_');
+    });
+
+    it('detects C++ constructor with brace-initializer in init-list', () => {
+        const src = [
+            'CFoo::CFoo()',
+            '    : CBase(',
+            '      someValue1,',
+            '      {bar(ns1::ns2::someValue2),',
+            '       bar(ns1::ns2::someValue3),',
+            '       bar(ns1::ns2::someValue4)})',
+            '    , someValue5(true)',
+            '{',
+            '    doWork();',
+            '}',
+        ].join('\n');
+        const lines = src.split('\n');
+        const { tree } = buildBraceTree(lines);
+        const a = tree.get(9); // inside the function body
+        expect(a).toHaveLength(1);
+        expect(a[0].content).toContain('CFoo');
+        expect(a[0].content).not.toContain('bar');
     });
 
     it('tracks blockEndLines for multiple blocks', () => {
