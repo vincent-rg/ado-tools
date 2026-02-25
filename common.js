@@ -1194,7 +1194,7 @@ const ADOContent = {
         // 4. Parse headers (h1-h6) - consume trailing newline to avoid double spacing with pre-wrap
         result = result.replace(/^(#{1,6})\s+(.+)(\n?)/gm, (match, hashes, text, trailing) => {
             const level = hashes.length;
-            const html = `<h${level} style="margin: 0.5em 0; font-size: ${1.5 - (level - 1) * 0.15}em;">${text}</h${level}>`;
+            const html = `<h${level} class="md-h${level}">${text}</h${level}>`;
             return createPlaceholder(html) + trailing;
         });
 
@@ -1204,9 +1204,9 @@ const ADOContent = {
                 const m = line.match(/^[ \t]*- \[([ xX])\] (.+)/);
                 if (!m) return '';
                 const checked = m[1] !== ' ' ? ' checked disabled' : ' disabled';
-                return `<li style="list-style:none;"><input type="checkbox"${checked}> ${m[2]}</li>`;
+                return `<li class="md-task-item"><input type="checkbox"${checked}> ${m[2]}</li>`;
             }).join('');
-            return createPlaceholder(`<ul style="margin:0.3em 0;padding-left:1.5em;">${items}</ul>\n`);
+            return createPlaceholder(`<ul class="md-list">${items}</ul>\n`);
         });
 
         // 4c. Parse bullet lists (- item, + item, * item)
@@ -1215,7 +1215,7 @@ const ADOContent = {
                 const m = line.match(/^[ \t]*[-+*] (.+)/);
                 return m ? `<li>${m[1]}</li>` : '';
             }).join('');
-            return createPlaceholder(`<ul style="margin:0.3em 0;padding-left:1.5em;">${items}</ul>\n`);
+            return createPlaceholder(`<ul class="md-list">${items}</ul>\n`);
         });
 
         // 4d. Parse numbered lists (1. item, 2. item)
@@ -1224,7 +1224,7 @@ const ADOContent = {
                 const m = line.match(/^[ \t]*\d+\. (.+)/);
                 return m ? `<li>${m[1]}</li>` : '';
             }).join('');
-            return createPlaceholder(`<ol style="margin:0.3em 0;padding-left:1.5em;">${items}</ol>\n`);
+            return createPlaceholder(`<ol class="md-list">${items}</ol>\n`);
         });
 
         // 4e. Emoji shortcodes (:smile:, :+1:, etc.) and text emoticons (:) :D etc.)
@@ -1306,7 +1306,7 @@ const ADOContent = {
                 const inner = loneBackslash(block.replace(/\n$/, '').split('\n')
                     .map(line => line.replace(/^&gt; ?/, '')).join('\n'));
                 const innerHtml = parseBlockquotes(inner);
-                return createPlaceholder(`<blockquote style="margin:0.3em 0;padding:0.1em 0.8em;border-left:3px solid #888;opacity:0.85;">${innerHtml}</blockquote>\n`);
+                return createPlaceholder(`<blockquote class="md-blockquote">${innerHtml}</blockquote>\n`);
             });
         }
         result = parseBlockquotes(result);

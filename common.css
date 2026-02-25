@@ -722,3 +722,24 @@ summary:hover {
 .comment-content ol {
     white-space: normal;
 }
+
+/* Markdown rendered content */
+.md-blockquote {
+    margin: 0.3em 0;
+    padding: 0.1em 0.8em;
+    border-left: 3px solid #888;
+    opacity: 0.85;
+}
+.md-list {
+    margin: 0.3em 0;
+    padding-left: 1.5em;
+}
+.md-task-item {
+    list-style: none;
+}
+.md-h1 { margin: 0.5em 0; font-size: 1.5em; }
+.md-h2 { margin: 0.5em 0; font-size: 1.35em; }
+.md-h3 { margin: 0.5em 0; font-size: 1.2em; }
+.md-h4 { margin: 0.5em 0; font-size: 1.05em; }
+.md-h5 { margin: 0.5em 0; font-size: 0.9em; }
+.md-h6 { margin: 0.5em 0; font-size: 0.75em; }

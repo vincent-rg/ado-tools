@@ -51,31 +51,23 @@ describe('ADOContent', () => {
         });
 
         it('parses inline code', () => {
-            const result = ADOContent.parseMarkdown('use `console.log`');
-            expect(result).toContain('<code>console.log</code>');
+            expect(ADOContent.parseMarkdown('use `console.log`')).toBe('use <code>console.log</code>');
         });
 
         it('parses links', () => {
-            const result = ADOContent.parseMarkdown('[text](http://example.com)');
-            expect(result).toContain('href="http://example.com"');
-            expect(result).toContain('>text</a>');
+            expect(ADOContent.parseMarkdown('[text](http://example.com)')).toBe('<a href="http://example.com" target="_blank" rel="noopener noreferrer">text</a>');
         });
 
         it('auto-links bare http URLs', () => {
-            const result = ADOContent.parseMarkdown('see http://www.foo.com for details');
-            expect(result).toContain('href="http://www.foo.com"');
-            expect(result).toContain('>http://www.foo.com</a>');
+            expect(ADOContent.parseMarkdown('see http://www.foo.com for details')).toBe('see <a href="http://www.foo.com" target="_blank" rel="noopener noreferrer">http://www.foo.com</a> for details');
         });
 
         it('auto-links bare https URLs', () => {
-            const result = ADOContent.parseMarkdown('https://example.com/path?a=1');
-            expect(result).toContain('href="https://example.com/path?a=1"');
+            expect(ADOContent.parseMarkdown('https://example.com/path?a=1')).toBe('<a href="https://example.com/path?a=1" target="_blank" rel="noopener noreferrer">https://example.com/path?a=1</a>');
         });
 
         it('auto-link strips trailing sentence punctuation', () => {
-            const result = ADOContent.parseMarkdown('see http://foo.com.');
-            expect(result).toContain('href="http://foo.com"');
-            expect(result).not.toContain('href="http://foo.com."');
+            expect(ADOContent.parseMarkdown('see http://foo.com.')).toBe('see <a href="http://foo.com" target="_blank" rel="noopener noreferrer">http://foo.com</a>.');
         });
 
         it('does not double-link markdown links', () => {
@@ -85,36 +77,23 @@ describe('ADOContent', () => {
         });
 
         it('parses headers', () => {
-            const result = ADOContent.parseMarkdown('## Title\n');
-            expect(result).toContain('<h2');
-            expect(result).toContain('Title');
+            expect(ADOContent.parseMarkdown('## Title\n')).toBe('<h2 class="md-h2">Title</h2>');
         });
 
         it('parses task list checkboxes', () => {
-            const result = ADOContent.parseMarkdown('- [ ] todo\n- [x] done\n');
-            expect(result).toContain('type="checkbox"');
-            expect(result).toContain('checked');
+            expect(ADOContent.parseMarkdown('- [ ] todo\n- [x] done\n')).toBe('<ul class="md-list"><li class="md-task-item"><input type="checkbox" disabled> todo</li><li class="md-task-item"><input type="checkbox" checked disabled> done</li></ul>');
         });
 
         it('parses checkboxes after a heading', () => {
-            const result = ADOContent.parseMarkdown('### liste choix\n- [X] choix A\n- [ ] choix B\n');
-            expect(result).toContain('<h3');
-            expect(result).toContain('liste choix');
-            expect(result).toContain('type="checkbox"');
-            expect(result).toContain('choix A');
-            expect(result).toContain('choix B');
+            expect(ADOContent.parseMarkdown('### liste choix\n- [X] choix A\n- [ ] choix B\n')).toBe('<h3 class="md-h3">liste choix</h3><ul class="md-list"><li class="md-task-item"><input type="checkbox" checked disabled> choix A</li><li class="md-task-item"><input type="checkbox" disabled> choix B</li></ul>');
         });
 
         it('parses bullet lists', () => {
-            const result = ADOContent.parseMarkdown('- item1\n- item2\n');
-            expect(result).toContain('<ul');
-            expect(result).toContain('<li>item1</li>');
+            expect(ADOContent.parseMarkdown('- item1\n- item2\n')).toBe('<ul class="md-list"><li>item1</li><li>item2</li></ul>');
         });
 
         it('parses numbered lists', () => {
-            const result = ADOContent.parseMarkdown('1. first\n2. second\n');
-            expect(result).toContain('<ol');
-            expect(result).toContain('<li>first</li>');
+            expect(ADOContent.parseMarkdown('1. first\n2. second\n')).toBe('<ol class="md-list"><li>first</li><li>second</li></ol>');
         });
 
         it('lone backslash line (nothing after) renders as empty line', () => {
@@ -136,66 +115,40 @@ describe('ADOContent', () => {
         });
 
         it('parses code blocks', () => {
-            const result = ADOContent.parseMarkdown('```js\nconst x = 1;\n```');
-            expect(result).toContain('<pre><code>');
-            expect(result).toContain('const x = 1;');
+            expect(ADOContent.parseMarkdown('```js\nconst x = 1;\n```')).toBe('<pre><code>const x = 1;</code></pre>');
         });
 
         it('parses images', () => {
-            const result = ADOContent.parseMarkdown('![alt](http://img.png)');
-            expect(result).toContain('<img');
-            expect(result).toContain('src="http://img.png"');
+            expect(ADOContent.parseMarkdown('![alt](http://img.png)')).toBe('<img src="http://img.png" alt="alt" />');
         });
 
         describe('blockquotes', () => {
             it('parses a simple blockquote', () => {
-                const result = ADOContent.parseMarkdown('&gt; quoted text\n');
-                expect(result).toContain('<blockquote');
-                expect(result).toContain('quoted text');
+                expect(ADOContent.parseMarkdown('&gt; quoted text\n')).toBe('<blockquote class="md-blockquote">quoted text</blockquote>');
             });
 
             it('parses multi-line blockquote as one block', () => {
-                const result = ADOContent.parseMarkdown('&gt; line one\n&gt; line two\n');
-                expect(result).toContain('line one');
-                expect(result).toContain('line two');
-                expect((result.match(/<blockquote/g) || []).length).toBe(1);
+                expect(ADOContent.parseMarkdown('&gt; line one\n&gt; line two\n')).toBe('<blockquote class="md-blockquote">line one\nline two</blockquote>');
             });
 
             it('breaks blockquote on empty line', () => {
-                const result = ADOContent.parseMarkdown('&gt; first\n\n&gt; second\n');
-                expect((result.match(/<blockquote/g) || []).length).toBe(2);
+                expect(ADOContent.parseMarkdown('&gt; first\n\n&gt; second\n')).toBe('<blockquote class="md-blockquote">first</blockquote><blockquote class="md-blockquote">second</blockquote>');
             });
 
             it('parses nested blockquotes', () => {
-                const result = ADOContent.parseMarkdown('&gt; outer\n&gt; &gt; inner\n');
-                expect((result.match(/<blockquote/g) || []).length).toBe(2);
-                expect(result).toContain('outer');
-                expect(result).toContain('inner');
+                expect(ADOContent.parseMarkdown('&gt; outer\n&gt; &gt; inner\n')).toBe('<blockquote class="md-blockquote">outer<blockquote class="md-blockquote">inner</blockquote></blockquote>');
             });
 
             it('processContent handles raw > input', () => {
-                const result = ADOContent.processContent('> quoted');
-                expect(result).toContain('<blockquote');
-                expect(result).toContain('quoted');
+                expect(ADOContent.processContent('> quoted')).toBe('<blockquote class="md-blockquote">quoted</blockquote>');
             });
 
             it('lazy continuation: non-empty lines following > are in the same blockquote', () => {
-                const result = ADOContent.parseMarkdown('&gt; quote line\ncontinuation here\n');
-                expect(result).toContain('<blockquote');
-                expect(result).toContain('quote line');
-                expect(result).toContain('continuation here');
-                expect((result.match(/<blockquote/g) || []).length).toBe(1);
+                expect(ADOContent.parseMarkdown('&gt; quote line\ncontinuation here\n')).toBe('<blockquote class="md-blockquote">quote line\ncontinuation here</blockquote>');
             });
 
             it('empty line breaks lazy continuation', () => {
-                const result = ADOContent.parseMarkdown('&gt; quote\ncontinues\n\nnot in quote\n');
-                expect(result).toContain('<blockquote');
-                expect(result).toContain('quote');
-                expect(result).toContain('continues');
-                // "not in quote" must be outside the blockquote
-                const bqMatch = result.match(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/);
-                expect(bqMatch[1]).not.toContain('not in quote');
-                expect(result).toContain('not in quote');
+                expect(ADOContent.parseMarkdown('&gt; quote\ncontinues\n\nnot in quote\n')).toBe('<blockquote class="md-blockquote">quote\ncontinues</blockquote>not in quote\n');
             });
 
             it('empty line and backslash mix inside blockquote', () => {
@@ -204,7 +157,7 @@ describe('ADOContent', () => {
                 // following a line in a blockquote, "\ " gives a "\ " line inside the blockquote and continues the blockquote
                 // following a line in a blockquote, " \" gives an empty line inside the blockquote and continues the blockquote
                 // "not in quote" must be outside the blockquote
-                const bqMatch = result.match(/<blockquote[^>]*>quote\ncontinues\n\n\n\\    <\/blockquote>not in quote/);
+                const bqMatch = result.match(/<blockquote class="md-blockquote">quote\ncontinues\n\n\n\\    <\/blockquote>not in quote/);
                 expect(bqMatch).not.toBeNull();
             });
 
