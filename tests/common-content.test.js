@@ -70,6 +70,14 @@ describe('ADOContent', () => {
             expect(ADOContent.parseMarkdown('see http://foo.com.')).toBe('see <a href="http://foo.com" target="_blank" rel="noopener noreferrer">http://foo.com</a>.');
         });
 
+        it('parses links inside bullet list items', () => {
+            expect(ADOContent.parseMarkdown('- [bar](http://foo.com)\n')).toBe('<ul class="md-list"><li><a href="http://foo.com" target="_blank" rel="noopener noreferrer">bar</a></li></ul>');
+        });
+
+        it('auto-links bare URLs inside bullet list items', () => {
+            expect(ADOContent.parseMarkdown('- see http://foo.com\n')).toBe('<ul class="md-list"><li>see <a href="http://foo.com" target="_blank" rel="noopener noreferrer">http://foo.com</a></li></ul>');
+        });
+
         it('does not double-link markdown links', () => {
             const result = ADOContent.parseMarkdown('[text](http://example.com)');
             const count = (result.match(/<a /g) || []).length;

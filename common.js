@@ -1198,6 +1198,19 @@ const ADOContent = {
             return createPlaceholder(html) + trailing;
         });
 
+        // 4a. Parse links before block elements so links inside list items/blockquotes work
+        result = result.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, text, url) => {
+            const html = `<a href="${ADOContent.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+            return createPlaceholder(html);
+        });
+        // Auto-link bare URLs (https?://) not already converted to placeholders
+        result = result.replace(/(https?:\/\/[^\s〔〕]+)/g, (match, url) => {
+            const stripped = url.replace(/[.,!?;:'"]+$/, '');
+            const rest = url.slice(stripped.length);
+            const html = `<a href="${stripped}" target="_blank" rel="noopener noreferrer">${stripped}</a>`;
+            return createPlaceholder(html) + rest;
+        });
+
         // 4b. Parse task lists (checkboxes): - [ ] unchecked, - [x] checked
         result = result.replace(/(?:^[ \t]*- \[([ xX])\] .+(?:\n|$))+/gm, (block) => {
             const items = block.replace(/\n$/, '').split('\n').map(line => {
@@ -1324,22 +1337,7 @@ const ADOContent = {
         // Must not be preceded or followed by alphanumeric or underscore characters
         result = result.replace(/(?<![a-zA-Z0-9_])_(?!_)([^_]+)_(?!_)(?![a-zA-Z0-9_])/g, '<em>$1</em>');
 
-        // 7. Parse regular links
-        result = result.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, text, url) => {
-            const html = `<a href="${ADOContent.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-            return createPlaceholder(html);
-        });
-
-        // 7b. Auto-link bare URLs (https?://) not already converted to placeholders
-        result = result.replace(/(https?:\/\/[^\s〔〕]+)/g, (match, url) => {
-            // Strip trailing sentence punctuation unlikely to be part of the URL
-            const stripped = url.replace(/[.,!?;:'"]+$/, '');
-            const rest = url.slice(stripped.length);
-            const html = `<a href="${stripped}" target="_blank" rel="noopener noreferrer">${stripped}</a>`;
-            return createPlaceholder(html) + rest;
-        });
-
-        // 8. Restore placeholders
+        // 7. Restore placeholders
         result = restorePlaceholders(result);
 
         // 9. Strip newlines adjacent to block elements (they cause extra whitespace with pre-wrap)
