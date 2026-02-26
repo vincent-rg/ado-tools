@@ -8276,9 +8276,9 @@
         function displayResults(prData, threads, iterations, config) {
             const resultsDiv = document.getElementById('results');
 
-            // Count threads by status
-            const statusCounts = threads.reduce((acc, thread) => {
-                if (thread.isDeleted === true) {
+            // Count threads by status — always use allThreads so stats are unaffected by filters
+            const statusCounts = allThreads.reduce((acc, thread) => {
+                if (PRThreadsUtils.isThreadDeleted(thread)) {
                     acc.deleted = (acc.deleted || 0) + 1;
                 } else if (thread.status === undefined) {
                     // Thread has no status field
