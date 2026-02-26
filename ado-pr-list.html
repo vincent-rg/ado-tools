@@ -4103,6 +4103,11 @@
             if (reviewerCells.length >= 2) {
                 const reviewerCell = reviewerCells[1];
                 reviewerCell.innerHTML = getReviewerAvatarsHtml(freshPR.reviewers);
+                // Re-apply cached thread badges immediately (getReviewerAvatarsHtml only renders vote badges)
+                const cached = prCommentCounts[prKey];
+                if (cached && cached.authorCounts) {
+                    updateReviewerThreadBadges(prKey, cached.authorCounts);
+                }
                 AvatarLoader.loadPending();
             }
 
