@@ -1118,6 +1118,17 @@ const ADOContent = {
     },
 
     /**
+     * Resolve mentions in plain text (returns plain text, not HTML)
+     */
+    resolveMentionsText(text) {
+        if (!text) return text;
+        return text.replace(/@<([^>]+)>/g, (match, id) => {
+            const displayName = identityCache[id] || id;
+            return `@${displayName}`;
+        });
+    },
+
+    /**
      * Resolve mentions in plain text
      */
     resolveMentions(text) {

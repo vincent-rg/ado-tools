@@ -8988,7 +8988,7 @@
                 if (!firstComment) continue;
                 const authorName = ADOContent.escapeHtml(firstComment.author?.displayName || 'Unknown');
                 const authorId = firstComment.author?.id;
-                const content = stripMarkdown(firstComment.content || '');
+                const content = stripMarkdown(ADOContent.resolveMentionsText(firstComment.content || ''));
                 const preview = content.length > 60 ? content.substring(0, 60) + '...' : content;
                 const statusCls = thread.status || 'active';
                 const lineInfo = thread.threadContext?.rightFileStart?.line || thread.threadContext?.leftFileStart?.line;
