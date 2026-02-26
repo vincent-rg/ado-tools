@@ -4915,6 +4915,8 @@
                 }));
                 if (compareThreads(newThreads) !== compareThreads(allThreads)) {
                     allThreads = newThreads;
+                    // Resolve any new @mention identities before re-rendering
+                    await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
                     buildThreadsByFilePath();
                     updateThreadStats();
                     // Re-apply filters to refresh thread display
