@@ -1112,14 +1112,6 @@
         .diff-comment-bubble:hover {
             background: #106ebe;
         }
-        /* Inline mode: show on hover of the line, except removed lines */
-        .diff-line:hover .diff-comment-bubble { display: flex; }
-        .diff-line.diff-removed .diff-comment-bubble { display: none !important; }
-        /* SBS mode: show on hover of each pane */
-        .sbs-left:hover .diff-comment-bubble,
-        .sbs-right:hover .diff-comment-bubble { display: flex; }
-        .sbs-left.sbs-empty .diff-comment-bubble,
-        .sbs-right.sbs-empty .diff-comment-bubble { display: none !important; }
         /* Position within sbs panes */
         .sbs-left, .sbs-right { position: relative; }
 
@@ -4475,51 +4467,80 @@
 
         const COMMENT_BUBBLE_SVG = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>';
 
+        // AbortController to cancel delegated bubble listeners when a new file is loaded
+        let _commentBubbleAbort = null;
+
         function injectCommentBubbles(filePath) {
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
 
-            const escapedFile = ADOContent.escapeHtml(filePath);
+            // Cancel listeners from previous file render
+            if (_commentBubbleAbort) {
+                _commentBubbleAbort.abort();
+            }
+            const controller = new AbortController();
+            _commentBubbleAbort = controller;
+            const { signal } = controller;
+
+            // One reusable bubble element — moved to the hovered line on demand
+            const bubble = document.createElement('div');
+            bubble.className = 'diff-comment-bubble';
+            bubble.innerHTML = COMMENT_BUBBLE_SVG;
+
             const effectiveMode = getEffectiveDisplayMode();
+            let currentTarget = null;
+
+            function showBubbleOn(lineNumEl, lineNum, side, lineLen) {
+                bubble.setAttribute('data-line', lineNum);
+                bubble.setAttribute('data-side', side);
+                bubble.setAttribute('data-file', filePath);
+                bubble.setAttribute('data-line-len', lineLen);
+                if (currentTarget !== lineNumEl) {
+                    lineNumEl.appendChild(bubble);
+                    currentTarget = lineNumEl;
+                }
+                bubble.style.display = 'flex';
+            }
+
+            function hideBubble() {
+                bubble.style.display = '';
+                currentTarget = null;
+            }
 
             if (effectiveMode === 'side-by-side') {
-                diffPanel.querySelectorAll('.sbs-left, .sbs-right').forEach(pane => {
+                let currentPane = null;
+                diffPanel.addEventListener('mouseover', (e) => {
+                    const pane = e.target.closest('.sbs-left, .sbs-right');
+                    if (pane === currentPane) return;
+                    currentPane = pane;
+                    if (!pane || pane.classList.contains('sbs-empty')) { hideBubble(); return; }
                     const lineNumEl = pane.querySelector('.diff-line-number');
-                    if (!lineNumEl || !lineNumEl.textContent.trim()) return;
-                    if (pane.classList.contains('sbs-empty')) return;
+                    if (!lineNumEl || !lineNumEl.textContent.trim()) { hideBubble(); return; }
                     const lineNum = lineNumEl.textContent.trim();
                     const side = pane.classList.contains('sbs-left') ? 'left' : 'right';
                     const contentEl = pane.querySelector('.diff-content');
                     const lineLen = contentEl ? contentEl.textContent.length : 0;
-                    const bubble = document.createElement('div');
-                    bubble.className = 'diff-comment-bubble';
-                    bubble.setAttribute('data-line', lineNum);
-                    bubble.setAttribute('data-side', side);
-                    bubble.setAttribute('data-file', filePath);
-                    bubble.setAttribute('data-line-len', lineLen);
-                    bubble.innerHTML = COMMENT_BUBBLE_SVG;
-                    if (lineNumEl) lineNumEl.appendChild(bubble);
-                });
+                    showBubbleOn(lineNumEl, lineNum, side, lineLen);
+                }, { signal });
             } else {
-                diffPanel.querySelectorAll('.diff-line').forEach(line => {
-                    if (line.classList.contains('diff-removed')) return;
+                let currentLine = null;
+                diffPanel.addEventListener('mouseover', (e) => {
+                    const line = e.target.closest('.diff-line');
+                    if (line === currentLine) return;
+                    currentLine = line;
+                    if (!line || line.classList.contains('diff-removed')) { hideBubble(); return; }
                     const lineNums = line.querySelectorAll('.diff-line-number');
                     // Second line-number span is the new line number
                     const newLineEl = lineNums[1];
-                    if (!newLineEl || !newLineEl.textContent.trim()) return;
+                    if (!newLineEl || !newLineEl.textContent.trim()) { hideBubble(); return; }
                     const lineNum = newLineEl.textContent.trim();
                     const contentEl = line.querySelector('.diff-content');
                     const lineLen = contentEl ? contentEl.textContent.length : 0;
-                    const bubble = document.createElement('div');
-                    bubble.className = 'diff-comment-bubble';
-                    bubble.setAttribute('data-line', lineNum);
-                    bubble.setAttribute('data-side', 'right');
-                    bubble.setAttribute('data-file', filePath);
-                    bubble.setAttribute('data-line-len', lineLen);
-                    bubble.innerHTML = COMMENT_BUBBLE_SVG;
-                    if (newLineEl) newLineEl.appendChild(bubble);
-                });
+                    showBubbleOn(newLineEl, lineNum, 'right', lineLen);
+                }, { signal });
             }
+
+            diffPanel.addEventListener('mouseleave', hideBubble, { signal });
         }
 
         function openLineCommentEditor(filePath, lineNum, side, bubbleEl, lineLen) {
