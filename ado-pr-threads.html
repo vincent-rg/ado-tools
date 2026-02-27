@@ -3776,6 +3776,7 @@
         let urlRepo = null;     // Saved from initial URL
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
         let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
+        let stickyLinesEnabled = localStorage.getItem('stickyLinesEnabled') !== 'false';
         let diffFontSize = parseInt(localStorage.getItem('diffFontSize') || '12', 10);
         let goToLineSide = 'new'; // 'old' or 'new'; which version's line numbers to navigate
         let fileSearchActive = false;
@@ -8928,6 +8929,20 @@
             if (selectedFilePath) refreshInlineThreadsIfNeeded();
         }
 
+        function toggleStickyLines() {
+            stickyLinesEnabled = !stickyLinesEnabled;
+            localStorage.setItem('stickyLinesEnabled', stickyLinesEnabled);
+            if (!stickyLinesEnabled) {
+                StickyLines.destroy();
+                const bar = document.querySelector('.sticky-lines-bar');
+                if (bar) bar.remove();
+            } else if (selectedFilePath) {
+                refreshInlineThreadsIfNeeded();
+            }
+            const btn = document.getElementById('stickyLinesToggleBtn');
+            if (btn) btn.classList.toggle('active', stickyLinesEnabled);
+        }
+
         function applyDiffFontSize() {
             document.documentElement.style.setProperty('--diff-font-size', diffFontSize + 'px');
         }
@@ -9777,7 +9792,7 @@
                     diffPanel.setAttribute('data-render-mode', 'inline');
                     injectCommentBubbles(filePath);
                     setupDiffMinimap(diffPanel);
-                    StickyLines.init(diffPanel, null, content, filePath, false);
+                    if (stickyLinesEnabled) StickyLines.init(diffPanel, null, content, filePath, false);
                     if (fileSearchActive) openFileSearch();
                     return;
                 }
@@ -10451,6 +10466,7 @@
 
             const inlineActive = fileDiffDisplayMode === 'inline' ? ' active' : '';
             const sbsActive = fileDiffDisplayMode === 'side-by-side' ? ' active' : '';
+            const stickyActive = stickyLinesEnabled ? ' active' : '';
 
             let headerHtml = `
                 <div class="file-diff-header">
@@ -10459,6 +10475,8 @@
                     <div class="diff-display-mode-bar">
                         <button class="file-view-mode-btn${inlineActive}" onclick="setDiffDisplayMode('inline')">Inline</button>
                         <button class="file-view-mode-btn${sbsActive}" onclick="setDiffDisplayMode('side-by-side')">Side by Side</button>
+                        <span style="margin: 0 2px; color: #999;">|</span>
+                        <button id="stickyLinesToggleBtn" class="file-view-mode-btn${stickyActive}" onclick="toggleStickyLines()" title="Toggle sticky scope lines">Scope</button>
                     </div>
                     <div class="diff-font-size-control">
                         <button class="diff-font-size-btn" onclick="adjustDiffFontSize(-1)" title="Decrease font size" ${diffFontSize <= 8 ? 'disabled' : ''}>−</button>
@@ -10656,7 +10674,7 @@
             }
 
             setupDiffMinimap(diffPanel);
-            StickyLines.init(diffPanel, oldContent || null, newContent || null, filePath, fileDiffDisplayMode === 'side-by-side');
+            if (stickyLinesEnabled) StickyLines.init(diffPanel, oldContent || null, newContent || null, filePath, fileDiffDisplayMode === 'side-by-side');
             if (fileSearchActive) openFileSearch();
         }
 
