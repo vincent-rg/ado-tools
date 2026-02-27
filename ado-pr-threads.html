@@ -6957,15 +6957,20 @@
             if (!diffContainer) { updateFileSearchCount(); return; }
 
             // Build visible row index map (mirrors minimap logic)
-            const visibleRows = [...diffContainer.children].filter(c =>
-                !c.classList.contains('inline-thread') &&
-                !c.classList.contains('sbs-thread-row') &&
-                !c.classList.contains('diff-hunk-separator')
-            );
+            const visibleRows = [];
+            const visibleRowIdx = new Map();
+            for (const c of diffContainer.children) {
+                if (!c.classList.contains('inline-thread') &&
+                    !c.classList.contains('sbs-thread-row') &&
+                    !c.classList.contains('diff-hunk-separator')) {
+                    visibleRowIdx.set(c, visibleRows.length);
+                    visibleRows.push(c);
+                }
+            }
 
             for (const cell of diffContainer.querySelectorAll('.diff-content')) {
                 const rowEl = cell.closest('.diff-line, .sbs-row');
-                const visibleIdx = rowEl ? visibleRows.indexOf(rowEl) : -1;
+                const visibleIdx = rowEl ? (visibleRowIdx.get(rowEl) ?? -1) : -1;
 
                 const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
                 const textNodes = [];
@@ -10327,6 +10332,10 @@
             let _cacheLeft = null;
             let _cacheRight = null;
             let _cacheInline = null;
+            // Row element maps: lineNum -> rowEl for O(1) scrollToLine lookup (built alongside position caches).
+            let _rowMapLeft = null;
+            let _rowMapRight = null;
+            let _rowMapInline = null;
             let _resizeObserver = null;
 
             // Pure tree-building functions are in sticky-lines-utils.js (StickyLinesUtils).
@@ -10356,22 +10365,25 @@
                 if (_isSbs) {
                     _cacheLeft = [];
                     _cacheRight = [];
+                    _rowMapLeft = new Map();
+                    _rowMapRight = new Map();
                     for (const row of _scrollArea.querySelectorAll('.sbs-row')) {
                         const rowRect = row.getBoundingClientRect();
                         const bottom = rowRect.bottom - areaRect.top + scrollTop;
                         const leftN = row.querySelector('.sbs-left .diff-line-number')?.textContent?.trim();
                         const rightN = row.querySelector('.sbs-right .diff-line-number')?.textContent?.trim();
-                        if (leftN) _cacheLeft.push({ bottom, lineNum: parseInt(leftN, 10) });
-                        if (rightN) _cacheRight.push({ bottom, lineNum: parseInt(rightN, 10) });
+                        if (leftN) { const n = parseInt(leftN, 10); _cacheLeft.push({ bottom, lineNum: n }); _rowMapLeft.set(n, row); }
+                        if (rightN) { const n = parseInt(rightN, 10); _cacheRight.push({ bottom, lineNum: n }); _rowMapRight.set(n, row); }
                     }
                 } else {
                     _cacheInline = [];
+                    _rowMapInline = new Map();
                     for (const row of _scrollArea.querySelectorAll('.diff-line')) {
                         const rowRect = row.getBoundingClientRect();
                         const bottom = rowRect.bottom - areaRect.top + scrollTop;
                         const spans = row.querySelectorAll('.diff-line-number');
                         const n = spans[1]?.textContent?.trim() || spans[0]?.textContent?.trim();
-                        if (n) _cacheInline.push({ bottom, lineNum: parseInt(n, 10) });
+                        if (n) { const ln = parseInt(n, 10); _cacheInline.push({ bottom, lineNum: ln }); _rowMapInline.set(ln, row); }
                     }
                 }
             }
@@ -10422,19 +10434,14 @@
 
             function scrollToLine(lineNum, side) {
                 if (!_scrollArea) return;
+                // Ensure row maps are built (they're always built alongside position caches).
+                if (_isSbs && !_cacheLeft) buildPositionCaches();
+                if (!_isSbs && !_cacheInline) buildPositionCaches();
                 let target = null;
                 if (_isSbs) {
-                    const sel = side === 'left' ? '.sbs-left' : '.sbs-right';
-                    for (const row of _scrollArea.querySelectorAll('.sbs-row')) {
-                        const n = row.querySelector(`${sel} .diff-line-number`)?.textContent?.trim();
-                        if (n && parseInt(n, 10) === lineNum) { target = row; break; }
-                    }
+                    target = (side === 'left' ? _rowMapLeft : _rowMapRight)?.get(lineNum) ?? null;
                 } else {
-                    for (const row of _scrollArea.querySelectorAll('.diff-line')) {
-                        const spans = row.querySelectorAll('.diff-line-number');
-                        const n = spans[1]?.textContent?.trim() || spans[0]?.textContent?.trim();
-                        if (n && parseInt(n, 10) === lineNum) { target = row; break; }
-                    }
+                    target = _rowMapInline?.get(lineNum) ?? null;
                 }
                 if (target) _scrollArea.scrollTop = target.offsetTop;
             }
@@ -10487,6 +10494,9 @@
                 _cacheLeft = null;
                 _cacheRight = null;
                 _cacheInline = null;
+                _rowMapLeft = null;
+                _rowMapRight = null;
+                _rowMapInline = null;
                 stickyLinesInvalidate = null;
             }
 
@@ -10534,7 +10544,7 @@
                 _scrollArea.addEventListener('scroll', _scrollHandler, { passive: true });
 
                 // Invalidate position cache on resize (row positions shift when container resizes)
-                stickyLinesInvalidate = () => { _cacheLeft = null; _cacheRight = null; _cacheInline = null; };
+                stickyLinesInvalidate = () => { _cacheLeft = null; _cacheRight = null; _cacheInline = null; _rowMapLeft = null; _rowMapRight = null; _rowMapInline = null; };
                 _resizeObserver = new ResizeObserver(stickyLinesInvalidate);
                 _resizeObserver.observe(_scrollArea);
 
@@ -10638,15 +10648,27 @@
             // Build thread range info with iteration applicability
             const threadRanges = fileThreads.map(thread => DiffUtils.buildThreadRange(thread, viewIterStart, viewIterEnd));
 
+            // Pre-index threadRanges by startLine for O(1) lookup in getLinePrefix.
+            const threadRangesByRight = new Map(); // newLineNum -> tr[]
+            const threadRangesByLeft = new Map();  // oldLineNum -> tr[]
+            for (const tr of threadRanges) {
+                if (tr.startLine == null) continue;
+                const map = tr.useRight ? threadRangesByRight : threadRangesByLeft;
+                if (!map.has(tr.startLine)) map.set(tr.startLine, []);
+                map.get(tr.startLine).push(tr);
+            }
+
             // Helper: get gutter avatars for threads starting at this line
             function getLinePrefix(newLineNum, oldLineNum) {
-                const matching = threadRanges.filter(tr => {
-                    const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                    if (lineNum == null || lineNum !== tr.startLine) return false;
-                    if (tr.useRight && oldLineNum != null && newLineNum == null) return false;
-                    if (!tr.useRight && newLineNum != null && oldLineNum == null) return false;
-                    return true;
-                });
+                const matching = [];
+                if (newLineNum != null) {
+                    const trs = threadRangesByRight.get(newLineNum);
+                    if (trs) matching.push(...trs);
+                }
+                if (oldLineNum != null) {
+                    const trs = threadRangesByLeft.get(oldLineNum);
+                    if (trs) matching.push(...trs);
+                }
                 return buildGutterHtmlForLine(matching);
             }
 
