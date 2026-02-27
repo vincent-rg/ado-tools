@@ -2952,7 +2952,11 @@
         /* Sticky scope lines bar */
         .sticky-lines-bar {
             display: flex;
-            flex-shrink: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
             border-bottom: 1px solid #d1d5db;
             background: #f6f8fa;
             font-family: monospace;
@@ -10437,7 +10441,7 @@
                     scrollToLine(parseInt(el.dataset.line, 10), el.dataset.side);
                 });
 
-                body.insertBefore(bar, body.querySelector('.diff-scroll-row'));
+                body.querySelector('.diff-scroll-row').appendChild(bar);
                 _bar = bar;
 
                 _scrollArea = diffPanel.querySelector('.diff-scroll-area');
