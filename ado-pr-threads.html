@@ -3790,7 +3790,8 @@
         let fileSearchCaseSensitive = false;
         let fileSearchWholeWord = false;
         let fileSearchHitLineIndices = []; // [{visibleIdx, markIdx}]
-        let diffMinimapDraw = null;   // reference to current minimap draw fn
+        let diffMinimapDraw = null;       // reference to current minimap draw fn
+        let diffMinimapInvalidate = null; // call to bust position cache (resize / thread toggle)
         let sbsScrollSync = null;     // { applyScroll, scrollRange, getCurrentOffset } set by setupSbsScrollSync
 
         // Cache for iteration changes and file path history
@@ -6651,6 +6652,7 @@
                 const stack = avatarEl.closest('.diff-gutter-stack');
                 if (stack) updateGutterStack(stack);
             }
+            diffMinimapInvalidate?.();
             diffMinimapDraw?.();
         }
 
@@ -6676,6 +6678,7 @@
                     }
                 }
             });
+            diffMinimapInvalidate?.();
             diffMinimapDraw?.();
         }
 
@@ -6691,6 +6694,7 @@
                     const stack = avatarEl.closest('.diff-gutter-stack');
                     if (stack) updateGutterStack(stack);
                 }
+                diffMinimapInvalidate?.();
                 diffMinimapDraw?.();
             }
             threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -9994,6 +9998,7 @@
 
         function setupDiffMinimap(diffPanel) {
             diffMinimapDraw = null;
+            diffMinimapInvalidate = null;
             const scrollArea = diffPanel.querySelector('.diff-scroll-area');
             const minimapWrap = diffPanel.querySelector('.diff-minimap-wrap');
             if (!scrollArea || !minimapWrap) return;
@@ -10025,6 +10030,19 @@
 
             if (lineItems.length === 0) return;
 
+            // Position cache: [{top, height}] parallel to lineItems
+            // "top" = absolute offset within scroll area content (invariant to scroll position)
+            let posCache = null;
+
+            function buildPositionCache() {
+                const saRect = scrollArea.getBoundingClientRect();
+                const scrollTop = scrollArea.scrollTop;
+                posCache = lineItems.map(({ el }) => {
+                    const r = el.getBoundingClientRect();
+                    return { top: r.top - saRect.top + scrollTop, height: r.height };
+                });
+            }
+
             function draw() {
                 const h = minimapWrap.clientHeight;
                 const w = minimapWrap.clientWidth;
@@ -10035,18 +10053,15 @@
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, w, h);
-                // Use actual DOM positions so expanded thread panels shift the minimap correctly
-                const saRect = scrollArea.getBoundingClientRect();
+                if (!posCache) buildPositionCache();
                 for (let i = 0; i < lineItems.length; i++) {
-                    const { el, color } = lineItems[i];
+                    const { color } = lineItems[i];
                     if (!color) continue;
-                    const elRect = el.getBoundingClientRect();
-                    const elTop = elRect.top - saRect.top + scrollArea.scrollTop;
-                    const elH = elRect.height;
+                    const { top: elTop, height: elH } = posCache[i];
                     ctx.fillStyle = color;
                     ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 1));
                 }
-                // Overlay search markers
+                // Overlay search markers (positions don't change with search, reuse cache)
                 if (fileSearchHitLineIndices.length > 0 && lineItems.length > 0) {
                     const hitSet = new Map(); // visibleIdx -> isCurrent
                     for (const {visibleIdx, markIdx} of fileSearchHitLineIndices) {
@@ -10054,11 +10069,8 @@
                         if (isCurrent || !hitSet.has(visibleIdx)) hitSet.set(visibleIdx, isCurrent);
                     }
                     for (const [idx, isCurrent] of hitSet) {
-                        if (idx >= lineItems.length) continue;
-                        const el = lineItems[idx].el;
-                        const elRect = el.getBoundingClientRect();
-                        const elTop = elRect.top - saRect.top + scrollArea.scrollTop;
-                        const elH = elRect.height;
+                        if (idx >= posCache.length) continue;
+                        const { top: elTop, height: elH } = posCache[idx];
                         ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
                         ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 2));
                     }
@@ -10095,10 +10107,11 @@
                 document.addEventListener('mouseup', onUp);
             });
 
-            const ro = new ResizeObserver(() => draw());
+            const ro = new ResizeObserver(() => { posCache = null; draw(); });
             ro.observe(minimapWrap);
             requestAnimationFrame(draw);
             diffMinimapDraw = draw;
+            diffMinimapInvalidate = () => { posCache = null; };
         }
 
         function setupSbsResizer(diffPanel) {
