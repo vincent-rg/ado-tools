@@ -3738,6 +3738,7 @@
     <script src="pr-threads-utils.js"></script>
     <script src="mention-utils.js"></script>
     <script src="sticky-lines-utils.js"></script>
+    <script src="diff-virtual-scroller.js"></script>
     <script>
         DiffUtils.init(ADOContent.escapeHtml.bind(ADOContent));
 
@@ -3786,6 +3787,7 @@
         let diffMinimapInvalidate = null; // call to bust position cache (resize / thread toggle)
         let stickyLinesInvalidate = null; // call to bust sticky-lines position cache (resize / thread toggle)
         let sbsScrollSync = null;     // { applyScroll, scrollRange, getCurrentOffset } set by setupSbsScrollSync
+        let currentDiffScroller = null; // DiffVirtualScroller instance for current file diff
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -6674,6 +6676,16 @@
                 const stack = avatarEl.closest('.diff-gutter-stack');
                 if (stack) updateGutterStack(stack);
             }
+            // Update scroller data model
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByThreadId(threadId);
+                if (row) {
+                    row.collapsed = !isCollapsed;
+                    row.measuredHeight = null; // force re-measure
+                    currentDiffScroller.invalidateHeights();
+                    currentDiffScroller.recalcLayout();
+                }
+            }
             diffMinimapInvalidate?.();
             diffMinimapDraw?.();
             stickyLinesInvalidate?.();
@@ -6701,36 +6713,78 @@
                     }
                 }
             });
+            // Bulk update scroller data model
+            if (currentDiffScroller) {
+                for (const row of currentDiffScroller.getAllRows()) {
+                    if (row.type === 'thread' || row.type === 'sbs-thread') {
+                        row.collapsed = collapse;
+                        row.measuredHeight = null;
+                    }
+                }
+                currentDiffScroller.invalidateHeights();
+                currentDiffScroller.recalcLayout();
+            }
             diffMinimapInvalidate?.();
             diffMinimapDraw?.();
             stickyLinesInvalidate?.();
         }
 
         function scrollToThread(threadId) {
-            const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
-            if (!threadEl) return;
-            // Expand if collapsed
-            if (threadEl.classList.contains('collapsed')) {
-                threadEl.classList.remove('collapsed');
-                const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
-                if (avatarEl) {
-                    avatarEl.style.display = 'none';
-                    const stack = avatarEl.closest('.diff-gutter-stack');
-                    if (stack) updateGutterStack(stack);
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByThreadId(threadId);
+                if (!row) return;
+                // Uncollapse if needed
+                if (row.collapsed) {
+                    row.collapsed = false;
+                    row.measuredHeight = null;
+                    currentDiffScroller.invalidateHeights();
+                    currentDiffScroller.recalcLayout();
                 }
-                diffMinimapInvalidate?.();
-                diffMinimapDraw?.();
-                stickyLinesInvalidate?.();
+                currentDiffScroller.scrollToRow(row, { block: 'center', behavior: 'smooth' });
+                // Update DOM state after scroll renders the element
+                setTimeout(() => {
+                    const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                    if (threadEl) {
+                        threadEl.classList.remove('collapsed');
+                        // Update gutter avatar
+                        const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
+                        if (avatarEl) {
+                            avatarEl.style.display = 'none';
+                            const stack = avatarEl.closest('.diff-gutter-stack');
+                            if (stack) updateGutterStack(stack);
+                        }
+                        clearThreadFocus();
+                        threadEl.classList.add('focused');
+                        threadEl.addEventListener('animationend', () => threadEl.classList.remove('focused'), { once: true });
+                    }
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
+                    stickyLinesInvalidate?.();
+                }, 50);
+            } else {
+                const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                if (!threadEl) return;
+                if (threadEl.classList.contains('collapsed')) {
+                    threadEl.classList.remove('collapsed');
+                    const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
+                    if (avatarEl) {
+                        avatarEl.style.display = 'none';
+                        const stack = avatarEl.closest('.diff-gutter-stack');
+                        if (stack) updateGutterStack(stack);
+                    }
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
+                    stickyLinesInvalidate?.();
+                }
+                threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                clearThreadFocus();
+                threadEl.classList.add('focused');
+                threadEl.addEventListener('animationend', () => threadEl.classList.remove('focused'), { once: true });
             }
-            threadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Highlight focused thread (clear previous, apply fresh)
-            clearThreadFocus();
-            threadEl.classList.add('focused');
-            threadEl.addEventListener('animationend', () => threadEl.classList.remove('focused'), { once: true });
-            // Also highlight corresponding file tree entry
+
+            // Highlight corresponding file tree entry
             const treeEntry = document.querySelector(`.file-tree-thread[data-thread-id="${threadId}"]`);
             if (treeEntry) {
-                // Auto-expand thread list if collapsed so the highlight is visible
                 const threadList = treeEntry.closest('.file-tree-threads');
                 if (threadList && threadList.classList.contains('collapsed')) {
                     threadList.classList.remove('collapsed');
@@ -6822,46 +6876,51 @@
         // Hunk (modification) jump navigation
         let currentHunkIndex = -1;
 
-        function getHunkElements() {
-            return document.querySelectorAll('#fileDiffPanel [data-hunk]');
+        function getHunkCount() {
+            if (currentDiffScroller) return currentDiffScroller.getHunkCount();
+            return document.querySelectorAll('#fileDiffPanel [data-hunk]').length;
         }
 
         function updateHunkNav(index) {
             const nav = document.getElementById('hunkNav');
             if (!nav) return;
-            const hunks = getHunkElements();
-            if (hunks.length === 0) { nav.style.display = 'none'; return; }
+            const count = getHunkCount();
+            if (count === 0) { nav.style.display = 'none'; return; }
             nav.style.display = 'flex';
             currentHunkIndex = index ?? -1;
             const label = document.getElementById('hunkNavLabel');
             const prevBtn = document.getElementById('hunkNavPrev');
             const nextBtn = document.getElementById('hunkNavNext');
             if (label) label.textContent = currentHunkIndex >= 0
-                ? `${currentHunkIndex + 1}/${hunks.length}`
-                : `${hunks.length} changes`;
+                ? `${currentHunkIndex + 1}/${count}`
+                : `${count} changes`;
             if (prevBtn) prevBtn.disabled = currentHunkIndex <= 0;
-            if (nextBtn) nextBtn.disabled = currentHunkIndex >= hunks.length - 1;
+            if (nextBtn) nextBtn.disabled = currentHunkIndex >= count - 1;
         }
 
         function scrollToHunk(index) {
-            const hunks = getHunkElements();
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByHunkIndex(index);
+                if (row) currentDiffScroller.scrollToRow(row, { block: 'center', behavior: 'smooth' });
+                return;
+            }
+            const hunks = document.querySelectorAll('#fileDiffPanel [data-hunk]');
             if (index < 0 || index >= hunks.length) return;
-            const el = hunks[index];
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            hunks[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         function jumpToNextHunk() {
-            const hunks = getHunkElements();
-            if (hunks.length === 0) return;
-            const nextIndex = currentHunkIndex < 0 ? 0 : Math.min(currentHunkIndex + 1, hunks.length - 1);
+            const count = getHunkCount();
+            if (count === 0) return;
+            const nextIndex = currentHunkIndex < 0 ? 0 : Math.min(currentHunkIndex + 1, count - 1);
             currentHunkIndex = nextIndex;
             scrollToHunk(nextIndex);
             updateHunkNav(nextIndex);
         }
 
         function jumpToPrevHunk() {
-            const hunks = getHunkElements();
-            if (hunks.length === 0) return;
+            const count = getHunkCount();
+            if (count === 0) return;
             const prevIndex = currentHunkIndex < 0 ? 0 : Math.max(currentHunkIndex - 1, 0);
             currentHunkIndex = prevIndex;
             scrollToHunk(prevIndex);
@@ -6904,9 +6963,11 @@
             if (widget) widget.style.display = 'none';
             clearFileSearchHighlights();
             fileSearchResults = [];
+            fileSearchDataResults = [];
             fileSearchIndex = -1;
             fileSearchQuery = '';
             fileSearchHitLineIndices = [];
+            currentDiffScroller?.setSearchHighlights(null);
             diffMinimapDraw?.();
         }
 
@@ -6931,10 +6992,14 @@
             }
         }
 
+        // Data-model search results (used when scroller is active)
+        let fileSearchDataResults = []; // [{codeRowIdx, rowIndex, offsets: [{start,end}]}]
+
         function runFileSearch() {
             clearFileSearchHighlights();
             fileSearchResults = [];
             fileSearchHitLineIndices = [];
+            fileSearchDataResults = [];
 
             const input = document.getElementById('fileSearchInput');
             fileSearchQuery = input?.value || '';
@@ -6951,12 +7016,57 @@
             let regex;
             try { regex = new RegExp(pattern, flags); } catch { updateFileSearchCount(); return; }
 
+            if (currentDiffScroller) {
+                runFileSearchWithScroller(regex);
+            } else {
+                runFileSearchLegacy(regex);
+            }
+
+            fileSearchIndex = (fileSearchDataResults.length > 0 || fileSearchResults.length > 0) ? 0 : -1;
+            updateFileSearchHighlightCurrent();
+            updateFileSearchCount();
+            scrollToCurrentSearchResult();
+            diffMinimapDraw?.();
+        }
+
+        function runFileSearchWithScroller(regex) {
+            const codeRows = currentDiffScroller.getCodeRows();
+            let totalMatches = 0;
+
+            for (let codeIdx = 0; codeIdx < codeRows.length; codeIdx++) {
+                const row = codeRows[codeIdx];
+                const text = currentDiffScroller.getRowTextContent(row);
+                if (!text) continue;
+
+                regex.lastIndex = 0;
+                let match;
+                const offsets = [];
+                while ((match = regex.exec(text)) !== null) {
+                    offsets.push({ start: match.index, end: match.index + match[0].length });
+                    fileSearchHitLineIndices.push({ visibleIdx: codeIdx, markIdx: totalMatches });
+                    totalMatches++;
+                    if (match[0].length === 0) { regex.lastIndex++; break; }
+                }
+
+                if (offsets.length > 0) {
+                    fileSearchDataResults.push({ codeRowIdx: codeIdx, rowIndex: row.index, offsets });
+                }
+            }
+
+            // Build search highlight map for scroller (applied at render time)
+            const highlightMap = new Map();
+            for (const dr of fileSearchDataResults) {
+                highlightMap.set(dr.rowIndex, dr.offsets);
+            }
+            currentDiffScroller.setSearchHighlights(highlightMap, regex);
+        }
+
+        function runFileSearchLegacy(regex) {
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
             const diffContainer = diffPanel.querySelector('.diff-lines');
-            if (!diffContainer) { updateFileSearchCount(); return; }
+            if (!diffContainer) return;
 
-            // Build visible row index map (mirrors minimap logic)
             const visibleRows = [];
             const visibleRowIdx = new Map();
             for (const c of diffContainer.children) {
@@ -7005,15 +7115,19 @@
                     }
                 }
             }
+        }
 
-            fileSearchIndex = fileSearchResults.length > 0 ? 0 : -1;
-            updateFileSearchHighlightCurrent();
-            updateFileSearchCount();
-            scrollToCurrentSearchResult();
-            diffMinimapDraw?.();
+        function getFileSearchTotalCount() {
+            // Data-model path stores matches in fileSearchHitLineIndices, legacy in fileSearchResults
+            return currentDiffScroller ? fileSearchHitLineIndices.length : fileSearchResults.length;
         }
 
         function updateFileSearchHighlightCurrent() {
+            if (currentDiffScroller) {
+                // Scroller handles highlight rendering; we just need to re-render
+                // to update the "current" marker
+                return;
+            }
             for (let i = 0; i < fileSearchResults.length; i++)
                 fileSearchResults[i].classList.toggle('current', i === fileSearchIndex);
         }
@@ -7023,17 +7137,19 @@
             if (!el) return;
             const prevBtn = document.getElementById('fileSearchPrevBtn');
             const nextBtn = document.getElementById('fileSearchNextBtn');
-            const hasResults = fileSearchResults.length > 0;
+            const total = getFileSearchTotalCount();
+            const hasResults = total > 0;
             if (!fileSearchQuery) el.textContent = '';
             else if (!hasResults) el.textContent = 'No results';
-            else el.textContent = `${fileSearchIndex + 1} / ${fileSearchResults.length}`;
+            else el.textContent = `${fileSearchIndex + 1} / ${total}`;
             if (prevBtn) prevBtn.disabled = !hasResults;
             if (nextBtn) nextBtn.disabled = !hasResults;
         }
 
         function navigateFileSearch(delta) {
-            if (fileSearchResults.length === 0) return;
-            fileSearchIndex = (fileSearchIndex + delta + fileSearchResults.length) % fileSearchResults.length;
+            const total = getFileSearchTotalCount();
+            if (total === 0) return;
+            fileSearchIndex = (fileSearchIndex + delta + total) % total;
             updateFileSearchHighlightCurrent();
             updateFileSearchCount();
             scrollToCurrentSearchResult();
@@ -7041,7 +7157,29 @@
         }
 
         function scrollToCurrentSearchResult() {
-            if (fileSearchIndex < 0 || fileSearchIndex >= fileSearchResults.length) return;
+            const total = getFileSearchTotalCount();
+            if (fileSearchIndex < 0 || fileSearchIndex >= total) return;
+
+            if (currentDiffScroller) {
+                // Find which data result contains this match index
+                let matchCounter = 0;
+                for (const dr of fileSearchDataResults) {
+                    for (const offset of dr.offsets) {
+                        if (matchCounter === fileSearchIndex) {
+                            const codeRows = currentDiffScroller.getCodeRows();
+                            const row = codeRows[dr.codeRowIdx];
+                            if (row) {
+                                currentDiffScroller.scrollToRow(row, { block: 'center', behavior: 'smooth' });
+                            }
+                            return;
+                        }
+                        matchCounter++;
+                    }
+                }
+                return;
+            }
+
+            // Legacy path
             const mark = fileSearchResults[fileSearchIndex];
             mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
             // In SBS mode, horizontal scroll is handled via custom scrollbar (transforms),
@@ -7052,9 +7190,7 @@
                 if (pane) {
                     const markRect = mark.getBoundingClientRect();
                     const paneRect = pane.getBoundingClientRect();
-                    // Mark's left position in untransformed content coordinates
                     const markLeft = markRect.left - paneRect.left + getCurrentOffset();
-                    // Scroll so the mark is centered horizontally in its actual pane
                     const desiredOffset = markLeft - pane.clientWidth / 2 + markRect.width / 2;
                     const clampedOffset = Math.max(0, Math.min(scrollRange, desiredOffset));
                     applyScroll(scrollRange > 0 ? clampedOffset / scrollRange : 0);
@@ -7088,6 +7224,25 @@
 
         function goToLine(lineNum, side) {
             if (!lineNum || lineNum < 1) return;
+
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByLineNum(lineNum, side);
+                if (!row) return;
+                currentDiffScroller.scrollToRow(row, { block: 'center', behavior: 'smooth' });
+                // Flash the rendered element after scroll
+                setTimeout(() => {
+                    const el = currentDiffScroller.getRenderedElement(row);
+                    if (el) {
+                        el.classList.remove('goto-line-flash');
+                        void el.offsetWidth;
+                        el.classList.add('goto-line-flash');
+                        el.addEventListener('animationend', () => el.classList.remove('goto-line-flash'), { once: true });
+                    }
+                }, 50);
+                return;
+            }
+
+            // Legacy DOM path
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
             const effectiveMode = getEffectiveDisplayMode();
@@ -7100,7 +7255,6 @@
                     if (numEl?.textContent.trim() === String(lineNum)) { targetEl = row; break; }
                 }
             } else {
-                // Inline: each .diff-line has two .diff-line-number spans: [0]=old, [1]=new
                 for (const row of diffPanel.querySelectorAll('.diff-line')) {
                     const spans = row.querySelectorAll('.diff-line-number');
                     if (spans.length < 2) continue;
@@ -7112,7 +7266,7 @@
             if (!targetEl) return;
             targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             targetEl.classList.remove('goto-line-flash');
-            void targetEl.offsetWidth; // force reflow to restart animation
+            void targetEl.offsetWidth;
             targetEl.classList.add('goto-line-flash');
             targetEl.addEventListener('animationend', () => targetEl.classList.remove('goto-line-flash'), { once: true });
         }
@@ -8998,6 +9152,11 @@
                 const isDecrement = btn.textContent.trim() === '−';
                 btn.disabled = isDecrement ? diffFontSize <= 8 : diffFontSize >= 24;
             });
+            // Recalc scroller layout after font size change
+            if (currentDiffScroller) {
+                currentDiffScroller.invalidateHeights();
+                currentDiffScroller.recalcLayout();
+            }
         }
 
         function addFileToTree(root, filePath, changeType, sourceServerItem) {
@@ -9727,6 +9886,7 @@
 
             // Show loading
             StickyLines.destroy();
+            if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
             diffPanel.innerHTML = '<div class="file-diff-loading">Loading diff...</div>';
 
             try {
@@ -9774,37 +9934,8 @@
                         return buildGutterHtmlForLine(matching);
                     }
 
-                    function getLineSuffix(newLineNum, oldLineNum) {
-                        let html = '';
-                        for (const tr of threadRanges) {
-                            if (tr.inserted) continue;
-                            const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                            if (lineNum != null && lineNum >= tr.endLine) {
-                                tr.inserted = true;
-                                html += renderInlineThread(tr.thread, tr.appliesToView);
-                            }
-                        }
-                        return html;
-                    }
-
-                    // File-level threads (no line position)
-                    let fileLevelHtml = '';
-                    for (const tr of threadRanges) {
-                        if (tr.startLine === 0 && tr.endLine === 0) {
-                            tr.inserted = true;
-                            fileLevelHtml += renderInlineThread(tr.thread, tr.appliesToView);
-                        }
-                    }
-
-                    let diffHtml = fileLevelHtml;
-                    diffHtml += DiffUtils.renderDiffLines(syntheticDiff, threadRanges, { getLinePrefix, getLineSuffix });
-
-                    // Append remaining threads beyond end of file
-                    for (const tr of threadRanges) {
-                        if (!tr.inserted) {
-                            diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
-                        }
-                    }
+                    // Destroy previous scroller if any
+                    if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
 
                     diffPanel.innerHTML = `
                         <div class="file-diff-header">
@@ -9814,7 +9945,7 @@
                         <div class="file-diff-body">
                             <div class="diff-scroll-row">
                                 <div class="diff-scroll-area">
-                                    <div class="diff-lines">${diffHtml}</div>
+                                    <div class="diff-lines"></div>
                                 </div>
                                 <div class="diff-minimap-wrap">
                                     <canvas class="diff-minimap-canvas"></canvas>
@@ -9824,13 +9955,26 @@
                         </div>
                     `;
 
+                    const scrollAreaUnchanged = diffPanel.querySelector('.diff-scroll-area');
+                    const diffLinesUnchanged = diffPanel.querySelector('.diff-lines');
+
+                    currentDiffScroller = DiffVirtualScroller.create({
+                        diff: syntheticDiff,
+                        threadRanges,
+                        mode: 'inline',
+                        getLinePrefix,
+                        renderInlineThread,
+                        threadRangesRaw: threadRanges,
+                    });
+                    currentDiffScroller.mount(scrollAreaUnchanged, diffLinesUnchanged);
+
                     AvatarLoader.loadPending();
                     // Unchanged files always render inline — mark the panel so comment
                     // interactions use inline logic even when user preference is side-by-side
                     diffPanel.setAttribute('data-render-mode', 'inline');
                     injectCommentBubbles(filePath);
-                    setupDiffMinimap(diffPanel);
-                    if (stickyLinesEnabled) StickyLines.init(diffPanel, null, content, filePath, false);
+                    setupDiffMinimap(diffPanel, currentDiffScroller);
+                    if (stickyLinesEnabled) StickyLines.init(diffPanel, null, content, filePath, false, currentDiffScroller);
                     if (fileSearchActive) openFileSearch();
                     return;
                 }
@@ -10026,7 +10170,7 @@
             });
         }
 
-        function setupDiffMinimap(diffPanel) {
+        function setupDiffMinimap(diffPanel, scroller) {
             diffMinimapDraw = null;
             diffMinimapInvalidate = null;
             const scrollArea = diffPanel.querySelector('.diff-scroll-area');
@@ -10035,36 +10179,43 @@
 
             const canvas = minimapWrap.querySelector('.diff-minimap-canvas');
             const viewport = minimapWrap.querySelector('.diff-minimap-viewport');
-            const diffContainer = scrollArea.querySelector('.diff-lines');
-            if (!diffContainer) return;
 
-            // Collect line elements and colors — skip thread rows and hunk separators
-            const lineItems = []; // {el, color}
-            for (const child of diffContainer.children) {
-                if (child.classList.contains('inline-thread') ||
-                    child.classList.contains('sbs-thread-row') ||
-                    child.classList.contains('diff-hunk-separator')) continue;
-                let color = null;
-                if (child.classList.contains('diff-added')) color = '#3fb950';
-                else if (child.classList.contains('diff-removed')) color = '#f85149';
-                else if (child.classList.contains('sbs-row')) {
-                    // SBS mode: diff-added/diff-removed live on the child panes
-                    const removed = child.querySelector('.sbs-left.diff-removed');
-                    const added = child.querySelector('.sbs-right.diff-added');
-                    if (removed && added) color = '#e3b341'; // modified — amber
-                    else if (removed) color = '#f85149';
-                    else if (added) color = '#3fb950';
+            // When scroller is available, read code rows from data model (no DOM iteration)
+            let codeRows = null;   // [{minimapColor, top, height}] from scroller
+            let lineItems = null;  // [{el, color}] legacy fallback
+
+            if (scroller) {
+                codeRows = scroller.getCodeRows();
+                if (codeRows.length === 0) return;
+            } else {
+                const diffContainer = scrollArea.querySelector('.diff-lines');
+                if (!diffContainer) return;
+
+                // Legacy fallback: collect line elements and colors from DOM
+                lineItems = [];
+                for (const child of diffContainer.children) {
+                    if (child.classList.contains('inline-thread') ||
+                        child.classList.contains('sbs-thread-row') ||
+                        child.classList.contains('diff-hunk-separator')) continue;
+                    let color = null;
+                    if (child.classList.contains('diff-added')) color = '#3fb950';
+                    else if (child.classList.contains('diff-removed')) color = '#f85149';
+                    else if (child.classList.contains('sbs-row')) {
+                        const removed = child.querySelector('.sbs-left.diff-removed');
+                        const added = child.querySelector('.sbs-right.diff-added');
+                        if (removed && added) color = '#e3b341';
+                        else if (removed) color = '#f85149';
+                        else if (added) color = '#3fb950';
+                    }
+                    lineItems.push({ el: child, color });
                 }
-                lineItems.push({ el: child, color });
+                if (lineItems.length === 0) return;
             }
 
-            if (lineItems.length === 0) return;
-
-            // Position cache: [{top, height}] parallel to lineItems
-            // "top" = absolute offset within scroll area content (invariant to scroll position)
-            let posCache = null;
+            let posCache = null; // only used for legacy (non-scroller) path
 
             function buildPositionCache() {
+                if (!lineItems) return;
                 const saRect = scrollArea.getBoundingClientRect();
                 const scrollTop = scrollArea.scrollTop;
                 posCache = lineItems.map(({ el }) => {
@@ -10083,26 +10234,50 @@
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, w, h);
-                if (!posCache) buildPositionCache();
-                for (let i = 0; i < lineItems.length; i++) {
-                    const { color } = lineItems[i];
-                    if (!color) continue;
-                    const { top: elTop, height: elH } = posCache[i];
-                    ctx.fillStyle = color;
-                    ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 1));
-                }
-                // Overlay search markers (positions don't change with search, reuse cache)
-                if (fileSearchHitLineIndices.length > 0 && lineItems.length > 0) {
-                    const hitSet = new Map(); // visibleIdx -> isCurrent
-                    for (const {visibleIdx, markIdx} of fileSearchHitLineIndices) {
-                        const isCurrent = (markIdx === fileSearchIndex);
-                        if (isCurrent || !hitSet.has(visibleIdx)) hitSet.set(visibleIdx, isCurrent);
+
+                if (scroller) {
+                    // Data-model driven: read positions directly from row objects
+                    for (const row of codeRows) {
+                        if (!row.minimapColor) continue;
+                        ctx.fillStyle = row.minimapColor;
+                        ctx.fillRect(1, Math.floor(row.top / totalH * h), w - 2, Math.max(Math.ceil(row.height / totalH * h), 1));
                     }
-                    for (const [idx, isCurrent] of hitSet) {
-                        if (idx >= posCache.length) continue;
-                        const { top: elTop, height: elH } = posCache[idx];
-                        ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
-                        ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 2));
+                    // Search markers
+                    if (fileSearchHitLineIndices.length > 0) {
+                        const hitSet = new Map();
+                        for (const { visibleIdx, markIdx } of fileSearchHitLineIndices) {
+                            const isCurrent = (markIdx === fileSearchIndex);
+                            if (isCurrent || !hitSet.has(visibleIdx)) hitSet.set(visibleIdx, isCurrent);
+                        }
+                        for (const [idx, isCurrent] of hitSet) {
+                            if (idx >= codeRows.length) continue;
+                            const row = codeRows[idx];
+                            ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
+                            ctx.fillRect(1, Math.floor(row.top / totalH * h), w - 2, Math.max(Math.ceil(row.height / totalH * h), 2));
+                        }
+                    }
+                } else {
+                    // Legacy DOM-based path
+                    if (!posCache) buildPositionCache();
+                    for (let i = 0; i < lineItems.length; i++) {
+                        const { color } = lineItems[i];
+                        if (!color) continue;
+                        const { top: elTop, height: elH } = posCache[i];
+                        ctx.fillStyle = color;
+                        ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 1));
+                    }
+                    if (fileSearchHitLineIndices.length > 0 && lineItems.length > 0) {
+                        const hitSet = new Map();
+                        for (const { visibleIdx, markIdx } of fileSearchHitLineIndices) {
+                            const isCurrent = (markIdx === fileSearchIndex);
+                            if (isCurrent || !hitSet.has(visibleIdx)) hitSet.set(visibleIdx, isCurrent);
+                        }
+                        for (const [idx, isCurrent] of hitSet) {
+                            if (idx >= posCache.length) continue;
+                            const { top: elTop, height: elH } = posCache[idx];
+                            ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
+                            ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 2));
+                        }
                     }
                 }
                 updateViewport();
@@ -10255,12 +10430,15 @@
             const maxThumbLeft = trackWidth - thumbWidth;
 
             let currentOffset = 0;
-            const contents = body.querySelectorAll('.diff-lines-sbs .diff-content');
+            // When virtual scroller is active, we can't cache content elements
+            // because rows are created/destroyed on scroll. Query live each time.
+            const staticContents = currentDiffScroller ? null : body.querySelectorAll('.diff-lines-sbs .diff-content');
 
             function applyScroll(ratio) {
                 ratio = Math.max(0, Math.min(1, ratio));
                 currentOffset = ratio * scrollRange;
                 thumb.style.left = (ratio * maxThumbLeft) + 'px';
+                const contents = staticContents || body.querySelectorAll('.diff-lines-sbs .diff-content');
                 for (const el of contents) {
                     el.style.transform = `translateX(-${currentOffset}px)`;
                 }
@@ -10327,12 +10505,13 @@
             let _bar = null;
             let _isSbs = false;
             let _rafPending = false;
+            let _scroller = null; // optional DiffVirtualScroller instance
             // Position caches: [{bottom, lineNum}] sorted by bottom (scroll-relative coords).
             // Built lazily on first getTopLineNum call, invalidated on resize / thread toggle.
+            // Only used when no scroller is available (legacy path).
             let _cacheLeft = null;
             let _cacheRight = null;
             let _cacheInline = null;
-            // Row element maps: lineNum -> rowEl for O(1) scrollToLine lookup (built alongside position caches).
             let _rowMapLeft = null;
             let _rowMapRight = null;
             let _rowMapInline = null;
@@ -10342,22 +10521,16 @@
             const getLanguage = StickyLinesUtils.getLanguage;
             const buildTree = StickyLinesUtils.buildTree;
 
-            // Filter ancestors to only those whose block spans >= MIN_BLOCK_LINES source lines.
-            // Uses source line count (endLine - startLine + 1) rather than DOM row count:
-            // in inline mode, diff-removed rows expose *old* line numbers via spans[0], which
-            // can collide with the new-file range and inflate the count past the threshold.
             function filterAncestors(ancestors, blockEndLines) {
                 if (!ancestors || !ancestors.length) return ancestors;
                 return ancestors.filter(a => {
                     const endLine = blockEndLines?.get(a.lineNum);
-                    if (!endLine) return true; // unknown end → always show
+                    if (!endLine) return true;
                     return (endLine - a.lineNum + 1) >= MIN_BLOCK_LINES;
                 });
             }
 
-            // Build scroll-relative position caches for binary search in getTopLineNum.
-            // getBoundingClientRect() calls are batched (all reads, no writes) so the
-            // browser performs a single layout pass.
+            // Legacy: build scroll-relative position caches from DOM
             function buildPositionCaches() {
                 if (!_scrollArea) return;
                 const areaRect = _scrollArea.getBoundingClientRect();
@@ -10388,7 +10561,6 @@
                 }
             }
 
-            // Binary search: first entry where bottom > scrollTop (i.e. first visible row).
             function firstVisibleLineNum(cache, scrollTop) {
                 let lo = 0, hi = cache.length - 1, result = -1;
                 while (lo <= hi) {
@@ -10401,6 +10573,18 @@
 
             function getTopLineNum(paneSelector) {
                 if (!_scrollArea) return null;
+
+                // Scroller path: use data model directly
+                if (_scroller) {
+                    const topRow = _scroller.getTopVisibleCodeRow();
+                    if (!topRow) return null;
+                    if (_isSbs) {
+                        return paneSelector?.includes('left') ? topRow.oldLineNum : topRow.newLineNum;
+                    }
+                    return topRow.newLineNum ?? topRow.oldLineNum;
+                }
+
+                // Legacy DOM path
                 const scrollTop = _scrollArea.scrollTop;
                 if (_isSbs) {
                     const cache = paneSelector?.includes('left') ? _cacheLeft : _cacheRight;
@@ -10434,7 +10618,16 @@
 
             function scrollToLine(lineNum, side) {
                 if (!_scrollArea) return;
-                // Ensure row maps are built (they're always built alongside position caches).
+
+                // Scroller path: use data model
+                if (_scroller) {
+                    const sideKey = side === 'left' ? 'old' : 'new';
+                    const row = _scroller.getRowByLineNum(lineNum, sideKey);
+                    if (row) _scroller.scrollToRow(row, { block: 'start' });
+                    return;
+                }
+
+                // Legacy DOM path
                 if (_isSbs && !_cacheLeft) buildPositionCaches();
                 if (!_isSbs && !_cacheInline) buildPositionCaches();
                 let target = null;
@@ -10491,6 +10684,7 @@
                 _bar = null;
                 _isSbs = false;
                 _rafPending = false;
+                _scroller = null;
                 _cacheLeft = null;
                 _cacheRight = null;
                 _cacheInline = null;
@@ -10500,10 +10694,11 @@
                 stickyLinesInvalidate = null;
             }
 
-            function init(diffPanel, oldContent, newContent, filePath, isSbs) {
+            function init(diffPanel, oldContent, newContent, filePath, isSbs, scroller) {
                 destroy();
                 if (!getLanguage(filePath)) return;
                 _isSbs = isSbs;
+                _scroller = scroller || null;
                 _oldTree = oldContent ? buildTree(oldContent, filePath) : null;
                 _newTree = newContent ? buildTree(newContent, filePath) : null;
                 if (!_oldTree && !_newTree) return;
@@ -10672,100 +10867,21 @@
                 return buildGutterHtmlForLine(matching);
             }
 
-            // Helper: get inline thread widgets to insert after this line
-            function getLineSuffix(newLineNum, oldLineNum) {
-                let html = '';
-                if (fileDiffDisplayMode === 'side-by-side') {
-                    const leftThreads = [];
-                    const rightThreads = [];
-                    for (const tr of threadRanges) {
-                        if (tr.inserted) continue;
-                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                        if (lineNum != null && lineNum >= tr.endLine) {
-                            tr.inserted = true;
-                            const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
-                            if (tr.useRight) rightThreads.push(threadHtml);
-                            else leftThreads.push(threadHtml);
-                        }
-                    }
-                    // Pair left and right threads into shared rows
-                    const maxLen = Math.max(leftThreads.length, rightThreads.length);
-                    for (let j = 0; j < maxLen; j++) {
-                        const left = j < leftThreads.length
-                            ? `<div class="sbs-thread-side sbs-thread-left">${leftThreads[j]}</div>`
-                            : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
-                        const right = j < rightThreads.length
-                            ? `<div class="sbs-thread-side">${rightThreads[j]}</div>`
-                            : `<div class="sbs-thread-spacer"></div>`;
-                        html += `<div class="sbs-thread-row">${left}${right}</div>`;
-                    }
-                } else {
-                    for (const tr of threadRanges) {
-                        if (tr.inserted) continue;
-                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
-                        if (lineNum != null && lineNum >= tr.endLine) {
-                            tr.inserted = true;
-                            html += renderInlineThread(tr.thread, tr.appliesToView);
-                        }
-                    }
-                }
-                return html;
-            }
+            // Destroy previous scroller if any
+            if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
 
-            // Render file-level threads (no line position) above the diff
-            let fileLevelHtml = '';
-            for (const tr of threadRanges) {
-                if (tr.startLine === 0 && tr.endLine === 0) {
-                    tr.inserted = true;
-                    fileLevelHtml += renderInlineThread(tr.thread, tr.appliesToView);
-                }
-            }
+            const isSbs = fileDiffDisplayMode === 'side-by-side';
+            const sbsClass = isSbs ? ' diff-lines-sbs' : '';
+            const resizerHtml = isSbs ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
 
-            // Render diff lines with highlighting and inline threads
-            let diffHtml = fileLevelHtml;
-            if (fileDiffDisplayMode === 'side-by-side') {
-                diffHtml += DiffUtils.renderDiffLinesSideBySide(diff, threadRanges, { getLinePrefix, getLineSuffix });
-            } else {
-                diffHtml += DiffUtils.renderDiffLines(diff, threadRanges, { getLinePrefix, getLineSuffix });
-            }
-
-            // Insert any remaining threads that weren't placed (e.g. beyond end of diff)
-            if (fileDiffDisplayMode === 'side-by-side') {
-                const leftRemaining = [];
-                const rightRemaining = [];
-                for (const tr of threadRanges) {
-                    if (tr.inserted) continue;
-                    const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
-                    if (tr.useRight) rightRemaining.push(threadHtml);
-                    else leftRemaining.push(threadHtml);
-                }
-                const maxLen = Math.max(leftRemaining.length, rightRemaining.length);
-                for (let j = 0; j < maxLen; j++) {
-                    const left = j < leftRemaining.length
-                        ? `<div class="sbs-thread-side sbs-thread-left">${leftRemaining[j]}</div>`
-                        : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
-                    const right = j < rightRemaining.length
-                        ? `<div class="sbs-thread-side">${rightRemaining[j]}</div>`
-                        : `<div class="sbs-thread-spacer"></div>`;
-                    diffHtml += `<div class="sbs-thread-row">${left}${right}</div>`;
-                }
-            } else {
-                for (const tr of threadRanges) {
-                    if (!tr.inserted) {
-                        diffHtml += renderInlineThread(tr.thread, tr.appliesToView);
-                    }
-                }
-            }
-
-            const sbsClass = fileDiffDisplayMode === 'side-by-side' ? ' diff-lines-sbs' : '';
-            const resizerHtml = fileDiffDisplayMode === 'side-by-side' ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
+            // Render the scaffold with empty .diff-lines container
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
                     <div class="diff-scroll-row">
                         ${resizerHtml}
                         <div class="diff-scroll-area">
-                            <div class="diff-lines${sbsClass}">${diffHtml}</div>
+                            <div class="diff-lines${sbsClass}"></div>
                         </div>
                         <div class="diff-minimap-wrap">
                             <canvas class="diff-minimap-canvas"></canvas>
@@ -10775,6 +10891,21 @@
                 </div>
             `;
 
+            // Create and mount virtual scroller
+            const scrollArea = diffPanel.querySelector('.diff-scroll-area');
+            const diffLinesContainer = diffPanel.querySelector('.diff-lines');
+
+            currentDiffScroller = DiffVirtualScroller.create({
+                diff,
+                threadRanges,
+                mode: fileDiffDisplayMode,
+                getLinePrefix,
+                renderInlineThread,
+                threadRangesRaw: threadRanges,
+            });
+
+            currentDiffScroller.mount(scrollArea, diffLinesContainer);
+
             // Trigger avatar loading for inline threads
             AvatarLoader.loadPending();
 
@@ -10783,14 +10914,27 @@
 
             // Set up horizontal scroll sync, selection lock, and resizer for SBS mode.
             // Resizer must run first so it applies --sbs-left-pct before scroll sync measures widths.
-            if (fileDiffDisplayMode === 'side-by-side') {
+            if (isSbs) {
                 setupSbsResizer(diffPanel);
                 setupSbsSelectionLock(diffPanel);
                 setupSbsScrollSync(diffPanel);
+                // Apply current horizontal scroll offset to newly rendered SBS rows
+                if (currentDiffScroller && sbsScrollSync) {
+                    const sync = sbsScrollSync;
+                    currentDiffScroller.onRowRendered((row, el) => {
+                        if (row.type !== 'code' || !row.sbsMode) return;
+                        const offset = sync.getCurrentOffset();
+                        if (offset > 0) {
+                            for (const c of el.querySelectorAll('.diff-content')) {
+                                c.style.transform = `translateX(-${offset}px)`;
+                            }
+                        }
+                    });
+                }
             }
 
-            setupDiffMinimap(diffPanel);
-            if (stickyLinesEnabled) StickyLines.init(diffPanel, oldContent || null, newContent || null, filePath, fileDiffDisplayMode === 'side-by-side');
+            setupDiffMinimap(diffPanel, currentDiffScroller);
+            if (stickyLinesEnabled) StickyLines.init(diffPanel, oldContent || null, newContent || null, filePath, isSbs, currentDiffScroller);
             if (fileSearchActive) openFileSearch();
         }
 

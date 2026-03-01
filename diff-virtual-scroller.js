@@ -1,0 +1,975 @@
+/**
+ * Virtual Scroller for Diff View
+ *
+ * Only renders visible rows + a buffer to avoid DOM bloat for large files.
+ * Works with both inline and side-by-side diff modes.
+ *
+ * IIFE exposing window.DiffVirtualScroller (matching project convention).
+ */
+const DiffVirtualScroller = (() => {
+    // Small file threshold — below this, render all rows without position:absolute
+    const SMALL_FILE_THRESHOLD = 500;
+    // Overscan: render this many extra pixels above/below viewport
+    const OVERSCAN_PX = 1500;
+    // Default code row height (monospace, line-height: 1.5, no wrapping)
+    const DEFAULT_CODE_HEIGHT = 19; // will be measured once at mount time
+    // Default collapsed thread height
+    const COLLAPSED_THREAD_HEIGHT = 32;
+    // Estimate per-comment height for expanded threads
+    const PER_COMMENT_HEIGHT = 60;
+    const THREAD_BASE_HEIGHT = 40;
+    // Hunk separator height
+    const HUNK_SEPARATOR_HEIGHT = 0; // hunk separators are not used in file view currently
+
+    /**
+     * Build a flat array of virtual row descriptors from diff + thread data.
+     *
+     * For inline mode: mirrors renderDiffLines logic.
+     * For SBS mode: mirrors renderDiffLinesSideBySide logic.
+     *
+     * @param {Array} diff - Array of {type, content} from HistogramDiff
+     * @param {Array} threadRanges - Thread range objects from DiffUtils.buildThreadRange
+     * @param {object} options
+     * @param {Function} options.getLinePrefix - (newLineNum, oldLineNum) => html
+     * @param {Function} options.renderInlineThread - (thread, appliesToView) => html
+     * @param {string} options.mode - 'inline' | 'side-by-side'
+     * @param {number} options.startOldLine
+     * @param {number} options.startNewLine
+     * @returns {object} { rows, lineNumMapRight, lineNumMapLeft, hunkStarts, threadIdMap }
+     */
+    function buildVirtualRows(diff, threadRanges, options = {}) {
+        const mode = options.mode || 'inline';
+        if (mode === 'side-by-side') {
+            return buildVirtualRowsSbs(diff, threadRanges, options);
+        }
+        return buildVirtualRowsInline(diff, threadRanges, options);
+    }
+
+    function buildVirtualRowsInline(diff, threadRanges, options) {
+        const startOld = options.startOldLine ?? 1;
+        const startNew = options.startNewLine ?? 1;
+        const getLinePrefix = options.getLinePrefix || null;
+        const renderInlineThread = options.renderInlineThread || (() => '');
+
+        const rows = [];
+        // Clone thread ranges so we can mark insertion without mutating originals
+        const trClones = threadRanges.map(tr => ({ ...tr, inserted: false }));
+
+        let oldLineNum = startOld;
+        let newLineNum = startNew;
+        let hunkIndex = 0;
+        let inChange = false;
+
+        // Insert file-level threads (startLine === 0 && endLine === 0) at the top
+        for (const tr of trClones) {
+            if (tr.startLine === 0 && tr.endLine === 0) {
+                tr.inserted = true;
+                rows.push({
+                    type: 'thread',
+                    threadId: tr.thread.id,
+                    threadHtml: renderInlineThread(tr.thread, tr.appliesToView),
+                    collapsed: isThreadCollapsedByDefault(tr),
+                    commentCount: tr.thread.comments?.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length || 1,
+                });
+            }
+        }
+
+        for (const entry of diff) {
+            let curOld = null, curNew = null;
+            let cssClass, minimapColor, hunkIdx = null;
+
+            if (entry.type === 'unchanged') {
+                inChange = false;
+                curOld = oldLineNum;
+                curNew = newLineNum;
+                cssClass = 'diff-unchanged';
+                minimapColor = null;
+                oldLineNum++;
+                newLineNum++;
+            } else if (entry.type === 'removed') {
+                if (!inChange) { hunkIdx = hunkIndex++; inChange = true; }
+                curOld = oldLineNum;
+                cssClass = 'diff-removed';
+                minimapColor = '#f85149';
+                oldLineNum++;
+            } else if (entry.type === 'added') {
+                if (!inChange) { hunkIdx = hunkIndex++; inChange = true; }
+                curNew = newLineNum;
+                cssClass = 'diff-added';
+                minimapColor = '#3fb950';
+                newLineNum++;
+            }
+
+            const prefixHtml = getLinePrefix ? getLinePrefix(curNew, curOld) : '';
+
+            rows.push({
+                type: 'code',
+                diffEntry: entry,
+                oldLineNum: curOld,
+                newLineNum: curNew,
+                cssClass,
+                minimapColor,
+                hunkIndex: hunkIdx,
+                prefixHtml,
+            });
+
+            // Check for thread suffixes after this line
+            appendThreadSuffixesInline(rows, trClones, curNew, curOld, renderInlineThread);
+        }
+
+        // Remaining threads beyond end of file
+        for (const tr of trClones) {
+            if (!tr.inserted) {
+                rows.push({
+                    type: 'thread',
+                    threadId: tr.thread.id,
+                    threadHtml: renderInlineThread(tr.thread, tr.appliesToView),
+                    collapsed: isThreadCollapsedByDefault(tr),
+                    commentCount: tr.thread.comments?.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length || 1,
+                });
+            }
+        }
+
+        return buildResult(rows);
+    }
+
+    function appendThreadSuffixesInline(rows, trClones, curNew, curOld, renderInlineThread) {
+        for (const tr of trClones) {
+            if (tr.inserted) continue;
+            const lineNum = tr.useRight ? curNew : curOld;
+            if (lineNum != null && lineNum >= tr.endLine) {
+                tr.inserted = true;
+                rows.push({
+                    type: 'thread',
+                    threadId: tr.thread.id,
+                    threadHtml: renderInlineThread(tr.thread, tr.appliesToView),
+                    collapsed: isThreadCollapsedByDefault(tr),
+                    commentCount: tr.thread.comments?.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length || 1,
+                });
+            }
+        }
+    }
+
+    function buildVirtualRowsSbs(diff, threadRanges, options) {
+        const startOld = options.startOldLine ?? 1;
+        const startNew = options.startNewLine ?? 1;
+        const getLinePrefix = options.getLinePrefix || null;
+        const renderInlineThread = options.renderInlineThread || (() => '');
+
+        const rows = [];
+        const trClones = threadRanges.map(tr => ({ ...tr, inserted: false }));
+
+        let oldLineNum = startOld;
+        let newLineNum = startNew;
+        let i = 0;
+        let hunkIndex = 0;
+
+        // File-level threads
+        for (const tr of trClones) {
+            if (tr.startLine === 0 && tr.endLine === 0) {
+                tr.inserted = true;
+                rows.push({
+                    type: 'sbs-thread',
+                    threadId: tr.thread.id,
+                    leftHtml: tr.useRight ? '' : renderInlineThread(tr.thread, tr.appliesToView),
+                    rightHtml: tr.useRight ? renderInlineThread(tr.thread, tr.appliesToView) : '',
+                    collapsed: isThreadCollapsedByDefault(tr),
+                    commentCount: tr.thread.comments?.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length || 1,
+                });
+            }
+        }
+
+        while (i < diff.length) {
+            const entry = diff[i];
+
+            if (entry.type === 'unchanged') {
+                const leftPrefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
+                const rightPrefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
+
+                rows.push({
+                    type: 'code',
+                    diffEntry: entry,
+                    oldLineNum: oldLineNum,
+                    newLineNum: newLineNum,
+                    cssClass: 'diff-unchanged',
+                    minimapColor: null,
+                    hunkIndex: null,
+                    prefixHtml: '',  // not used in SBS
+                    sbsMode: true,
+                    sbsLeft: { lineNum: oldLineNum, content: entry.content, cssClass: '', prefixHtml: leftPrefix },
+                    sbsRight: { lineNum: newLineNum, content: entry.content, cssClass: '', prefixHtml: rightPrefix },
+                });
+
+                appendThreadSuffixesSbs(rows, trClones, newLineNum, oldLineNum, renderInlineThread);
+                oldLineNum++;
+                newLineNum++;
+                i++;
+            } else {
+                // Collect consecutive removed then added
+                const removed = [];
+                while (i < diff.length && diff[i].type === 'removed') {
+                    removed.push(diff[i]);
+                    i++;
+                }
+                const added = [];
+                while (i < diff.length && diff[i].type === 'added') {
+                    added.push(diff[i]);
+                    i++;
+                }
+
+                const maxLen = Math.max(removed.length, added.length);
+                for (let j = 0; j < maxLen; j++) {
+                    let sbsLeft, sbsRight;
+                    let curOld = null, curNew = null;
+                    let minimapColor = null;
+
+                    if (j < removed.length) {
+                        curOld = oldLineNum;
+                        const leftPrefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
+                        sbsLeft = { lineNum: oldLineNum, content: removed[j].content, cssClass: 'diff-removed', prefixHtml: leftPrefix };
+                        oldLineNum++;
+                    } else {
+                        sbsLeft = { lineNum: null, content: '', cssClass: 'sbs-empty', prefixHtml: '' };
+                    }
+
+                    if (j < added.length) {
+                        curNew = newLineNum;
+                        const rightPrefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
+                        sbsRight = { lineNum: newLineNum, content: added[j].content, cssClass: 'diff-added', prefixHtml: rightPrefix };
+                        newLineNum++;
+                    } else {
+                        sbsRight = { lineNum: null, content: '', cssClass: 'sbs-empty', prefixHtml: '' };
+                    }
+
+                    // Minimap color
+                    if (sbsLeft.cssClass === 'diff-removed' && sbsRight.cssClass === 'diff-added') {
+                        minimapColor = '#e3b341'; // modified — amber
+                    } else if (sbsLeft.cssClass === 'diff-removed') {
+                        minimapColor = '#f85149';
+                    } else if (sbsRight.cssClass === 'diff-added') {
+                        minimapColor = '#3fb950';
+                    }
+
+                    rows.push({
+                        type: 'code',
+                        diffEntry: j < removed.length ? removed[j] : (j < added.length ? added[j] : null),
+                        oldLineNum: curOld,
+                        newLineNum: curNew,
+                        cssClass: 'sbs-row',
+                        minimapColor,
+                        hunkIndex: j === 0 ? hunkIndex : null,
+                        prefixHtml: '',
+                        sbsMode: true,
+                        sbsLeft,
+                        sbsRight,
+                    });
+
+                    appendThreadSuffixesSbs(rows, trClones, curNew, curOld, renderInlineThread);
+                }
+                hunkIndex++;
+            }
+        }
+
+        // Remaining threads
+        for (const tr of trClones) {
+            if (tr.inserted) continue;
+            const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
+            rows.push({
+                type: 'sbs-thread',
+                threadId: tr.thread.id,
+                leftHtml: tr.useRight ? '' : threadHtml,
+                rightHtml: tr.useRight ? threadHtml : '',
+                collapsed: isThreadCollapsedByDefault(tr),
+                commentCount: tr.thread.comments?.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length || 1,
+            });
+        }
+
+        return buildResult(rows);
+    }
+
+    function appendThreadSuffixesSbs(rows, trClones, curNew, curOld, renderInlineThread) {
+        // Collect left and right thread htmls, then pair into sbs-thread rows
+        const leftThreads = [];
+        const rightThreads = [];
+        for (const tr of trClones) {
+            if (tr.inserted) continue;
+            const lineNum = tr.useRight ? curNew : curOld;
+            if (lineNum != null && lineNum >= tr.endLine) {
+                tr.inserted = true;
+                const threadHtml = renderInlineThread(tr.thread, tr.appliesToView);
+                if (tr.useRight) rightThreads.push({ tr, html: threadHtml });
+                else leftThreads.push({ tr, html: threadHtml });
+            }
+        }
+
+        const maxLen = Math.max(leftThreads.length, rightThreads.length);
+        for (let j = 0; j < maxLen; j++) {
+            const left = j < leftThreads.length ? leftThreads[j] : null;
+            const right = j < rightThreads.length ? rightThreads[j] : null;
+            const tr = left?.tr || right?.tr;
+            rows.push({
+                type: 'sbs-thread',
+                threadId: (left?.tr || right?.tr).thread.id,
+                leftHtml: left ? left.html : '',
+                rightHtml: right ? right.html : '',
+                collapsed: isThreadCollapsedByDefault(tr),
+                commentCount: tr.thread.comments?.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length || 1,
+            });
+        }
+    }
+
+    function isThreadCollapsedByDefault(tr) {
+        const status = tr.thread.status;
+        return (status === 'fixed' || status === 'closed' || status === 'wontFix') || !tr.appliesToView;
+    }
+
+    function buildResult(rows) {
+        // Assign indices and build lookup maps
+        const lineNumMapRight = new Map(); // newLineNum -> rowIndex
+        const lineNumMapLeft = new Map();  // oldLineNum -> rowIndex
+        const hunkStarts = [];             // rowIndex[] of first row per hunk
+        const threadIdMap = new Map();     // threadId -> rowIndex
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            row.index = i;
+            if (row.type === 'code') {
+                if (row.newLineNum != null) lineNumMapRight.set(row.newLineNum, i);
+                if (row.oldLineNum != null) lineNumMapLeft.set(row.oldLineNum, i);
+                if (row.hunkIndex != null) hunkStarts.push(i);
+            } else if (row.type === 'thread' || row.type === 'sbs-thread') {
+                threadIdMap.set(row.threadId, i);
+            }
+        }
+
+        return { rows, lineNumMapRight, lineNumMapLeft, hunkStarts, threadIdMap };
+    }
+
+    /**
+     * Estimate the height of a thread row.
+     */
+    function estimateThreadHeight(row, codeRowHeight) {
+        if (row.collapsed) return COLLAPSED_THREAD_HEIGHT;
+        return THREAD_BASE_HEIGHT + (row.commentCount || 1) * PER_COMMENT_HEIGHT;
+    }
+
+    /**
+     * Compute layout: assign top/height to each row.
+     */
+    function computeLayout(rows, codeRowHeight) {
+        let top = 0;
+        for (const row of rows) {
+            row.top = top;
+            if (row.type === 'code') {
+                row.height = codeRowHeight;
+            } else {
+                // Thread row: use measured height if available, else estimate
+                if (row.measuredHeight != null) {
+                    row.height = row.measuredHeight;
+                } else {
+                    row.height = estimateThreadHeight(row, codeRowHeight);
+                }
+            }
+            top += row.height;
+        }
+        return top; // total height
+    }
+
+    /**
+     * Binary search for the first row whose bottom edge (top + height) > targetTop.
+     */
+    function findFirstVisibleRow(rows, targetTop) {
+        let lo = 0, hi = rows.length - 1, result = 0;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (rows[mid].top + rows[mid].height > targetTop) {
+                result = mid;
+                hi = mid - 1;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Create a virtual scroller instance.
+     */
+    function create(options) {
+        const {
+            diff,
+            threadRanges,
+            mode,              // 'inline' | 'side-by-side'
+            getLinePrefix,
+            renderInlineThread,
+            threadRangesRaw,   // original threadRanges for getHighlightedContent
+            startOldLine,
+            startNewLine,
+        } = options;
+
+        // Build the virtual row data model
+        const built = buildVirtualRows(diff, threadRanges, {
+            mode,
+            getLinePrefix,
+            renderInlineThread: renderInlineThread || (() => ''),
+            startOldLine,
+            startNewLine,
+        });
+
+        const { rows, lineNumMapRight, lineNumMapLeft, hunkStarts, threadIdMap } = built;
+
+        // State
+        let _scrollArea = null;
+        let _container = null;   // .diff-lines element
+        let _codeRowHeight = DEFAULT_CODE_HEIGHT;
+        let _totalHeight = 0;
+        let _isSmallFile = rows.length < SMALL_FILE_THRESHOLD;
+        let _renderedRange = { start: -1, end: -1 }; // indices currently in DOM
+        let _renderedElements = new Map();  // rowIndex -> DOM element
+        let _rafId = null;
+        let _destroyed = false;
+        let _rowRenderedCallbacks = [];
+        let _searchHighlights = null;  // Map<rowIndex, [{start, end}]> or null
+        let _searchRegex = null;       // RegExp for applying highlights to rendered elements
+        let _mode = mode || 'inline';
+
+        /**
+         * Create the HTML for a single inline code row.
+         */
+        function buildInlineCodeRowHtml(row) {
+            const entry = row.diffEntry;
+            const hunkAttr = row.hunkIndex != null ? ` data-hunk="${row.hunkIndex}"` : '';
+
+            let contentHtml;
+            if (entry.type === 'unchanged') {
+                const r = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || []);
+                if (!r.commented) {
+                    const r2 = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || []);
+                    contentHtml = r2.html;
+                } else {
+                    contentHtml = r.html;
+                }
+            } else if (entry.type === 'removed') {
+                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || []));
+            } else if (entry.type === 'added') {
+                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || []));
+            }
+
+            const indicator = entry.type === 'removed' ? '−' : (entry.type === 'added' ? '+' : ' ');
+            const oldNum = row.oldLineNum != null ? row.oldLineNum : '';
+            const newNum = row.newLineNum != null ? row.newLineNum : '';
+
+            return `<div class="diff-line ${row.cssClass}"${hunkAttr}><span class="diff-avatar-slot">${row.prefixHtml}</span><span class="diff-line-number">${oldNum}</span><span class="diff-line-number">${newNum}</span><span class="diff-indicator">${indicator}</span><span class="diff-content">${contentHtml}</span></div>`;
+        }
+
+        /**
+         * Create the HTML for a single SBS code row.
+         */
+        function buildSbsCodeRowHtml(row) {
+            const hunkAttr = row.hunkIndex != null ? ` data-hunk="${row.hunkIndex}"` : '';
+            const left = row.sbsLeft;
+            const right = row.sbsRight;
+
+            let leftContentHtml, rightContentHtml;
+            if (left.cssClass === 'sbs-empty') {
+                leftContentHtml = '';
+            } else {
+                ({ html: leftContentHtml } = DiffUtils.getHighlightedContent(left.content, left.lineNum, false, threadRangesRaw || []));
+            }
+            if (right.cssClass === 'sbs-empty') {
+                rightContentHtml = '';
+            } else {
+                ({ html: rightContentHtml } = DiffUtils.getHighlightedContent(right.content, right.lineNum, true, threadRangesRaw || []));
+            }
+
+            const leftNum = left.lineNum != null ? left.lineNum : '';
+            const rightNum = right.lineNum != null ? right.lineNum : '';
+
+            const leftCls = left.cssClass ? ` ${left.cssClass}` : '';
+            const rightCls = right.cssClass ? ` ${right.cssClass}` : '';
+
+            return `<div class="sbs-row${row.cssClass === 'diff-unchanged' ? ' diff-unchanged' : ''}"${hunkAttr}><div class="sbs-left${leftCls}"><span class="diff-avatar-slot">${left.prefixHtml}</span><span class="diff-line-number">${leftNum}</span><span class="diff-content">${leftContentHtml}</span></div><div class="sbs-right${rightCls}"><span class="diff-avatar-slot">${right.prefixHtml}</span><span class="diff-line-number">${rightNum}</span><span class="diff-content">${rightContentHtml}</span></div></div>`;
+        }
+
+        /**
+         * Create a DOM element for a row.
+         */
+        function createRowElement(row) {
+            let html;
+            if (row.type === 'code') {
+                if (row.sbsMode) {
+                    html = buildSbsCodeRowHtml(row);
+                } else {
+                    html = buildInlineCodeRowHtml(row);
+                }
+            } else if (row.type === 'thread') {
+                html = row.threadHtml;
+            } else if (row.type === 'sbs-thread') {
+                const leftContent = row.leftHtml
+                    ? `<div class="sbs-thread-side sbs-thread-left">${row.leftHtml}</div>`
+                    : `<div class="sbs-thread-spacer sbs-thread-left"></div>`;
+                const rightContent = row.rightHtml
+                    ? `<div class="sbs-thread-side">${row.rightHtml}</div>`
+                    : `<div class="sbs-thread-spacer"></div>`;
+                html = `<div class="sbs-thread-row">${leftContent}${rightContent}</div>`;
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html;
+            const el = wrapper.firstElementChild;
+
+            // Apply search highlights if active
+            if (_searchRegex && _searchHighlights?.has(row.index) && row.type === 'code') {
+                applySearchHighlightsToElement(el);
+            }
+
+            return el;
+        }
+
+        /**
+         * Apply search highlights to a rendered element using the stored regex.
+         * Uses the same text-node walking approach as the legacy search path.
+         */
+        function applySearchHighlightsToElement(el) {
+            if (!_searchRegex) return;
+
+            for (const cell of el.querySelectorAll('.diff-content')) {
+                const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+                const textNodes = [];
+                let node;
+                while ((node = walker.nextNode())) textNodes.push(node);
+
+                for (const textNode of textNodes) {
+                    const text = textNode.textContent;
+                    const parts = [];
+                    let lastIndex = 0;
+                    _searchRegex.lastIndex = 0;
+                    let match;
+                    while ((match = _searchRegex.exec(text)) !== null) {
+                        if (match.index > lastIndex)
+                            parts.push(document.createTextNode(text.slice(lastIndex, match.index)));
+                        const mark = document.createElement('mark');
+                        mark.className = 'search-highlight';
+                        mark.textContent = match[0];
+                        parts.push(mark);
+                        lastIndex = match.index + match[0].length;
+                        if (match[0].length === 0) { _searchRegex.lastIndex++; break; }
+                    }
+                    if (parts.length > 0) {
+                        if (lastIndex < text.length)
+                            parts.push(document.createTextNode(text.slice(lastIndex)));
+                        const parent = textNode.parentNode;
+                        for (const part of parts) parent.insertBefore(part, textNode);
+                        parent.removeChild(textNode);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Measure the actual code row height from the DOM.
+         */
+        function measureCodeRowHeight() {
+            if (!_container || !_scrollArea) return DEFAULT_CODE_HEIGHT;
+            // Create a temporary hidden row to measure
+            const testEl = document.createElement('div');
+            testEl.innerHTML = `<div class="diff-line diff-unchanged" style="position:absolute;visibility:hidden;"><span class="diff-avatar-slot"></span><span class="diff-line-number">1</span><span class="diff-line-number">1</span><span class="diff-indicator"> </span><span class="diff-content">x</span></div>`;
+            const row = testEl.firstElementChild;
+            _container.appendChild(row);
+            const h = row.getBoundingClientRect().height;
+            _container.removeChild(row);
+            return h > 0 ? h : DEFAULT_CODE_HEIGHT;
+        }
+
+        /**
+         * Mount the scroller: takes over the .diff-lines container.
+         */
+        function mount(scrollArea, diffLinesContainer) {
+            _scrollArea = scrollArea;
+            _container = diffLinesContainer;
+
+            // Measure actual code row height
+            _codeRowHeight = measureCodeRowHeight();
+
+            // Compute layout
+            _totalHeight = computeLayout(rows, _codeRowHeight);
+
+            if (_isSmallFile) {
+                // Render all rows directly (no position:absolute)
+                renderAllRows();
+            } else {
+                // Set container to relative positioning with total height
+                _container.style.position = 'relative';
+                _container.style.height = _totalHeight + 'px';
+                _container.style.overflow = 'hidden';
+
+                // Initial render
+                renderVisibleRows();
+
+                // Attach scroll handler (RAF-throttled)
+                _scrollArea.addEventListener('scroll', onScroll, { passive: true });
+            }
+        }
+
+        /**
+         * For small files: render everything without virtualization.
+         */
+        function renderAllRows() {
+            const fragment = document.createDocumentFragment();
+            for (const row of rows) {
+                const el = createRowElement(row);
+                _renderedElements.set(row.index, el);
+                fragment.appendChild(el);
+            }
+            _container.appendChild(fragment);
+            _renderedRange = { start: 0, end: rows.length - 1 };
+
+            // Measure thread heights and notify
+            measureThreadHeights();
+            notifyRowsRendered(0, rows.length - 1);
+        }
+
+        function onScroll() {
+            if (_rafId != null) return;
+            _rafId = requestAnimationFrame(() => {
+                _rafId = null;
+                if (_destroyed) return;
+                renderVisibleRows();
+            });
+        }
+
+        /**
+         * Determine which rows to render and update DOM.
+         */
+        function renderVisibleRows() {
+            if (!_scrollArea || !_container || rows.length === 0) return;
+
+            const scrollTop = _scrollArea.scrollTop;
+            const viewportHeight = _scrollArea.clientHeight;
+            const rangeTop = Math.max(0, scrollTop - OVERSCAN_PX);
+            const rangeBottom = scrollTop + viewportHeight + OVERSCAN_PX;
+
+            const startIdx = findFirstVisibleRow(rows, rangeTop);
+            let endIdx = startIdx;
+            while (endIdx < rows.length - 1 && rows[endIdx].top < rangeBottom) {
+                endIdx++;
+            }
+
+            // Check if range changed
+            if (startIdx === _renderedRange.start && endIdx === _renderedRange.end) return;
+
+            // Remove elements outside new range
+            for (const [idx, el] of _renderedElements) {
+                if (idx < startIdx || idx > endIdx) {
+                    el.remove();
+                    _renderedElements.delete(idx);
+                }
+            }
+
+            // Add elements in new range that aren't already rendered
+            const fragment = document.createDocumentFragment();
+            let needsInsert = false;
+
+            for (let i = startIdx; i <= endIdx; i++) {
+                if (_renderedElements.has(i)) continue;
+
+                const row = rows[i];
+                const el = createRowElement(row);
+
+                // Position absolutely
+                el.style.position = 'absolute';
+                el.style.top = row.top + 'px';
+                el.style.width = '100%';
+                el.style.boxSizing = 'border-box';
+
+                _renderedElements.set(i, el);
+                fragment.appendChild(el);
+                needsInsert = true;
+            }
+
+            if (needsInsert) {
+                _container.appendChild(fragment);
+            }
+
+            const prevStart = _renderedRange.start;
+            const prevEnd = _renderedRange.end;
+            _renderedRange = { start: startIdx, end: endIdx };
+
+            // Measure thread row heights for newly rendered rows
+            measureThreadHeightsInRange(startIdx, endIdx);
+
+            // Notify callbacks for newly rendered rows
+            if (prevStart === -1) {
+                notifyRowsRendered(startIdx, endIdx);
+            } else {
+                if (startIdx < prevStart) notifyRowsRendered(startIdx, Math.min(prevStart - 1, endIdx));
+                if (endIdx > prevEnd) notifyRowsRendered(Math.max(prevEnd + 1, startIdx), endIdx);
+            }
+        }
+
+        /**
+         * Measure actual thread row heights and recalc layout if needed.
+         */
+        function measureThreadHeights() {
+            measureThreadHeightsInRange(0, rows.length - 1);
+        }
+
+        function measureThreadHeightsInRange(start, end) {
+            let needsRecalc = false;
+            for (let i = start; i <= end; i++) {
+                const row = rows[i];
+                if (row.type === 'code') continue;
+                const el = _renderedElements.get(i);
+                if (!el) continue;
+
+                const actual = el.getBoundingClientRect().height;
+                if (actual > 0 && (row.measuredHeight == null || Math.abs(actual - row.measuredHeight) > 2)) {
+                    row.measuredHeight = actual;
+                    needsRecalc = true;
+                }
+            }
+            if (needsRecalc && !_isSmallFile) {
+                recalcLayoutInternal();
+            }
+        }
+
+        function notifyRowsRendered(start, end) {
+            for (const cb of _rowRenderedCallbacks) {
+                for (let i = start; i <= end; i++) {
+                    const el = _renderedElements.get(i);
+                    if (el) cb(rows[i], el);
+                }
+            }
+        }
+
+        /**
+         * Recalculate layout after height changes (thread toggle, font change).
+         */
+        function recalcLayoutInternal() {
+            if (_isSmallFile) return; // small files don't use absolute positioning
+            const scrollTop = _scrollArea?.scrollTop || 0;
+
+            // Find the row currently at the top of viewport for scroll anchoring
+            const anchorIdx = findFirstVisibleRow(rows, scrollTop);
+            const anchorOffset = scrollTop - rows[anchorIdx].top;
+
+            // Recompute layout
+            _totalHeight = computeLayout(rows, _codeRowHeight);
+            _container.style.height = _totalHeight + 'px';
+
+            // Update positions of rendered elements
+            for (const [idx, el] of _renderedElements) {
+                el.style.top = rows[idx].top + 'px';
+            }
+
+            // Anchor scroll position to prevent jump
+            if (_scrollArea) {
+                _scrollArea.scrollTop = rows[anchorIdx].top + anchorOffset;
+            }
+        }
+
+        // ===== Public API =====
+
+        function destroy() {
+            _destroyed = true;
+            if (_rafId != null) cancelAnimationFrame(_rafId);
+            if (_scrollArea) _scrollArea.removeEventListener('scroll', onScroll);
+            _renderedElements.clear();
+            _scrollArea = null;
+            _container = null;
+            _rowRenderedCallbacks = [];
+        }
+
+        function getRowByLineNum(lineNum, side) {
+            const idx = (side === 'old' ? lineNumMapLeft : lineNumMapRight).get(lineNum);
+            return idx != null ? rows[idx] : null;
+        }
+
+        function getRowByHunkIndex(idx) {
+            return idx >= 0 && idx < hunkStarts.length ? rows[hunkStarts[idx]] : null;
+        }
+
+        function getHunkCount() {
+            return hunkStarts.length;
+        }
+
+        function getRowByThreadId(id) {
+            const idx = threadIdMap.get(id);
+            return idx != null ? rows[idx] : null;
+        }
+
+        function getCodeRows() {
+            return rows.filter(r => r.type === 'code');
+        }
+
+        function getAllRows() {
+            return rows;
+        }
+
+        function scrollToRow(row, opts = {}) {
+            if (!_scrollArea || !row) return;
+            const block = opts.block || 'center';
+
+            // Ensure the row is rendered first
+            ensureRowRendered(row);
+
+            const viewportH = _scrollArea.clientHeight;
+            let targetScrollTop;
+
+            if (block === 'center') {
+                targetScrollTop = row.top + row.height / 2 - viewportH / 2;
+            } else if (block === 'start') {
+                targetScrollTop = row.top;
+            } else {
+                targetScrollTop = row.top + row.height - viewportH;
+            }
+
+            targetScrollTop = Math.max(0, Math.min(targetScrollTop, _scrollArea.scrollHeight - viewportH));
+
+            if (opts.behavior === 'smooth') {
+                _scrollArea.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+            } else {
+                _scrollArea.scrollTop = targetScrollTop;
+            }
+
+            // Re-render to ensure the row and surrounding rows are in DOM
+            if (!_isSmallFile) {
+                renderVisibleRows();
+            }
+        }
+
+        function ensureRowRendered(row) {
+            if (_isSmallFile) return; // all rows always rendered
+            if (_renderedElements.has(row.index)) return;
+
+            // Temporarily render just this row
+            const el = createRowElement(row);
+            el.style.position = 'absolute';
+            el.style.top = row.top + 'px';
+            el.style.width = '100%';
+            el.style.boxSizing = 'border-box';
+            _container.appendChild(el);
+            _renderedElements.set(row.index, el);
+        }
+
+        function getRenderedElement(row) {
+            if (!row) return null;
+            return _renderedElements.get(row.index) || null;
+        }
+
+        function getTopVisibleCodeRow() {
+            if (!_scrollArea) return null;
+            const scrollTop = _scrollArea.scrollTop;
+            const idx = findFirstVisibleRow(rows, scrollTop);
+            // Find the first code row at or after idx
+            for (let i = idx; i < rows.length; i++) {
+                if (rows[i].type === 'code') return rows[i];
+            }
+            return null;
+        }
+
+        function getRowTextContent(row) {
+            if (!row || row.type !== 'code') return '';
+            if (row.sbsMode) {
+                return (row.sbsLeft.content || '') + '\n' + (row.sbsRight.content || '');
+            }
+            return row.diffEntry?.content || '';
+        }
+
+        function setSearchHighlights(highlights, regex) {
+            // highlights: Map<rowIndex, [{start, end}]> or null
+            // regex: RegExp used for applying highlights to rendered DOM
+            _searchHighlights = highlights;
+            _searchRegex = regex || null;
+            // Re-render visible rows that have highlight changes
+            if (!_isSmallFile) {
+                // Force re-render of all currently visible rows
+                const { start, end } = _renderedRange;
+                for (let i = start; i <= end; i++) {
+                    const el = _renderedElements.get(i);
+                    if (el) {
+                        el.remove();
+                        _renderedElements.delete(i);
+                    }
+                }
+                _renderedRange = { start: -1, end: -1 };
+                renderVisibleRows();
+            } else {
+                // For small files, re-render all
+                if (_container) {
+                    _container.innerHTML = '';
+                    _renderedElements.clear();
+                    renderAllRows();
+                }
+            }
+        }
+
+        function invalidateHeights() {
+            // Clear measured heights on all thread rows
+            for (const row of rows) {
+                if (row.type !== 'code') {
+                    row.measuredHeight = null;
+                }
+            }
+        }
+
+        function recalcLayout() {
+            if (_isSmallFile) return;
+            _totalHeight = computeLayout(rows, _codeRowHeight);
+            _container.style.height = _totalHeight + 'px';
+            for (const [idx, el] of _renderedElements) {
+                el.style.top = rows[idx].top + 'px';
+            }
+        }
+
+        function onRowRendered(callback) {
+            _rowRenderedCallbacks.push(callback);
+        }
+
+        function isSmallFile() {
+            return _isSmallFile;
+        }
+
+        function getMode() {
+            return _mode;
+        }
+
+        function getTotalHeight() {
+            return _totalHeight;
+        }
+
+        return {
+            mount,
+            destroy,
+            getRowByLineNum,
+            getRowByHunkIndex,
+            getHunkCount,
+            getRowByThreadId,
+            getCodeRows,
+            getAllRows,
+            scrollToRow,
+            getRenderedElement,
+            getTopVisibleCodeRow,
+            getRowTextContent,
+            setSearchHighlights,
+            invalidateHeights,
+            recalcLayout,
+            onRowRendered,
+            isSmallFile,
+            getMode,
+            getTotalHeight,
+        };
+    }
+
+    return { create, buildVirtualRows };
+})();
+
+// Export for use in HTML files
+if (typeof window !== 'undefined') {
+    window.DiffVirtualScroller = DiffVirtualScroller;
+}
+
+// Export for use in Node.js (tests)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = DiffVirtualScroller;
+}

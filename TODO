@@ -13,9 +13,6 @@ PR threads
 
 pr threads file view
 - "modified version" view
-- perf: injectCommentBubbles() creates hover DOM elements for every line → switch to event delegation (one mouseover on diff panel, create bubble lazily); see memory/perf-optimizations.md
-- perf: sticky lines getTopLineNum() does querySelectorAll + getBoundingClientRect loop on every scroll → binary search on cached positions; see memory/perf-optimizations.md
-- perf: no virtualization in renderDiffLines — all lines inserted into DOM upfront; long-term fix; see memory/perf-optimizations.md
 
 global:
 - refactor avatar indicators display (maybe also some other stuff on avatars?)
