@@ -5309,7 +5309,17 @@
                         queueBtn = `<button class="queue-build-btn" data-evaluation-id="${evaluationId}" title="${tooltip}"><svg height="16" viewBox="0 0 32 32" width="16"><circle cx="16" cy="16" r="16" fill="#0078d4"/><path d="M12 9v14l12-7z" fill="#fff"/></svg></button>`;
                     }
 
-                    buildHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${ADOContent.escapeHtml(label)}${extraHtml}${queueBtn}</li>`;
+                    // Link to the build run if a buildId is available
+                    const buildId = p.context?.buildId;
+                    let labelHtml;
+                    if (buildId) {
+                        const buildUrl = `${currentConfig.serverUrl}/${currentConfig.organization}/${currentConfig.project}/_build/results?buildId=${buildId}`;
+                        labelHtml = `<a href="${ADOContent.escapeHtml(buildUrl)}" target="_blank" rel="noopener">${ADOContent.escapeHtml(label)}</a>`;
+                    } else {
+                        labelHtml = ADOContent.escapeHtml(label);
+                    }
+
+                    buildHtml += `<li class="check-item ${cls}"><span class="check-icon">${icon}</span> ${labelHtml}${extraHtml}${queueBtn}</li>`;
                 });
 
                 buildHtml += '</ul></div>';

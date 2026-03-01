@@ -15,7 +15,10 @@ const ADOConfig = {
      */
     get() {
         const savedConfig = localStorage.getItem('adoConfig');
-        return savedConfig ? JSON.parse(savedConfig) : null;
+        if (!savedConfig) return null;
+        const config = JSON.parse(savedConfig);
+        if (config.serverUrl) config.serverUrl = config.serverUrl.replace(/\/+$/, '');
+        return config;
     },
 
     /**
