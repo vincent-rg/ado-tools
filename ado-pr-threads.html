@@ -2539,6 +2539,195 @@
             display: flex;
         }
 
+        #updatesView {
+            display: none;
+            padding: 20px 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        #updatesView.active { display: block; }
+
+        .updates-timeline {
+            max-width: 800px;
+        }
+
+        .update-item {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .update-item-badge {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            background: #e1dfdd;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 13px;
+            color: #323130;
+            margin-top: 4px;
+        }
+
+        .update-item-card {
+            flex: 1;
+            background: white;
+            border: 1px solid #e1dfdd;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .update-item-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f3f2f1;
+        }
+
+        .update-item-header img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .update-header-text { flex: 1; }
+
+        .update-header-text strong { color: #323130; }
+
+        .update-header-date {
+            font-size: 12px;
+            color: #605e5c;
+            margin-top: 2px;
+        }
+
+        .update-commits {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .update-commit-row {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            padding: 8px 16px;
+            border-top: 1px solid #f3f2f1;
+            font-size: 13px;
+        }
+
+        .update-commit-hash {
+            font-family: monospace;
+            font-size: 12px;
+            color: #605e5c;
+            text-decoration: none;
+            flex-shrink: 0;
+            background: #f3f2f1;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .update-commit-hash:hover { color: #0078d4; text-decoration: underline; }
+
+        .update-commit-msg {
+            flex: 1;
+            color: #323130;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .update-commit-meta {
+            font-size: 12px;
+            color: #605e5c;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .update-rebase-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 0 6px 8px;
+            font-size: 13px;
+            color: #605e5c;
+            margin-bottom: 8px;
+            margin-left: 8px;
+        }
+
+        .update-rebase-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #c8c6c4;
+            flex-shrink: 0;
+        }
+
+        .update-target-change .update-item-card {
+            background: #f9f8f7;
+        }
+
+        /* Base commit card (replaces the grey dot separator) */
+        .update-base-card {
+            background: #f3f2f1;
+            border: 1px solid #e1dfdd;
+            border-left: 3px solid #c8c6c4;
+            border-radius: 4px;
+            padding: 8px 14px;
+            margin: 0 0 12px 48px;
+            font-size: 13px;
+        }
+
+        .update-base-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #a19f9d;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .update-base-commit-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .update-base-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #605e5c;
+            margin-top: 4px;
+        }
+
+        .update-base-initials {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #8a8886;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+
         .files-layout {
             display: flex;
             flex: 1;
@@ -3771,6 +3960,7 @@
                         </div>
                     </div>
                 </div>
+                <div id="updatesView"></div>
             </div>
 
             <!-- Right Sidebar with Stats, Reviewers, Checks -->
@@ -3805,6 +3995,8 @@
         let selectedFilePath = null;
         let fileDiffCache = new Map();
         let fileTreeBuilt = false;
+        let updatesViewBuilt = false;
+        let baseCommitCache = new Map();  // commitId -> commit object
         let currentMergeBase = null;
         let currentUserId = null;
         let selectedIterationStart = null; // null = "all"
@@ -5080,6 +5272,18 @@
                         container.innerHTML = `<span>Updates</span><strong>${allIterations.length}</strong>`;
                     }
 
+                    // Mark updates view as stale and rebuild if active
+                    updatesViewBuilt = false;
+                    if (currentView === 'updates') {
+                        updatesViewBuilt = true;
+                        buildUpdatesView();
+                    }
+                    // Update updates tab count
+                    const updatesTabBtn = document.querySelector('.view-tab[data-view="updates"]');
+                    if (updatesTabBtn) {
+                        updatesTabBtn.textContent = `Updates (${allIterations.length})`;
+                    }
+
                     // Refresh file change stats if we have a new iteration
                     if (allIterations.length > 0) {
                         try {
@@ -5752,6 +5956,7 @@
                         allChangeEntries = entries;
                         fileDiffCache.clear();
                         fileTreeBuilt = false;
+                        updatesViewBuilt = false;
                         fileChangeStats = calculateFileChangeStats(entries);
                         // Build cumulative rename maps from all iterations
                         buildCumulativeRenameMaps(entries);
@@ -8633,6 +8838,7 @@
                 <div class="view-tabs">
                     <button class="view-tab${currentView === 'overview' ? ' active' : ''}" data-view="overview" onclick="switchView('overview')">Overview</button>
                     <button class="view-tab${currentView === 'files' ? ' active' : ''}" data-view="files" onclick="switchView('files')">Files (${fileCount})</button>
+                    <button class="view-tab${currentView === 'updates' ? ' active' : ''}" data-view="updates" onclick="switchView('updates')">Updates (${allIterations.length})</button>
                 </div>
             `;
 
@@ -9088,6 +9294,13 @@
                     const entry = allChangeEntries.find(e => e.item?.path === _restoredFile);
                     selectFileForDiff(_restoredFile, entry?.changeType || 'edit');
                 }
+            } else if (currentView === 'updates') {
+                const overviewView = document.getElementById('overviewView');
+                const updatesView = document.getElementById('updatesView');
+                if (overviewView) overviewView.style.display = 'none';
+                if (updatesView) updatesView.classList.add('active');
+                updatesViewBuilt = true;
+                buildUpdatesView();
             }
 
             // Load avatars
@@ -9183,9 +9396,11 @@
 
             const overviewView = document.getElementById('overviewView');
             const filesView = document.getElementById('filesView');
+            const updatesView = document.getElementById('updatesView');
 
             if (view === 'files') {
                 if (overviewView) overviewView.style.display = 'none';
+                if (updatesView) updatesView.classList.remove('active');
                 if (filesView) filesView.classList.add('active');
 
                 // Lazily build file tree on first switch
@@ -9197,15 +9412,26 @@
                     // Filters may have changed while in overview – refresh thread display
                     refreshInlineThreadsIfNeeded();
                 }
-            } else {
-                if (overviewView) overviewView.style.display = '';
+            } else if (view === 'updates') {
+                if (overviewView) overviewView.style.display = 'none';
                 if (filesView) filesView.classList.remove('active');
+                if (updatesView) updatesView.classList.add('active');
+                if (!updatesViewBuilt) {
+                    updatesViewBuilt = true;
+                    buildUpdatesView();
+                }
+            } else {
+                if (filesView) filesView.classList.remove('active');
+                if (updatesView) updatesView.classList.remove('active');
+                if (overviewView) overviewView.style.display = '';
             }
 
             // Update URL param
             const url = new URL(window.location);
             if (view === 'files') {
                 url.searchParams.set('view', 'files');
+            } else if (view === 'updates') {
+                url.searchParams.set('view', 'updates');
             } else {
                 url.searchParams.delete('view');
                 url.searchParams.delete('file');
@@ -9634,6 +9860,164 @@
                 return `${months[d.getMonth()]} ${d.getDate()}`;
             }
             return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+        }
+
+        async function buildUpdatesView() {
+            const container = document.getElementById('updatesView');
+            if (!container) return;
+
+            const config = currentConfig;
+            const baseUrl = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}/commit/`;
+
+            if (allIterations.length === 0) {
+                container.innerHTML = '<p style="color:#605e5c;">No updates yet.</p>';
+                return;
+            }
+
+            // Show brief loading state while fetching data
+            container.innerHTML = '<div style="color:#a19f9d;padding:8px 0;font-size:13px;">Loading…</div>';
+
+            // Collect unique base commit IDs and iteration author IDs
+            const uniqueBaseIds = new Set();
+            const iterAuthorIds = new Set();
+            for (const iter of allIterations) {
+                if (iter.commonRefCommit?.commitId) uniqueBaseIds.add(iter.commonRefCommit.commitId);
+                if (iter.author?.id) iterAuthorIds.add(iter.author.id);
+            }
+
+            // Fetch base commit details + pre-fetch iteration author avatars in parallel
+            const [commitResults] = await Promise.all([
+                Promise.all([...uniqueBaseIds].map(id =>
+                    baseCommitCache.has(id)
+                        ? Promise.resolve(baseCommitCache.get(id))
+                        : ADOAPI.getCommit(config, id)
+                            .then(c => { baseCommitCache.set(id, c); return c; })
+                            .catch(() => null)
+                )),
+                Promise.all([...iterAuthorIds].map(id => AvatarLoader.fetch(id).catch(() => null)))
+            ]);
+
+            // Build lookup: commitId -> commit object
+            const commitMap = new Map();
+            for (const c of commitResults) {
+                if (c) commitMap.set(c.commitId, c);
+            }
+
+            // Pre-fetch base commit pusher avatars via push.pushedBy.id
+            const baseAuthorIds = [...commitMap.values()].map(c => c.push?.pushedBy?.id || null).filter(Boolean);
+            if (baseAuthorIds.length > 0) {
+                await Promise.all(baseAuthorIds.map(id => AvatarLoader.fetch(id).catch(() => null)));
+            }
+
+            let html = '<div class="updates-timeline">';
+
+            // Descending: newest first
+            for (let i = allIterations.length - 1; i >= 0; i--) {
+                const iter = allIterations[i];
+                const iterNum = i + 1;
+                const commits = iter.commits || [];
+                const authorName = iter.author?.displayName || 'Unknown';
+                const authorId = iter.author?.id || '';
+                const date = ADOUI.formatDate(iter.createdDate);
+
+                const reason = iter.reason || '';
+                const isTargetChange = reason === 'retarget' || reason === 'targetBranchUpdate';
+
+                // Avatar HTML — pre-fetched above so getCached() is always populated
+                const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
+                const initials = authorName.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
+                const avatarHtml = cachedUrl
+                    ? `<img src="${cachedUrl}" alt="${ADOContent.escapeHtml(authorName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">`
+                    : `<div class="avatar-initials" style="width:28px;height:28px;border-radius:50%;background:#0078d4;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;">${initials}</div>`;
+
+                const itemClass = isTargetChange ? 'update-item update-target-change' : 'update-item';
+                html += `<div class="${itemClass}">`;
+                html += `<div class="update-item-badge">${iterNum}</div>`;
+                html += `<div style="flex:1;margin-bottom:8px;">`;
+                html += `<div class="update-item-card">`;
+                html += `<div class="update-item-header">`;
+                html += avatarHtml;
+                html += `<div class="update-header-text">`;
+
+                if (isTargetChange) {
+                    html += `<strong>${ADOContent.escapeHtml(authorName)}</strong> changed the target branch`;
+                } else {
+                    const verb = reason === 'forcePush' ? 'force-pushed' : 'pushed';
+                    const count = commits.length;
+                    html += `<strong>${ADOContent.escapeHtml(authorName)}</strong> ${verb} ${count} commit${count !== 1 ? 's' : ''}`;
+                }
+                html += `<div class="update-header-date">${date}</div>`;
+                html += `</div>`; // update-header-text
+                html += `</div>`; // update-item-header
+
+                // Commits list
+                if (!isTargetChange && commits.length > 0) {
+                    html += `<ul class="update-commits">`;
+                    for (const commit of commits) {
+                        const shortHash = commit.commitId.substring(0, 7);
+                        const commitUrl = baseUrl + commit.commitId;
+                        const msg = ADOContent.escapeHtml((commit.comment || '').split('\n')[0]);
+                        const authorStr = ADOContent.escapeHtml(commit.author?.name || '');
+                        const commitDate = commit.author?.date ? ADOUI.formatDate(commit.author.date) : '';
+                        html += `<li class="update-commit-row">`;
+                        html += `<a href="${commitUrl}" target="_blank" class="update-commit-hash">${shortHash}</a>`;
+                        html += `<span class="update-commit-msg">${msg}</span>`;
+                        html += `<span class="update-commit-meta">${authorStr}${commitDate ? ' · ' + commitDate : ''}</span>`;
+                        html += `</li>`;
+                    }
+                    html += `</ul>`;
+                }
+
+                html += `</div>`; // update-item-card
+                html += `</div>`; // flex:1
+                html += `</div>`; // update-item
+
+                // Base commit card — enriched, visually distinct from iteration cards
+                // Show if: oldest iteration (i===0) OR base changed from prev iteration
+                const currBase = iter.commonRefCommit?.commitId;
+                const prevBase = i > 0 ? allIterations[i - 1].commonRefCommit?.commitId : null;
+                const showBase = currBase && (i === 0 || (prevBase && currBase !== prevBase));
+                if (showBase) {
+                    const baseShort = currBase.substring(0, 7);
+                    const baseCommitUrl = baseUrl + currBase;
+                    const baseCommit = commitMap.get(currBase);
+
+                    html += `<div class="update-base-card">`;
+                    html += `<div class="update-base-label">`;
+                    // Fork icon (SVG)
+                    html += `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm0 2.122a2.25 2.25 0 1 0-1.5 0v.878A2.25 2.25 0 0 0 5.75 8.5h1.5v2.128a2.251 2.251 0 1 0 1.5 0V8.5h1.5a2.25 2.25 0 0 0 2.25-2.25v-.878a2.25 2.25 0 1 0-1.5 0v.878a.75.75 0 0 1-.75.75h-4.5A.75.75 0 0 1 5 6.25v-.878zm3.75 7.378a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm3-8.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0z"/></svg>`;
+                    html += `Based on commit</div>`;
+
+                    html += `<div class="update-base-commit-row">`;
+                    html += `<a href="${baseCommitUrl}" target="_blank" class="update-commit-hash">${baseShort}</a>`;
+                    if (baseCommit?.comment) {
+                        const msg = ADOContent.escapeHtml(baseCommit.comment.split('\n')[0]);
+                        html += `<span class="update-commit-msg">${msg}</span>`;
+                    }
+                    html += `</div>`;
+
+                    if (baseCommit?.author) {
+                        const authorName = ADOContent.escapeHtml(baseCommit.author.name || '');
+                        const authorDate = baseCommit.author.date ? ADOUI.formatDate(baseCommit.author.date) : '';
+                        const baseInitials = (baseCommit.author.name || '?').split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
+                        const pushedById = baseCommit.push?.pushedBy?.id;
+                        const baseCachedUrl = pushedById ? AvatarLoader.getCached(pushedById) : null;
+                        const baseAvatarHtml = baseCachedUrl
+                            ? `<img src="${baseCachedUrl}" alt="${authorName}" style="width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+                            : `<div class="update-base-initials">${baseInitials}</div>`;
+                        html += `<div class="update-base-meta">`;
+                        html += baseAvatarHtml;
+                        html += `<span>${authorName}</span>`;
+                        if (authorDate) html += `<span>·</span><span>${authorDate}</span>`;
+                        html += `</div>`;
+                    }
+
+                    html += `</div>`; // update-base-card
+                }
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
         }
 
         function buildIterationSelector() {
@@ -11136,6 +11520,8 @@
             if (params.get('view') === 'files' || params.get('file')) {
                 // Will be applied after PR loads — just set the variable
                 currentView = 'files';
+            } else if (params.get('view') === 'updates') {
+                currentView = 'updates';
             }
         })();
 

@@ -296,6 +296,19 @@ const ADOAPI = {
     },
 
     /**
+     * Get a single commit's details (author, message, date)
+     */
+    async getCommit(config, commitId) {
+        const url = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/commits/${commitId}?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch commit: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    },
+
+    /**
      * Update thread status
      */
     async updateThreadStatus(config, prId, threadId, status) {
