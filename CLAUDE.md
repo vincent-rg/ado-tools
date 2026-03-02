@@ -6,22 +6,24 @@ Browser-based tools for Azure DevOps Server 2022.1+. Pure HTML/CSS/JS frontend +
 
 **Run:** `python ado-server.py [port]` (default 8000)
 
-## File Map (14,890 lines total)
+## File Map (22,409 lines total)
 
 ```
-ado-server.py          (197 lines)  Python HTTP server + avatar/identity proxy
-common.css             (715 lines)  Shared styles (badges, modals, avatars, forms, layout)
-common.js             (1747 lines)  Shared JS modules (API, config, UI, content, avatars, checks)
-diff.js                (219 lines)  Histogram diff algorithm (line-by-line diff)
-diff-utils.js                       Extracted diff/thread utilities from ado-pr-threads.html
-pr-list-utils.js                    Extracted pure functions from ado-pr-list.html (filters, time, change detection)
-mention-utils.js                    @mention autocomplete utilities (context detection, text insertion)
-pr-threads-utils.js                 Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
-vitest.config.js                    Vitest configuration for unit tests
-index.html             (206 lines)  Landing page with tool cards
-ado-settings.html      (219 lines)  Settings form (serverUrl, org, project, repo, PAT)
-ado-pr-list.html      (4201 lines)  PR list browser (CSS: 1-1057, HTML: 1059-1221, JS: 1224-4199)
-ado-pr-threads.html   (7386 lines)  PR thread viewer + Files diff (CSS: 8-2358, HTML: 2360-2527, JS: 2530-7372)
+ado-server.py               (280 lines)  Python HTTP server + avatar/identity proxy
+common.css                  (745 lines)  Shared styles (badges, modals, avatars, forms, layout)
+common.js                  (2042 lines)  Shared JS modules (API, config, UI, content, avatars, checks)
+diff.js                     (232 lines)  Histogram diff algorithm (line-by-line diff)
+diff-utils.js               (393 lines)  Extracted diff/thread utilities from ado-pr-threads.html
+diff-virtual-scroller.js   (1130 lines)  Virtual scroll for diff view (DiffVirtualScroller IIFE)
+sticky-lines-utils.js       (227 lines)  Sticky line tracking utilities for diff view
+pr-list-utils.js            (164 lines)  Extracted pure functions from ado-pr-list.html (filters, time, change detection)
+mention-utils.js             (74 lines)  @mention autocomplete utilities (context detection, text insertion)
+pr-threads-utils.js         (312 lines)  Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
+vitest.config.js              (8 lines)  Vitest configuration for unit tests
+index.html                  (208 lines)  Landing page with tool cards
+ado-settings.html           (221 lines)  Settings form (serverUrl, org, project, repo, PAT)
+ado-pr-list.html           (4214 lines)  PR list browser
+ado-pr-threads.html       (12047 lines)  PR thread viewer + Files diff
 ```
 
 ## Architecture
@@ -124,7 +126,7 @@ All exposed on `window.*`:
 - **@mention autocomplete**: `MentionAutocomplete` IIFE (attach to textareas, dropdown UI, keyboard nav) + `MentionUtils` (from mention-utils.js: context detection, text insertion, display↔ID resolution). `resolveMentionsForSubmit()` converts `@<DisplayName>` back to `@<id>` on submit
 - **Work items** (~2 funcs): `fetchAndUpdateWorkItems()`, `renderWorkItemsSection()` - linked work items in right sidebar
 - **Line stats** (~8 funcs): async line count computation via local diff (fetch both versions, diff with HistogramDiff)
-- **Display** (~540 lines in `displayResults()`): thread rendering, compact/detailed views, stats, code context links
+- **Display** (~600 lines in `displayResults()`): thread rendering, compact/detailed views, stats, code context links
 - **Files view rendering** (~800 lines): file tree panel, diff panel, iteration selector
 
 ### Iteration System
@@ -169,9 +171,9 @@ look at TODO file
 
 ### Medium Impact
 
-- [ ] Extract inline CSS/JS from monolithic HTML files into separate `.css`/`.js` files
-- [ ] Break up `displayPRs()` (266 lines) in `ado-pr-list.html` into smaller functions
-- [ ] Break up `displayResults()` (540 lines) in `ado-pr-threads.html` into smaller functions
+- [ ] Extract remaining inline CSS/JS from HTML files into separate files (several JS modules already extracted: diff-utils, diff-virtual-scroller, sticky-lines-utils, pr-list-utils, mention-utils, pr-threads-utils)
+- [ ] Break up `displayPRs()` (~268 lines) in `ado-pr-list.html` into smaller functions
+- [ ] Break up `displayResults()` (~598 lines) in `ado-pr-threads.html` into smaller functions
 - [ ] Organize global state into state objects instead of 50+/25+ loose globals
 - [x] Fix inconsistent API methods: `setDraft()` uses raw `fetch()` instead of `fetchWithAuth()`; deduplicate `getPRThreads`/`getThreads` and `getPRIterations`/`getIterations` pairs
 - [ ] Consolidate magic numbers (timeouts, thresholds) into config constants objects
