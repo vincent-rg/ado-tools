@@ -13,8 +13,8 @@ const DiffVirtualScroller = (() => {
     const OVERSCAN_PX = 1500;
     // Default code row height (monospace, line-height: 1.5, no wrapping)
     const DEFAULT_CODE_HEIGHT = 19; // will be measured once at mount time
-    // Default collapsed thread height
-    const COLLAPSED_THREAD_HEIGHT = 32;
+    // Collapsed threads use display:none so they take no space in the layout
+    const COLLAPSED_THREAD_HEIGHT = 0;
     // Estimate per-comment height for expanded threads
     const PER_COMMENT_HEIGHT = 60;
     const THREAD_BASE_HEIGHT = 40;
