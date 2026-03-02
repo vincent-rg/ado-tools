@@ -10091,7 +10091,15 @@
                 const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff });
                 if (selectedFilePath !== filePath) return;
 
-                renderFileDiff(filePath, changeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent);
+                if (result.newFetchFailed) {
+                    throw new Error(`Could not load new file content (${filePath})`);
+                }
+                // Old content 404 can happen when a rebase brings in a file that didn't exist
+                // in the base iteration's commit. ADO reports it as 'edit' (the file existed on
+                // the target branch) but the base commit doesn't have it — treat it as 'add'.
+                const effectiveChangeType = (result.oldFetchFailed && !ct.includes('delete')) ? 'add' : changeType;
+
+                renderFileDiff(filePath, effectiveChangeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent);
                 updateHunkNav();
                 updateThreadNav(scrollToThreadId);
                 if (scrollToThreadId) scrollToThread(scrollToThreadId);
