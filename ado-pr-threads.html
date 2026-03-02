@@ -3295,6 +3295,43 @@
             white-space: nowrap;
         }
 
+        .iteration-rebase-separator {
+            display: flex;
+            align-items: center;
+            padding: 2px 12px;
+            gap: 10px;
+            cursor: default;
+        }
+
+        .iteration-rebase-separator .iteration-node-col::before {
+            height: 50%;
+            top: 0;
+        }
+
+        .iteration-rebase-separator .iteration-node-col::after {
+            height: 50%;
+            bottom: 0;
+        }
+
+        .iteration-rebase-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            color: #a19f9d;
+            flex: 1;
+            min-width: 0;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .iteration-rebase-label::before,
+        .iteration-rebase-label::after {
+            content: '';
+            flex: 1;
+            border-top: 1px dashed #d2d0ce;
+        }
+
         /* File view mode selector */
         .file-view-mode-bar {
             display: flex;
@@ -9627,6 +9664,19 @@
             const total = allIterations.length;
             for (let i = 1; i <= total; i++) {
                 const iter = allIterations[i - 1];
+
+                if (i > 1) {
+                    const prevBase = allIterations[i - 2].commonRefCommit?.commitId;
+                    const currBase = iter.commonRefCommit?.commitId;
+                    if (prevBase && currBase && prevBase !== currBase) {
+                        const short = id => id.substring(0, 7);
+                        html += `<div class="iteration-rebase-separator" title="Base changed: ${short(prevBase)} \u2192 ${short(currBase)}">`;
+                        html += '<div class="iteration-node-col"></div>';
+                        html += '<div class="iteration-rebase-label">\u21bb rebased</div>';
+                        html += '</div>';
+                    }
+                }
+
                 const inRange = !hasSel || (i >= selectedIterationStart && i <= selectedIterationEnd);
                 const isStart = !hasSel ? i === 1 : i === selectedIterationStart;
                 const isEnd = !hasSel ? i === total : i === selectedIterationEnd;
