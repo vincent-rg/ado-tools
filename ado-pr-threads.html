@@ -3500,6 +3500,15 @@
             min-width: 0;
         }
 
+        .thread-preview .code-tag {
+            background: #2d2d2d;
+            color: #ccc;
+            border-radius: 3px;
+            padding: 0 3px;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+
         .tree-thread-avatar-wrap {
             position: relative;
             width: 16px;
@@ -9260,7 +9269,8 @@
                 html += `<div class="file-tree-thread" data-thread-id="${thread.id}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
                 html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
                 html += avatarHtml;
-                html += `<span class="thread-preview">${lineLabel}${ADOContent.escapeHtml(preview)}</span>`;
+                const previewHtml = ADOContent.escapeHtml(preview).replace(/\[code\]/g, '<span class="code-tag">[code]</span>');
+                html += `<span class="thread-preview">${lineLabel}${previewHtml}</span>`;
                 html += '</div>';
             }
             html += '</div>';
