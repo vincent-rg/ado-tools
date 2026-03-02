@@ -4032,7 +4032,8 @@
         let stickyLinesInvalidate = null; // call to bust sticky-lines position cache (resize / thread toggle)
         let sbsScrollSync = null;     // { applyScroll, scrollRange, getCurrentOffset } set by setupSbsScrollSync
         let currentDiffScroller = null; // DiffVirtualScroller instance for current file diff
-        let replyFormThreadObserver = null; // ResizeObserver watching inline thread height while reply form is open
+        let replyFormThreadObserver = null;    // ResizeObserver watching inline thread height while reply form is open
+        let editCommentThreadObserver = null;  // ResizeObserver watching inline thread height while edit-comment editor is open
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -6556,6 +6557,26 @@
 
             const actions = commentDiv?.querySelector('.comment-actions');
             if (actions) actions.style.display = 'none';
+
+            // Watch for height changes while the editor is open (textarea grow, preview toggle)
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByThreadId(threadId);
+                const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                if (row && threadEl) {
+                    row.measuredHeight = null;
+                    currentDiffScroller.recalcLayout();
+                    if (editCommentThreadObserver) editCommentThreadObserver.disconnect();
+                    editCommentThreadObserver = new ResizeObserver(() => {
+                        if (!currentDiffScroller) return;
+                        const newH = threadEl.getBoundingClientRect().height;
+                        if (newH > 0 && Math.abs(newH - (row.measuredHeight || 0)) > 1) {
+                            row.measuredHeight = newH;
+                            currentDiffScroller.recalcLayout();
+                        }
+                    });
+                    editCommentThreadObserver.observe(threadEl);
+                }
+            }
         }
 
         function cancelEditComment(threadId, commentId, prefix = '') {
@@ -6567,6 +6588,28 @@
 
             const actions = commentDiv?.querySelector('.comment-actions');
             if (actions) actions.style.display = '';
+
+            // Stop watching and notify scroller the thread shrank back
+            if (editCommentThreadObserver) {
+                editCommentThreadObserver.disconnect();
+                editCommentThreadObserver = null;
+            }
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByThreadId(threadId);
+                if (row) {
+                    row.measuredHeight = null;
+                    currentDiffScroller.recalcLayout();
+                    const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                    requestAnimationFrame(() => {
+                        if (!currentDiffScroller || !threadEl) return;
+                        const actualH = threadEl.getBoundingClientRect().height;
+                        if (actualH > 0 && actualH !== row.measuredHeight) {
+                            row.measuredHeight = actualH;
+                            currentDiffScroller.recalcLayout();
+                        }
+                    });
+                }
+            }
         }
 
         async function saveEditComment(threadId, commentId, prefix = '') {
