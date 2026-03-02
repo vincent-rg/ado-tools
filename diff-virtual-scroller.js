@@ -355,8 +355,12 @@ const DiffVirtualScroller = (() => {
 
     /**
      * Compute layout: assign top/height to each row.
+     *
+     * extraFormAfterIndex / extraFormShift: when a comment form is spliced in
+     * after a row, its height is added to the cumulative top so subsequent
+     * rows are pushed down correctly. Pass -1 / 0 when no form is present.
      */
-    function computeLayout(rows, codeRowHeight) {
+    function computeLayout(rows, codeRowHeight, extraFormAfterIndex = -1, extraFormShift = 0) {
         let top = 0;
         for (const row of rows) {
             row.top = top;
@@ -371,6 +375,10 @@ const DiffVirtualScroller = (() => {
                 }
             }
             top += row.height;
+            // If a comment form is spliced in after this row, reserve its height
+            if (extraFormAfterIndex >= 0 && row.index === extraFormAfterIndex) {
+                top += extraFormShift;
+            }
         }
         return top; // total height
     }
@@ -432,6 +440,12 @@ const DiffVirtualScroller = (() => {
         let _searchHighlights = null;  // Map<rowIndex, [{start, end}]> or null
         let _searchRegex = null;       // RegExp for applying highlights to rendered elements
         let _mode = mode || 'inline';
+
+        // Extra comment-form state (spliced between rows while editing)
+        let _extraFormEl = null;
+        let _extraFormAfterIndex = -1;
+        let _extraFormShift = 0;
+        let _extraFormObserver = null;  // ResizeObserver tracking form height changes
 
         /**
          * Create the HTML for a single inline code row.
@@ -753,13 +767,19 @@ const DiffVirtualScroller = (() => {
             const anchorIdx = findFirstVisibleRow(rows, scrollTop);
             const anchorOffset = scrollTop - rows[anchorIdx].top;
 
-            // Recompute layout
-            _totalHeight = computeLayout(rows, _codeRowHeight);
+            // Recompute layout (accounting for spliced comment form if present)
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
             _container.style.height = _totalHeight + 'px';
 
             // Update positions of rendered elements
             for (const [idx, el] of _renderedElements) {
                 el.style.top = rows[idx].top + 'px';
+            }
+
+            // Keep comment form element positioned correctly
+            if (_extraFormEl && _extraFormAfterIndex >= 0) {
+                const r = rows[_extraFormAfterIndex];
+                _extraFormEl.style.top = (r.top + r.height) + 'px';
             }
 
             // Anchor scroll position to prevent jump
@@ -774,6 +794,7 @@ const DiffVirtualScroller = (() => {
             _destroyed = true;
             if (_rafId != null) cancelAnimationFrame(_rafId);
             if (_scrollArea) _scrollArea.removeEventListener('scroll', onScroll);
+            if (_extraFormObserver) { _extraFormObserver.disconnect(); _extraFormObserver = null; }
             _renderedElements.clear();
             _scrollArea = null;
             _container = null;
@@ -915,10 +936,109 @@ const DiffVirtualScroller = (() => {
 
         function recalcLayout() {
             if (_isSmallFile) return;
-            _totalHeight = computeLayout(rows, _codeRowHeight);
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
             _container.style.height = _totalHeight + 'px';
             for (const [idx, el] of _renderedElements) {
                 el.style.top = rows[idx].top + 'px';
+            }
+            if (_extraFormEl && _extraFormAfterIndex >= 0) {
+                const r = rows[_extraFormAfterIndex];
+                _extraFormEl.style.top = (r.top + r.height) + 'px';
+            }
+        }
+
+        /**
+         * Splice a comment-form element into the layout after a given row DOM element,
+         * shifting all subsequent rows down so the form pushes content rather than overlaying it.
+         * No-op for small files (which use normal DOM flow and don't need this).
+         */
+        function insertFormRow(formEl, afterElement) {
+            if (_isSmallFile) return;
+
+            // Reverse-lookup: find the row index that owns afterElement
+            let afterIndex = -1;
+            for (const [idx, el] of _renderedElements) {
+                if (el === afterElement) { afterIndex = idx; break; }
+            }
+            if (afterIndex === -1) return;
+
+            // Clean up any previous form first
+            if (_extraFormEl) removeFormRow();
+
+            // Position the form absolutely right below the target row and append to container
+            const r = rows[afterIndex];
+            const formTop = r.top + r.height;
+            formEl.style.position = 'absolute';
+            formEl.style.top = formTop + 'px';
+            formEl.style.left = '0';
+            formEl.style.right = '0';
+            formEl.style.zIndex = '10';
+            formEl.style.boxSizing = 'border-box';
+            _container.appendChild(formEl);
+
+            // Measure actual rendered height (getBoundingClientRect forces layout)
+            const formH = formEl.getBoundingClientRect().height || 130;
+
+            // Store state and re-run layout so subsequent rows are shifted
+            _extraFormEl = formEl;
+            _extraFormAfterIndex = afterIndex;
+            _extraFormShift = formH;
+
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
+            _container.style.height = _totalHeight + 'px';
+
+            // Update positions of all currently-rendered rows after insertion point
+            for (const [idx, el] of _renderedElements) {
+                if (idx > afterIndex) el.style.top = rows[idx].top + 'px';
+            }
+
+            // Scroll to show the form if it's below the current viewport
+            if (_scrollArea) {
+                const visibleBottom = _scrollArea.scrollTop + _scrollArea.clientHeight;
+                if (formTop + formH > visibleBottom) {
+                    _scrollArea.scrollTop = Math.min(
+                        formTop,
+                        formTop + formH - _scrollArea.clientHeight + 8
+                    );
+                }
+            }
+
+            // Watch for height changes as the user types / preview expands
+            _extraFormObserver = new ResizeObserver(() => {
+                if (!_extraFormEl) return;
+                const newH = _extraFormEl.getBoundingClientRect().height;
+                if (newH <= 0 || Math.abs(newH - _extraFormShift) <= 1) return;
+                _extraFormShift = newH;
+                _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
+                _container.style.height = _totalHeight + 'px';
+                for (const [idx, el] of _renderedElements) {
+                    if (idx > _extraFormAfterIndex) el.style.top = rows[idx].top + 'px';
+                }
+            });
+            _extraFormObserver.observe(formEl);
+        }
+
+        /**
+         * Remove the spliced comment form and restore the original row layout.
+         */
+        function removeFormRow() {
+            if (!_extraFormEl || _isSmallFile) return;
+
+            if (_extraFormObserver) { _extraFormObserver.disconnect(); _extraFormObserver = null; }
+            _extraFormEl.remove();
+            const afterIndex = _extraFormAfterIndex;
+
+            _extraFormEl = null;
+            _extraFormAfterIndex = -1;
+            _extraFormShift = 0;
+
+            // Recompute layout without the form shift
+            _totalHeight = computeLayout(rows, _codeRowHeight);
+            _container.style.height = _totalHeight + 'px';
+
+            // Restore positions of rows that were shifted
+            for (const [idx, el] of _renderedElements) {
+                if (idx > afterIndex) el.style.top = rows[idx].top + 'px';
             }
         }
 
@@ -958,6 +1078,8 @@ const DiffVirtualScroller = (() => {
             isSmallFile,
             getMode,
             getTotalHeight,
+            insertFormRow,
+            removeFormRow,
         };
     }
 

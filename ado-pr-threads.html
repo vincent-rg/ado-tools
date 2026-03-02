@@ -1139,7 +1139,13 @@
         .sbs-line-comment-spacer {
             flex: 1;
             min-width: 0;
-            background: #f6f8fa;
+            background: repeating-linear-gradient(
+                -45deg,
+                #f6f8fa,
+                #f6f8fa 4px,
+                #eef0f2 4px,
+                #eef0f2 8px
+            );
         }
         .sbs-line-comment-side .comment-editor textarea {
             min-height: 60px;
@@ -4546,6 +4552,32 @@
             diffPanel.addEventListener('mouseleave', hideBubble, { signal });
         }
 
+        // Insert a comment form after a diff row element.
+        // In virtual-scroll mode (large files), delegates to the scroller's insertFormRow()
+        // which splices the form into the layout data model, shifting subsequent rows down
+        // so the form pushes content rather than overlaying it.
+        // Small files and non-virtual-scroll contexts fall back to insertAdjacentElement.
+        function insertCommentFormAfterRow(formEl, rowEl) {
+            if (currentDiffScroller && !currentDiffScroller.isSmallFile()) {
+                currentDiffScroller.insertFormRow(formEl, rowEl);
+                diffMinimapInvalidate?.();
+                diffMinimapDraw?.();
+                stickyLinesInvalidate?.();
+            } else {
+                rowEl.insertAdjacentElement('afterend', formEl);
+            }
+        }
+
+        // Remove the spliced comment form and restore layout.
+        function restoreCommentFormContainerHeight() {
+            if (currentDiffScroller) {
+                currentDiffScroller.removeFormRow();
+                diffMinimapInvalidate?.();
+                diffMinimapDraw?.();
+                stickyLinesInvalidate?.();
+            }
+        }
+
         function openLineCommentEditor(filePath, lineNum, side, bubbleEl, lineLen) {
             hideLineCommentForm();
             hideSelectionCommentForm();
@@ -4585,7 +4617,7 @@
                     formRow.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
                 }
 
-                sbsRow.insertAdjacentElement('afterend', formRow);
+                insertCommentFormAfterRow(formRow, sbsRow);
             } else {
                 const diffLine = bubbleEl.closest('.diff-line');
                 if (!diffLine) return;
@@ -4602,7 +4634,7 @@
                     </div>
                 `;
 
-                diffLine.insertAdjacentElement('afterend', formDiv);
+                insertCommentFormAfterRow(formDiv, diffLine);
             }
 
             const textarea = document.querySelector('.line-comment-textarea');
@@ -4626,6 +4658,7 @@
 
         function hideLineCommentForm() {
             document.querySelectorAll('.line-comment-form, .sbs-line-comment-form').forEach(el => el.remove());
+            restoreCommentFormContainerHeight();
             document.querySelectorAll('.line-comment-highlight-mark').forEach(mark => {
                 const parent = mark.parentNode;
                 while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
@@ -11037,6 +11070,7 @@
 
         function hideSelectionCommentForm() {
             document.querySelectorAll('.selection-comment-form-row').forEach(el => el.remove());
+            restoreCommentFormContainerHeight();
             removeSelectionHighlightMarks();
             selectionCommentState = null;
         }
@@ -11254,12 +11288,12 @@
                     formRow.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
                 }
 
-                parsed.endRow.insertAdjacentElement('afterend', formRow);
+                insertCommentFormAfterRow(formRow, parsed.endRow);
             } else {
                 const formDiv = document.createElement('div');
                 formDiv.className = 'line-comment-form selection-comment-form-row';
                 formDiv.innerHTML = editorHtml;
-                parsed.endEl.insertAdjacentElement('afterend', formDiv);
+                insertCommentFormAfterRow(formDiv, parsed.endEl);
             }
 
             const textarea = document.querySelector('.selection-comment-form-row .line-comment-textarea');
