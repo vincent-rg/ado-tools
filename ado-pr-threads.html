@@ -6452,6 +6452,24 @@
                 attachImagePaste(textarea);
                 attachEditPreview(textarea);
             }
+
+            // Notify virtual scroller that this thread row grew (same pattern as toggleInlineThread)
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByThreadId(threadId);
+                if (row) {
+                    row.measuredHeight = null;
+                    currentDiffScroller.recalcLayout();
+                    const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                    requestAnimationFrame(() => {
+                        if (!currentDiffScroller || !threadEl) return;
+                        const actualH = threadEl.getBoundingClientRect().height;
+                        if (actualH > 0 && actualH !== row.measuredHeight) {
+                            row.measuredHeight = actualH;
+                            currentDiffScroller.recalcLayout();
+                        }
+                    });
+                }
+            }
         }
 
         function hideReplyForm(threadId, prefix = '') {
@@ -6459,6 +6477,24 @@
             if (container) container.innerHTML = '';
             const btn = document.getElementById(`${prefix}reply-btn-${threadId}`);
             if (btn) btn.style.display = '';
+
+            // Notify virtual scroller that this thread row shrank (same pattern as toggleInlineThread)
+            if (currentDiffScroller) {
+                const row = currentDiffScroller.getRowByThreadId(threadId);
+                if (row) {
+                    row.measuredHeight = null;
+                    currentDiffScroller.recalcLayout();
+                    const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                    requestAnimationFrame(() => {
+                        if (!currentDiffScroller || !threadEl) return;
+                        const actualH = threadEl.getBoundingClientRect().height;
+                        if (actualH > 0 && actualH !== row.measuredHeight) {
+                            row.measuredHeight = actualH;
+                            currentDiffScroller.recalcLayout();
+                        }
+                    });
+                }
+            }
         }
 
         async function submitReply(threadId, prefix = '') {
