@@ -6798,6 +6798,16 @@
                     const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
                     if (threadEl) {
                         threadEl.classList.remove('collapsed');
+                        // Measure actual height after expanding and update layout so
+                        // the scroller knows the real size (estimate may be wrong).
+                        const row = currentDiffScroller.getRowByThreadId(threadId);
+                        if (row) {
+                            const actualH = threadEl.getBoundingClientRect().height;
+                            if (actualH > 0 && actualH !== row.measuredHeight) {
+                                row.measuredHeight = actualH;
+                                currentDiffScroller.recalcLayout();
+                            }
+                        }
                         // Update gutter avatar
                         const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${threadId}"]`);
                         if (avatarEl) {

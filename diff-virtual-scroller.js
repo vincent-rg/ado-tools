@@ -532,6 +532,16 @@ const DiffVirtualScroller = (() => {
             wrapper.innerHTML = html;
             const el = wrapper.firstElementChild;
 
+            // Sync collapsed state: threadHtml is baked at build time but row.collapsed
+            // may have changed (e.g. scrollToThread uncollapsed it before rendering).
+            if (row.type === 'thread') {
+                el.classList.toggle('collapsed', row.collapsed);
+            } else if (row.type === 'sbs-thread') {
+                for (const t of el.querySelectorAll('.inline-thread')) {
+                    t.classList.toggle('collapsed', row.collapsed);
+                }
+            }
+
             // Apply search highlights if active
             if (_searchRegex && _searchHighlights?.has(row.index) && row.type === 'code') {
                 applySearchHighlightsToElement(el);
