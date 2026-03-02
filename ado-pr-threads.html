@@ -4032,6 +4032,7 @@
         let stickyLinesInvalidate = null; // call to bust sticky-lines position cache (resize / thread toggle)
         let sbsScrollSync = null;     // { applyScroll, scrollRange, getCurrentOffset } set by setupSbsScrollSync
         let currentDiffScroller = null; // DiffVirtualScroller instance for current file diff
+        let replyFormThreadObserver = null; // ResizeObserver watching inline thread height while reply form is open
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -6453,21 +6454,24 @@
                 attachEditPreview(textarea);
             }
 
-            // Notify virtual scroller that this thread row grew (same pattern as toggleInlineThread)
+            // Notify virtual scroller that this thread row grew, and watch for further
+            // height changes as the textarea grows / preview toggles (same pattern as insertFormRow).
             if (currentDiffScroller) {
                 const row = currentDiffScroller.getRowByThreadId(threadId);
-                if (row) {
+                const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
+                if (row && threadEl) {
                     row.measuredHeight = null;
                     currentDiffScroller.recalcLayout();
-                    const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
-                    requestAnimationFrame(() => {
-                        if (!currentDiffScroller || !threadEl) return;
-                        const actualH = threadEl.getBoundingClientRect().height;
-                        if (actualH > 0 && actualH !== row.measuredHeight) {
-                            row.measuredHeight = actualH;
+                    if (replyFormThreadObserver) replyFormThreadObserver.disconnect();
+                    replyFormThreadObserver = new ResizeObserver(() => {
+                        if (!currentDiffScroller) return;
+                        const newH = threadEl.getBoundingClientRect().height;
+                        if (newH > 0 && Math.abs(newH - (row.measuredHeight || 0)) > 1) {
+                            row.measuredHeight = newH;
                             currentDiffScroller.recalcLayout();
                         }
                     });
+                    replyFormThreadObserver.observe(threadEl);
                 }
             }
         }
@@ -6478,7 +6482,11 @@
             const btn = document.getElementById(`${prefix}reply-btn-${threadId}`);
             if (btn) btn.style.display = '';
 
-            // Notify virtual scroller that this thread row shrank (same pattern as toggleInlineThread)
+            // Stop watching and notify scroller the thread shrank back
+            if (replyFormThreadObserver) {
+                replyFormThreadObserver.disconnect();
+                replyFormThreadObserver = null;
+            }
             if (currentDiffScroller) {
                 const row = currentDiffScroller.getRowByThreadId(threadId);
                 if (row) {
