@@ -360,7 +360,9 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
     }
 
     const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldContent, newContent };
-    if (!oldFetchFailed && !newFetchFailed) {
+    // Cache unless new content failed (may be transient). Old-side failures are deterministic —
+    // the file genuinely didn't exist at that commit (e.g. rebase-introduced file) — safe to cache.
+    if (!newFetchFailed) {
         cache.set(cacheKey, result);
     }
     return result;

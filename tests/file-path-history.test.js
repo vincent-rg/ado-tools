@@ -181,8 +181,8 @@ describe('getOrComputeFileDiff', () => {
 
         const result = await DiffUtils.getOrComputeFileDiff('/new.js', 'abc', 'def', '/old.js', deps);
         expect(result.oldFetchFailed).toBe(true);
-        // Should NOT be cached when fetch fails
-        expect(deps.cache.size).toBe(0);
+        // Should be cached — old-side 404 is deterministic (file didn't exist at that commit)
+        expect(deps.cache.size).toBe(1);
     });
 
     it('skips fetch when commitId is null', async () => {

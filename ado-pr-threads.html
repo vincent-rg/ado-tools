@@ -8733,10 +8733,11 @@
                 }
 
                 const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff });
-                if (result.oldFetchFailed || result.newFetchFailed) {
-                    const side = result.oldFetchFailed ? 'base' : 'new';
-                    throw new Error(`Could not load ${side} file content (${result.oldFetchFailed ? oldFilePath : filePath})`);
+                if (result.newFetchFailed) {
+                    throw new Error(`Could not load new file content (${filePath})`);
                 }
+                // oldFetchFailed: rebase brought this file from the target branch — treat as add.
+                // The diff already contains all-added lines (diff of '' vs new content).
                 const cropped = DiffUtils.cropDiffToRegion(result.diff, startLine, endLine, useRight);
 
                 // Derive start line numbers from the cropped diff entries
