@@ -542,6 +542,29 @@ const DiffVirtualScroller = (() => {
                 }
             }
 
+            // Sync gutter avatar visibility for code rows. The prefixHtml is baked at
+            // build time, so when the virtual scroller recycles a DOM element the avatar
+            // reverts to its initial display state. Re-apply the current collapsed state
+            // from the thread row data model so the avatar stays hidden when the thread
+            // is expanded (and visible again when the thread is collapsed).
+            if (row.type === 'code') {
+                for (const avatarEl of el.querySelectorAll('.diff-gutter-avatar[data-thread-id]')) {
+                    const tid = parseInt(avatarEl.getAttribute('data-thread-id'));
+                    const threadRow = getRowByThreadId(tid);
+                    if (threadRow) {
+                        avatarEl.style.display = threadRow.collapsed ? '' : 'none';
+                    }
+                }
+                // Re-sync gutter stack count and visibility after updating individual avatars
+                for (const stack of el.querySelectorAll('.diff-gutter-stack')) {
+                    const avatars = stack.querySelectorAll('.diff-gutter-avatar');
+                    const collapsedCount = Array.from(avatars).filter(a => a.style.display !== 'none').length;
+                    const countEl = stack.querySelector('.diff-gutter-stack-count');
+                    if (countEl) countEl.textContent = collapsedCount;
+                    stack.style.display = collapsedCount === 0 ? 'none' : '';
+                }
+            }
+
             // Apply search highlights if active
             if (_searchRegex && _searchHighlights?.has(row.index) && row.type === 'code') {
                 applySearchHighlightsToElement(el);

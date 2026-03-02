@@ -9921,8 +9921,10 @@
         }
 
         async function selectFileForDiff(filePath, changeType, scrollToThreadId) {
-            // If same file already displayed and we just need to scroll to a thread, skip re-render
-            if (scrollToThreadId && selectedFilePath === filePath && document.querySelector(`.inline-thread[data-thread-id="${scrollToThreadId}"]`)) {
+            // If same file already displayed and we just need to scroll to a thread, skip re-render.
+            // Use the scroller data model (not a DOM query) so out-of-viewport threads don't
+            // trigger a full rebuild that would reset all expanded/collapsed state.
+            if (scrollToThreadId && selectedFilePath === filePath && currentDiffScroller?.getRowByThreadId(scrollToThreadId)) {
                 scrollToThread(scrollToThreadId);
                 updateThreadNav(scrollToThreadId);
                 return;
