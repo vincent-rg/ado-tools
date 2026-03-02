@@ -6734,8 +6734,22 @@
                 if (row) {
                     row.collapsed = !isCollapsed;
                     row.measuredHeight = null; // force re-measure
-                    currentDiffScroller.invalidateHeights();
+                    // Do NOT call invalidateHeights() here — that clears measured heights on
+                    // all thread rows, causing recalcLayout to fall back to estimates for
+                    // every visible thread. Wrong estimates make the container too short,
+                    // clipping other threads' content until a scroll re-measures them.
+                    // Only this row's height needs to be invalidated (already done above).
                     currentDiffScroller.recalcLayout();
+                    // Re-measure the toggled thread after the browser lays out the new state
+                    // (estimate may differ from actual when expanding).
+                    requestAnimationFrame(() => {
+                        if (!currentDiffScroller) return;
+                        const actualH = threadEl.getBoundingClientRect().height;
+                        if (actualH > 0 && actualH !== row.measuredHeight) {
+                            row.measuredHeight = actualH;
+                            currentDiffScroller.recalcLayout();
+                        }
+                    });
                 }
             }
             diffMinimapInvalidate?.();
@@ -6789,7 +6803,8 @@
                 if (row.collapsed) {
                     row.collapsed = false;
                     row.measuredHeight = null;
-                    currentDiffScroller.invalidateHeights();
+                    // Only this row's height is invalidated; don't call invalidateHeights()
+                    // which would clear all threads and cause estimate-based clipping.
                     currentDiffScroller.recalcLayout();
                 }
                 currentDiffScroller.scrollToRow(row, { block: 'center', behavior: 'smooth' });
@@ -10034,6 +10049,15 @@
                     currentDiffScroller.mount(scrollAreaUnchanged, diffLinesUnchanged);
 
                     AvatarLoader.loadPending();
+                    // Re-load avatars for thread rows re-entering the viewport after eviction.
+                    // Baked row HTML has avatar-pending imgs without src; loadPending re-resolves
+                    // them from cache. RAF-debounced to batch multiple rows entering at once.
+                    let _avatarLoadPending = false;
+                    currentDiffScroller.onRowRendered(row => {
+                        if (row.type === 'code' || _avatarLoadPending) return;
+                        _avatarLoadPending = true;
+                        requestAnimationFrame(() => { _avatarLoadPending = false; AvatarLoader.loadPending(); });
+                    });
                     // Unchanged files always render inline — mark the panel so comment
                     // interactions use inline logic even when user preference is side-by-side
                     diffPanel.setAttribute('data-render-mode', 'inline');
@@ -10973,6 +10997,15 @@
 
             // Trigger avatar loading for inline threads
             AvatarLoader.loadPending();
+            // Re-load avatars for thread rows re-entering the viewport after eviction.
+            // Baked row HTML has avatar-pending imgs without src; loadPending re-resolves
+            // them from cache. RAF-debounced to batch multiple rows entering at once.
+            let _avatarLoadPending = false;
+            currentDiffScroller.onRowRendered(row => {
+                if (row.type === 'code' || _avatarLoadPending) return;
+                _avatarLoadPending = true;
+                requestAnimationFrame(() => { _avatarLoadPending = false; AvatarLoader.loadPending(); });
+            });
 
             // Inject comment bubbles for line-level commenting
             injectCommentBubbles(filePath);
