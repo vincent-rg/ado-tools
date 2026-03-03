@@ -6,7 +6,7 @@ Browser-based tools for Azure DevOps Server 2022.1+. Pure HTML/CSS/JS frontend +
 
 **Run:** `python ado-server.py [port]` (default 8000)
 
-## File Map (22,409 lines total)
+## File Map (~23,200 lines total)
 
 ```
 ado-server.py               (280 lines)  Python HTTP server + avatar/identity proxy
@@ -19,11 +19,19 @@ sticky-lines-utils.js       (227 lines)  Sticky line tracking utilities for diff
 pr-list-utils.js            (164 lines)  Extracted pure functions from ado-pr-list.html (filters, time, change detection)
 mention-utils.js             (74 lines)  @mention autocomplete utilities (context detection, text insertion)
 pr-threads-utils.js         (312 lines)  Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
+pr-bulk-operations.js       (176 lines)  Bulk thread status operations
+pr-status-actions.js        (319 lines)  PR status/complete/abandon/draft actions
+pr-reviewer-manager.js      (415 lines)  Reviewer display, voting, add/remove
+pr-thread-crud.js           (486 lines)  Reply/edit/delete comment CRUD + attachment handling
+pr-thread-nav.js            (210 lines)  Thread/hunk navigation, diff scroll save/restore
+pr-file-search.js           (345 lines)  In-file search and go-to-line
+pr-line-stats.js            (286 lines)  Line stats computation (cache, diff, display)
+pr-live-updates.js          (494 lines)  Live polling, checks/work-items rendering
 vitest.config.js              (8 lines)  Vitest configuration for unit tests
 index.html                  (208 lines)  Landing page with tool cards
 ado-settings.html           (221 lines)  Settings form (serverUrl, org, project, repo, PAT)
 ado-pr-list.html           (4214 lines)  PR list browser
-ado-pr-threads.html       (12047 lines)  PR thread viewer + Files diff
+ado-pr-threads.html        (8857 lines)  PR thread viewer + Files diff
 ```
 
 ## Architecture
