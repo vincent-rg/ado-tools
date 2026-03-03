@@ -1,0 +1,534 @@
+/* Diff styles */
+.diff-line {
+    display: flex;
+    font-family: monospace;
+    font-size: var(--diff-font-size, 12px);
+    line-height: 1.5;
+    position: relative;
+}
+
+.diff-line-number {
+    color: #6e7681;
+    text-align: right;
+    width: 40px;
+    min-width: 40px;
+    padding: 0 4px;
+    user-select: none;
+    background: rgba(0, 0, 0, 0.05);
+    box-sizing: border-box;
+    position: relative;
+}
+
+/* Dedicated avatar column — sits before line numbers, no overlap */
+.diff-avatar-slot {
+    width: 20px;
+    min-width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;         /* Above translateX-scrolled diff-content (z-index: 0) */
+    background: inherit; /* Mask scrolled content bleeding through */
+}
+.diff-gutter-avatar {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 2;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.diff-gutter-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+}
+.diff-gutter-avatar .gutter-avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #0078d4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.diff-gutter-avatar .gutter-avatar-placeholder svg {
+    width: 12px;
+    height: 12px;
+    fill: #fff;
+}
+
+/* Stack group — shown when 2+ threads are collapsed on the same line */
+.diff-gutter-stack {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+/* Hidden state-tracking avatars inside a stack */
+.diff-gutter-stack .diff-gutter-avatar {
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+    border: none;
+    box-shadow: none;
+}
+.diff-gutter-stack-trigger {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6e40c9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-sizing: border-box;
+}
+.diff-gutter-stack-count {
+    color: #fff;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+}
+/* .diff-gutter-stack-popover stays hidden — content is cloned into #gutter-stack-popup */
+.diff-gutter-stack-popover { display: none; }
+
+/* Singleton fixed-position popup (avoids overflow:hidden clipping in diff containers) */
+#gutter-stack-popup {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    background: #fff;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    padding: 4px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+}
+.diff-gutter-stack-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.diff-gutter-stack-item:hover {
+    background: #f6f8fa;
+}
+.diff-gutter-stack-item.expanded {
+    opacity: 0.5;
+}
+/* Avatar in popup items: relative wrapper stacks placeholder + photo */
+.popup-avatar-wrap {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    overflow: hidden;
+}
+.popup-avatar-placeholder {
+    position: absolute;
+    inset: 0;
+    background: #0078d4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.popup-avatar-placeholder svg { width: 12px; height: 12px; fill: #fff; }
+.popup-avatar-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.popup-avatar-img.loaded { opacity: 1; }
+.diff-gutter-stack-item span {
+    font-size: 11px;
+    color: #333;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Comment bubble — fills the line-number cell on hover */
+.diff-comment-bubble {
+    position: absolute;
+    inset: 0;
+    border-radius: 2px;
+    background: #0078d4;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+}
+.diff-comment-bubble svg {
+    width: 12px;
+    height: 12px;
+    fill: #fff;
+}
+.diff-comment-bubble:hover {
+    background: #106ebe;
+}
+/* Position within sbs panes */
+.sbs-left, .sbs-right { position: relative; }
+
+/* Line comment form */
+.line-comment-form {
+    padding: 8px 16px 8px 60px;
+    background: #faf9f8;
+    border-top: 1px solid #e1dfdd;
+    border-bottom: 1px solid #e1dfdd;
+}
+.line-comment-form .comment-editor textarea {
+    min-height: 60px;
+}
+.sbs-line-comment-form {
+    display: flex;
+    border-top: 1px solid #e1dfdd;
+    border-bottom: 1px solid #e1dfdd;
+}
+.sbs-line-comment-side {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    background: #faf9f8;
+}
+.sbs-line-comment-spacer {
+    flex: 1;
+    min-width: 0;
+    background: repeating-linear-gradient(
+        -45deg,
+        #f6f8fa,
+        #f6f8fa 4px,
+        #eef0f2 4px,
+        #eef0f2 8px
+    );
+}
+.sbs-line-comment-side .comment-editor textarea {
+    min-height: 60px;
+}
+
+/* Selection comment button */
+.selection-comment-btn {
+    position: absolute;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #0078d4;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    white-space: nowrap;
+}
+.selection-comment-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: #fff;
+}
+.selection-comment-btn:hover {
+    background: #106ebe;
+}
+/* Selection highlight mark used during comment creation */
+.selection-highlight-mark {
+    background: #ffe082;
+}
+.selection-range-label {
+    font-size: 11px;
+    color: #605e5c;
+    margin-bottom: 4px;
+}
+
+.diff-indicator {
+    width: 20px;
+    text-align: center;
+    font-weight: bold;
+    user-select: none;
+}
+
+.diff-content {
+    flex: 1;
+    padding-left: 8px;
+    white-space: pre;
+    min-width: 0;
+}
+
+.diff-unchanged {
+    background: #f6f8fa;
+    color: #24292f;
+}
+
+.diff-added {
+    background: #e6ffec;
+    color: #1a7f37;
+}
+
+.diff-added .diff-indicator {
+    color: #1a7f37;
+}
+
+.diff-removed {
+    background: #ffebe9;
+    color: #cf222e;
+}
+
+.diff-removed .diff-indicator {
+    color: #cf222e;
+}
+
+/* Comment highlight is applied only on the selected character range via <mark> */
+
+/* Side-by-side diff mode */
+.sbs-row {
+    display: flex;
+    font-family: monospace;
+    line-height: 1.5;
+    position: relative;
+}
+.sbs-row.diff-unchanged .sbs-left,
+.sbs-row.diff-unchanged .sbs-right {
+    background: #f6f8fa;
+    color: #24292f;
+}
+.sbs-left, .sbs-right {
+    display: flex;
+    min-width: 0;
+    overflow-x: clip;
+    overflow-y: clip;
+}
+.sbs-left {
+    flex: 0 0 var(--sbs-left-pct, 50%);
+    border-right: 1px solid #d8dee4;
+}
+.sbs-right {
+    flex: 1 1 0;
+}
+.sbs-left .diff-content, .sbs-right .diff-content {
+    flex: 1;
+    padding-left: 8px;
+    white-space: pre;
+}
+/* Prevent cross-side text selection in side-by-side mode */
+.diff-lines-sbs.selecting-left .sbs-right .diff-content,
+.diff-lines-sbs.selecting-left .sbs-right .diff-avatar-slot { user-select: none; }
+.diff-lines-sbs.selecting-right .sbs-left .diff-content,
+.diff-lines-sbs.selecting-right .sbs-left .diff-avatar-slot { user-select: none; }
+.sbs-left .diff-line-number, .sbs-right .diff-line-number {
+    color: #6e7681;
+    text-align: right;
+    width: 40px;
+    min-width: 40px;
+    padding: 0 4px;
+    user-select: none;
+    background: #f0f0f0;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+}
+.sbs-left.diff-removed {
+    background: #ffebe9;
+    color: #cf222e;
+}
+.sbs-left.diff-removed .diff-line-number {
+    background: #ffd7d5;
+}
+.sbs-right.diff-added {
+    background: #e6ffec;
+    color: #1a7f37;
+}
+.sbs-right.diff-added .diff-line-number {
+    background: #ccffd8;
+}
+.sbs-empty {
+    background: repeating-linear-gradient(
+        -45deg,
+        #f6f8fa,
+        #f6f8fa 4px,
+        #eef0f2 4px,
+        #eef0f2 8px
+    );
+}
+.sbs-empty .diff-line-number {
+    visibility: hidden;
+}
+/* Comment highlight is applied only via <mark> inside .diff-content */
+/* SBS thread positioning */
+.sbs-thread-row {
+    display: flex;
+}
+.sbs-thread-side {
+    flex: 1;
+    min-width: 0;
+}
+.sbs-thread-side.sbs-thread-left {
+    flex: 0 0 var(--sbs-left-pct, 50%);
+    border-right: 1px solid #d8dee4;
+}
+.sbs-thread-spacer {
+    flex: 1;
+    min-width: 0;
+    background: repeating-linear-gradient(
+        -45deg,
+        #f6f8fa,
+        #f6f8fa 4px,
+        #eef0f2 4px,
+        #eef0f2 8px
+    );
+}
+.sbs-thread-row .sbs-thread-spacer.sbs-thread-left {
+    flex: 0 0 var(--sbs-left-pct, 50%);
+    border-right: 1px solid #d8dee4;
+}
+.sbs-thread-side .inline-thread {
+    border-right: none;
+}
+
+.sbs-scroll-track {
+    flex-shrink: 0;
+    height: 14px;
+    background: #f0f0f0;
+    border-top: 1px solid #e1dfdd;
+    position: relative;
+    cursor: pointer;
+}
+.sbs-scroll-thumb {
+    position: absolute;
+    top: 2px;
+    height: 10px;
+    min-width: 30px;
+    background: #a0a0a0;
+    border-radius: 5px;
+    cursor: grab;
+}
+.sbs-scroll-thumb:hover {
+    background: #888;
+}
+.sbs-scroll-thumb.dragging {
+    background: #666;
+    cursor: grabbing;
+}
+.sbs-resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 30;
+    transform: translateX(-50%);
+}
+.sbs-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    transform: translateX(-50%);
+    background: transparent;
+    transition: background 0.15s;
+}
+.sbs-resizer:hover::after, .sbs-resizer.dragging::after {
+    background: #0969da;
+}
+.diff-display-mode-bar {
+    display: flex;
+    gap: 0;
+    margin-left: 12px;
+}
+
+/* Inline thread block inserted between diff lines */
+.inline-thread {
+    border: 1px solid #d1d5db;
+    border-left: 3px solid #0078d4;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    white-space: normal;
+}
+.inline-thread .comment {
+    padding: 10px 14px;
+    border-bottom: 1px solid #edebe9;
+}
+.inline-thread .comment:last-of-type {
+    border-bottom: none;
+}
+.inline-thread .inline-thread-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: #f3f6fc;
+    border-bottom: 1px solid #d1d5db;
+    font-size: 12px;
+}
+.inline-thread .thread-reply-container {
+    padding: 0 14px 10px;
+}
+.inline-thread .comment-header {
+    margin-bottom: 6px;
+}
+.inline-thread .comment-content {
+    font-size: 13px;
+}
+.inline-thread .comment-editor {
+    margin-top: 4px;
+}
+
+/* Focused: highlight when navigated to from file tree, fades out */
+.inline-thread.focused {
+    outline: 2px solid #0078d4;
+    outline-offset: -2px;
+    box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.15);
+    animation: thread-focus-fade 5s ease-out forwards;
+}
+@keyframes thread-focus-fade {
+    0%, 40% { outline-color: #0078d4; box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.15); }
+    100% { outline-color: transparent; box-shadow: 0 0 0 4px transparent; }
+}
+
+/* Collapsed: thread block is fully hidden, avatar in gutter shows instead */
+.inline-thread.collapsed {
+    display: none;
+}
+
+/* Thread from a different iteration — dimmed */
+.inline-thread-outdated {
+    opacity: 0.55;
+}
+
+.api-link {
+    color: #0078d4;
+    text-decoration: none;
+    font-size: 12px;
+    font-family: monospace;
+    background: #f9f8f7;
+    padding: 4px 8px;
+    border-radius: 0;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.api-link:hover {
+    background: #e1dfdd;
+    text-decoration: underline;
+}

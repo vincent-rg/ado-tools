@@ -1,0 +1,270 @@
+/* Branch info */
+.branch-info {
+    margin: 8px 0;
+}
+
+.branch-info code {
+    background: #f9f8f7;
+    padding: 2px 6px;
+    border-radius: 0;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+/* Checks section */
+.work-items-section {
+    margin-top: 15px;
+    padding: 12px;
+    background: #f8f8f8;
+    border-radius: 0;
+}
+
+.work-items-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #323130;
+}
+
+.work-item-entry {
+    margin-bottom: 4px;
+}
+
+.work-item-entry a {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    text-decoration: none;
+    color: #323130;
+    font-size: 13px;
+}
+
+.work-item-entry a:hover {
+    background: #e8e8e8;
+}
+
+.work-item-id {
+    color: #0078d4;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.work-item-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.work-item-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.checks-section {
+    margin-top: 15px;
+    padding: 12px;
+    background: #f8f8f8;
+    border-radius: 0;
+}
+
+.checks-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #323130;
+}
+
+.checks-loading {
+    color: #605e5c;
+    font-size: 13px;
+}
+
+.check-group {
+    margin-bottom: 12px;
+}
+
+.check-group:last-child {
+    margin-bottom: 0;
+}
+
+.check-group-header {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    padding: 4px 8px;
+    border-radius: 0;
+    background: #e1dfdd;
+    color: #323130;
+}
+
+.check-group-header.status-indicator-error {
+    background: #fde7e9;
+    color: #d13438;
+}
+
+.check-group-header.status-indicator-pending {
+    background: #e1f3ff;
+    color: #0078d4;
+}
+
+.check-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: #323130;
+    border-bottom: 1px solid #edebe9;
+}
+
+.check-item:last-child {
+    border-bottom: none;
+}
+
+.check-item code {
+    font-size: 11px;
+    background: #fff;
+    padding: 2px 6px;
+    border-radius: 0;
+    word-break: break-all;
+}
+
+.check-item a {
+    color: #0078d4;
+    text-decoration: none;
+}
+
+.check-item a:hover {
+    text-decoration: underline;
+}
+
+.check-icon {
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+}
+
+.check-item.status-indicator-success .check-icon {
+    color: #107c10;
+}
+
+.check-item.status-indicator-error .check-icon {
+    color: #d13438;
+}
+
+.check-item.status-indicator-pending .check-icon {
+    color: #0078d4;
+}
+
+.check-item.status-indicator-expired {
+    background-color: rgba(202, 140, 0, 0.1);
+}
+
+.check-item.status-indicator-not-triggered {
+    background-color: rgba(138, 136, 134, 0.1);
+}
+
+.check-item-note {
+    font-size: 12px;
+    color: #605e5c;
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.check-extra {
+    color: #8a6d3b;
+    font-size: 11px;
+    font-style: italic;
+}
+
+/* Build status SVG icons */
+.build-status-icon {
+    vertical-align: middle;
+}
+
+.build-status-running {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.queue-build-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-left: auto;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.queue-build-btn:hover,
+.queue-build-btn:focus,
+.queue-build-btn:active {
+    background: transparent;
+    outline: none;
+    box-shadow: none;
+}
+
+.queue-build-btn:hover svg {
+    filter: drop-shadow(0 0 3px #0078d4);
+}
+
+.queue-build-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Left-edge resize handle for right sidebar */
+.resize-handle-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.2s;
+}
+
+.resize-handle-left:hover {
+    background: rgba(0, 120, 212, 0.2);
+}
+
+/* Vertical stats layout for right sidebar */
+.right-sidebar .stats {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.right-sidebar .stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: white;
+}
+
+.right-sidebar .stat-value {
+    font-size: 18px;
+    order: 2;
+}
+
+.right-sidebar .stat-label {
+    font-size: 13px;
+    order: 1;
+}

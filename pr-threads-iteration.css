@@ -1,0 +1,559 @@
+/* Iteration selector */
+.iteration-selector {
+    flex-shrink: 0;
+    font-size: 12px;
+    border-bottom: 1px solid #e1dfdd;
+    background: #faf9f8;
+}
+
+.iteration-selector-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+}
+
+.iteration-selector-label {
+    font-weight: 600;
+    color: #605e5c;
+    margin-right: 2px;
+}
+
+.iteration-btn {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    border: 1px solid #c8c6c4;
+    background: #fff;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #323130;
+    line-height: 22px;
+    text-align: center;
+}
+
+.iteration-btn:hover {
+    background: #f3f2f1;
+    border-color: #a19f9d;
+}
+
+.iteration-btn.active {
+    background: #0078d4;
+    color: #fff;
+    border-color: #0078d4;
+}
+
+.iteration-collapse-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    color: #605e5c;
+    padding: 2px 4px;
+    line-height: 1;
+}
+
+.iteration-collapse-toggle:hover {
+    color: #323130;
+}
+
+.iteration-selection-text {
+    font-size: 12px;
+    color: #605e5c;
+}
+
+.iteration-panel {
+    max-height: 0;
+    overflow: hidden;
+    background: #fff;
+    border-top: none;
+    transition: max-height 0.15s ease;
+}
+
+.iteration-panel.open {
+    max-height: 220px;
+    overflow-y: auto;
+    border-top: 1px solid #e1dfdd;
+}
+
+.iteration-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 10px;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+
+.iteration-row:hover {
+    background: #f3f2f1;
+}
+
+.iteration-row.in-range {
+    background: #eff6fc;
+}
+
+.iteration-row.in-range:hover {
+    background: #deecf9;
+}
+
+.iteration-row.range-edge {
+    background: #deecf9;
+}
+
+.iteration-row.range-edge:hover {
+    background: #c7e0f4;
+}
+
+.iteration-node-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 16px;
+    flex-shrink: 0;
+    position: relative;
+    align-self: stretch;
+}
+
+/* Timeline line segments above and below the node */
+.iteration-node-col::before,
+.iteration-node-col::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    background: #c8c6c4;
+}
+
+.iteration-node-col::before {
+    top: 0;
+    height: calc(50% - 6px);
+}
+
+.iteration-node-col::after {
+    bottom: 0;
+    height: calc(50% - 6px);
+}
+
+.iteration-row:first-child .iteration-node-col::before {
+    display: none;
+}
+
+.iteration-row:last-child .iteration-node-col::after {
+    display: none;
+}
+
+/* In-range timeline line segments are blue and thicker */
+.iteration-row.in-range .iteration-node-col::before,
+.iteration-row.in-range .iteration-node-col::after,
+.iteration-row.range-edge .iteration-node-col::after {
+    background: #0078d4;
+    width: 3px;
+}
+
+/* The top edge: line above is normal, line below is blue */
+.iteration-row.range-edge-start .iteration-node-col::before {
+    background: #c8c6c4;
+    width: 2px;
+}
+
+.iteration-row.range-edge-start .iteration-node-col::after {
+    background: #0078d4;
+    width: 3px;
+}
+
+/* The bottom edge: line above is blue, line below is normal */
+.iteration-row.range-edge-end .iteration-node-col::before {
+    background: #0078d4;
+    width: 3px;
+}
+
+.iteration-row.range-edge-end .iteration-node-col::after {
+    background: #c8c6c4;
+    width: 2px;
+}
+
+/* When start == end (single selection), both lines are normal */
+.iteration-row.range-edge-start.range-edge-end .iteration-node-col::before,
+.iteration-row.range-edge-start.range-edge-end .iteration-node-col::after {
+    background: #c8c6c4;
+    width: 2px;
+}
+
+.iteration-node {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #c8c6c4;
+    background: #fff;
+    flex-shrink: 0;
+    z-index: 1;
+    box-sizing: border-box;
+}
+
+.iteration-row.in-range .iteration-node {
+    border-color: #0078d4;
+    background: #deecf9;
+}
+
+.iteration-row.range-edge .iteration-node {
+    width: 16px;
+    height: 16px;
+    border-color: #0078d4;
+    background: #0078d4;
+    cursor: grab;
+}
+
+.iteration-row.range-edge .iteration-node:active {
+    cursor: grabbing;
+}
+
+.iteration-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.iteration-info-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.iteration-number {
+    font-weight: 700;
+    font-size: 12px;
+    color: #323130;
+}
+
+.iteration-date {
+    font-size: 11px;
+    color: #605e5c;
+}
+
+.iteration-commit {
+    font-size: 11px;
+    color: #605e5c;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.iteration-rebase-separator {
+    display: flex;
+    align-items: center;
+    padding: 2px 12px;
+    gap: 10px;
+    cursor: default;
+}
+
+.iteration-rebase-separator .iteration-node-col::before {
+    height: 50%;
+    top: 0;
+}
+
+.iteration-rebase-separator .iteration-node-col::after {
+    height: 50%;
+    bottom: 0;
+}
+
+.iteration-rebase-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #a19f9d;
+    flex: 1;
+    min-width: 0;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.iteration-rebase-label::before,
+.iteration-rebase-label::after {
+    content: '';
+    flex: 1;
+    border-top: 1px dashed #d2d0ce;
+}
+
+/* File view mode selector */
+.file-view-mode-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 12px;
+    border-bottom: 1px solid #e1dfdd;
+    background: #faf9f8;
+    flex-shrink: 0;
+}
+
+.file-view-mode-btn {
+    padding: 2px 8px;
+    border: 1px solid #c8c6c4;
+    background: #fff;
+    cursor: pointer;
+    font-size: 11px;
+    color: #605e5c;
+    line-height: 18px;
+}
+
+.file-view-mode-btn:first-child {
+    border-radius: 3px 0 0 3px;
+}
+
+.file-view-mode-btn:last-child {
+    border-radius: 0 3px 3px 0;
+}
+
+.file-view-mode-btn:not(:first-child) {
+    border-left: none;
+}
+
+.file-view-mode-btn:hover {
+    background: #f3f2f1;
+    color: #323130;
+}
+
+.file-view-mode-btn.active {
+    background: #0078d4;
+    color: #fff;
+    border-color: #0078d4;
+}
+
+.file-view-mode-btn.active + .file-view-mode-btn {
+    border-left: 1px solid #c8c6c4;
+}
+
+.diff-font-size-control {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+}
+
+.diff-font-size-btn {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #c8c6c4;
+    background: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    color: #605e5c;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+}
+
+.diff-font-size-btn:hover {
+    background: #f3f2f1;
+    color: #323130;
+}
+
+.diff-font-size-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.diff-font-size-label {
+    font-size: 11px;
+    color: #605e5c;
+    min-width: 26px;
+    text-align: center;
+    user-select: none;
+}
+
+/* Thread count badge on files */
+.file-thread-count {
+    font-size: 10px;
+    font-weight: 700;
+    background: #e1dfdd;
+    color: #605e5c;
+    border-radius: 8px;
+    padding: 0 5px;
+    line-height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.file-thread-count:hover {
+    filter: brightness(0.9);
+}
+
+.file-thread-count .thread-toggle-chevron {
+    font-size: 8px;
+    transition: transform 0.15s ease;
+}
+
+.file-thread-count.expanded .thread-toggle-chevron {
+    transform: rotate(90deg);
+}
+
+.file-thread-count.has-active {
+    background: #fff4ce;
+    color: #835c00;
+}
+
+/* Thread sub-list under files */
+.file-tree-threads {
+    padding-left: calc(28px + var(--depth, 0) * 16px);
+}
+
+.file-tree-threads.collapsed {
+    display: none;
+}
+
+.file-tree-thread {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    color: #605e5c;
+}
+
+.file-tree-thread:hover {
+    background: #f3f2f1;
+}
+
+.file-tree-thread.focused {
+    animation: tree-thread-focus-fade 5s ease-out forwards;
+    background: #e8f0fe;
+    color: #0078d4;
+    font-weight: 600;
+}
+@keyframes tree-thread-focus-fade {
+    0%, 40% { background: #e8f0fe; color: #0078d4; font-weight: 600; }
+    100% { background: transparent; color: #605e5c; font-weight: normal; }
+}
+
+.thread-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.thread-status-dot.active {
+    background: #0078d4;
+}
+
+.thread-status-dot.pending {
+    background: #ffaa44;
+}
+
+.thread-status-dot.fixed {
+    background: #107c10;
+}
+
+.thread-status-dot.closed {
+    background: #fff;
+    border: 2px solid #107c10;
+    box-sizing: border-box;
+}
+
+.thread-status-dot.wontFix {
+    background: #a19f9d;
+}
+
+.thread-status-dot.deleted {
+    background: #fff;
+    border: 2px solid #605e5c;
+    box-sizing: border-box;
+}
+
+.thread-status-dot.byDesign {
+    background: #a19f9d;
+}
+
+.thread-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.thread-preview .code-tag {
+    background: #2d2d2d;
+    color: #ccc;
+    border-radius: 3px;
+    padding: 0 3px;
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+.tree-thread-avatar-wrap {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    --avatar-size: 16px;
+}
+
+.tree-thread-avatar-wrap > img {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Directory indicators */
+.dir-indicators {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 6px;
+    align-items: center;
+}
+
+.dir-indicator-change {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #0550ae;
+}
+
+.dir-indicator-comment {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #bf8700;
+}
+
+/* Comment-only file indicator */
+.file-change-indicator.comment {
+    color: #835c00;
+    background: #fff4ce;
+}
+
+/* No-change file (all files mode) */
+.file-tree-file.no-change {
+    color: #a19f9d;
+}
+
+.file-tree-file.no-change .file-tree-file-name {
+    color: #a19f9d;
+}
+
+/* Lazy-loading directory indicator */
+.file-tree-dir-loading {
+    padding: 3px 8px;
+    padding-left: calc(28px + var(--depth, 0) * 16px);
+    font-size: 11px;
+    color: #a19f9d;
+    font-style: italic;
+}
