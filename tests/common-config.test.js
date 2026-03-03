@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ADOConfig } from '../common.js';
+import { ADOConfig } from '../js/common.js';
 
 // Minimal localStorage mock
 const store = {};

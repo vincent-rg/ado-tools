@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import HistogramDiff from '../diff.js';
+import HistogramDiff from '../js/diff.js';
 
 describe('HistogramDiff', () => {
     describe('diff', () => {

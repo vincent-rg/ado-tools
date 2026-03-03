@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import StickyLinesUtils from '../sticky-lines-utils.js';
+import StickyLinesUtils from '../js/sticky-lines-utils.js';
 
 const { buildTree, buildBraceTree, buildPythonTree, findExtendedSignature } = StickyLinesUtils;
 

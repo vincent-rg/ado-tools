@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import PRListUtils from '../pr-list-utils.js';
+import PRListUtils from '../js/pr-list-utils.js';
 
 // Simple normalize stub matching ADOSearch.normalize behavior
 const normalize = (text) => {

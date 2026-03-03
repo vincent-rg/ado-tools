@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import DiffUtils from '../diff-utils.js';
-import { ADOContent } from '../common.js';
+import DiffUtils from '../js/diff-utils.js';
+import { ADOContent } from '../js/common.js';
 import { iterations, changesByIteration } from './helpers/mock-data.js';
 
 beforeAll(() => {

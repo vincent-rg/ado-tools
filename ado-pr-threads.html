@@ -4,22 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Azure DevOps PR Threads Viewer</title>
-    <link rel="icon" type="image/svg+xml" href="toad.svg">
-    <link rel="icon" href="favicon.ico" sizes="any">
-    <link rel="stylesheet" href="common.css">
-    <link rel="stylesheet" href="pr-threads-layout.css">
-    <link rel="stylesheet" href="pr-threads-comments.css">
-    <link rel="stylesheet" href="pr-threads-diff.css">
-    <link rel="stylesheet" href="pr-threads-reviewers.css">
-    <link rel="stylesheet" href="pr-threads-checks.css">
-    <link rel="stylesheet" href="pr-threads-files.css">
-    <link rel="stylesheet" href="pr-threads-iteration.css">
+    <link rel="icon" type="image/svg+xml" href="assets/toad.svg">
+    <link rel="icon" href="assets/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/pr-threads-layout.css">
+    <link rel="stylesheet" href="css/pr-threads-comments.css">
+    <link rel="stylesheet" href="css/pr-threads-diff.css">
+    <link rel="stylesheet" href="css/pr-threads-reviewers.css">
+    <link rel="stylesheet" href="css/pr-threads-checks.css">
+    <link rel="stylesheet" href="css/pr-threads-files.css">
+    <link rel="stylesheet" href="css/pr-threads-iteration.css">
 </head>
 <body>
     <div class="container wide">
         <div style="display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 8px 8px; border-radius: 0;">
             <div>
-                <h1 style="font-size: 1.3em; margin: 0;"><img src="toad.svg" class="page-title-icon" alt=""> PR Threads Viewer</h1>
+                <h1 style="font-size: 1.3em; margin: 0;"><img src="assets/toad.svg" class="page-title-icon" alt=""> PR Threads Viewer</h1>
             </div>
             <div style="display: flex; gap: 14px; align-items: center;">
                 <label id="liveUpdatesToggle" class="live-toggle active" onclick="toggleLiveUpdates()">
@@ -191,21 +191,21 @@
         </div>
     </div>
 
-    <script src="common.js"></script>
-    <script src="diff.js"></script>
-    <script src="diff-utils.js"></script>
-    <script src="pr-threads-utils.js"></script>
-    <script src="mention-utils.js"></script>
-    <script src="sticky-lines-utils.js"></script>
-    <script src="diff-virtual-scroller.js"></script>
-    <script src="pr-bulk-operations.js"></script>
-    <script src="pr-status-actions.js"></script>
-    <script src="pr-reviewer-manager.js"></script>
-    <script src="pr-thread-crud.js"></script>
-    <script src="pr-thread-nav.js"></script>
-    <script src="pr-file-search.js"></script>
-    <script src="pr-line-stats.js"></script>
-    <script src="pr-live-updates.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/diff.js"></script>
+    <script src="js/diff-utils.js"></script>
+    <script src="js/pr-threads-utils.js"></script>
+    <script src="js/mention-utils.js"></script>
+    <script src="js/sticky-lines-utils.js"></script>
+    <script src="js/diff-virtual-scroller.js"></script>
+    <script src="js/pr-bulk-operations.js"></script>
+    <script src="js/pr-status-actions.js"></script>
+    <script src="js/pr-reviewer-manager.js"></script>
+    <script src="js/pr-thread-crud.js"></script>
+    <script src="js/pr-thread-nav.js"></script>
+    <script src="js/pr-file-search.js"></script>
+    <script src="js/pr-line-stats.js"></script>
+    <script src="js/pr-live-updates.js"></script>
     <script>
         DiffUtils.init(ADOContent.escapeHtml.bind(ADOContent));
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import DiffUtils from '../diff-utils.js';
-import HistogramDiff from '../diff.js';
-import { ADOContent } from '../common.js';
+import DiffUtils from '../js/diff-utils.js';
+import HistogramDiff from '../js/diff.js';
+import { ADOContent } from '../js/common.js';
 import { makeRightThread, makeLeftThread } from './helpers/mock-data.js';
 
 beforeAll(() => {

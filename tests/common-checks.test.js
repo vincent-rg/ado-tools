@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ChecksFormatter } from '../common.js';
+import { ChecksFormatter } from '../js/common.js';
 
 describe('ChecksFormatter', () => {
     describe('getIcon', () => {

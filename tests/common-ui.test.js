@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ADOUI } from '../common.js';
+import { ADOUI } from '../js/common.js';
 
 describe('ADOUI', () => {
     describe('formatDate', () => {

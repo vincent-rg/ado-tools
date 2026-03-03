@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ADOURL } from '../common.js';
+import { ADOURL } from '../js/common.js';
 
 const config = {
     serverUrl: 'https://dev.azure.com',

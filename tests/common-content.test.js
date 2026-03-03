@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ADOContent } from '../common.js';
+import { ADOContent } from '../js/common.js';
 
 describe('ADOContent', () => {
     describe('escapeHtml', () => {

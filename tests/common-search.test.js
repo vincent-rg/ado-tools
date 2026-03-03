@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ADOSearch } from '../common.js';
+import { ADOSearch } from '../js/common.js';
 
 describe('ADOSearch', () => {
     describe('normalize', () => {

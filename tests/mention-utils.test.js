@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MentionUtils } from '../mention-utils.js';
+import { MentionUtils } from '../js/mention-utils.js';
 
 describe('MentionUtils', () => {
     describe('getMentionContext', () => {

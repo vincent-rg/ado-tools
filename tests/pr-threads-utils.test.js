@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import PRThreadsUtils from '../pr-threads-utils.js';
+import PRThreadsUtils from '../js/pr-threads-utils.js';
 
 describe('PRThreadsUtils', () => {
     describe('calculateFileChangeStats', () => {

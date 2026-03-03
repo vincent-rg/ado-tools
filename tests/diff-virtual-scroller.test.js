@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import DiffVirtualScroller from '../diff-virtual-scroller.js';
-import DiffUtils from '../diff-utils.js';
-import HistogramDiff from '../diff.js';
-import { ADOContent } from '../common.js';
+import DiffVirtualScroller from '../js/diff-virtual-scroller.js';
+import DiffUtils from '../js/diff-utils.js';
+import HistogramDiff from '../js/diff.js';
+import { ADOContent } from '../js/common.js';
 
 beforeAll(() => {
     DiffUtils.init(ADOContent.escapeHtml.bind(ADOContent));
