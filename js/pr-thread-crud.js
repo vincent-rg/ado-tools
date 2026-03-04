@@ -18,7 +18,6 @@ function showReplyForm(threadId, prefix = '') {
 
     const textarea = document.getElementById(`${prefix}reply-content-${threadId}`);
     if (textarea) {
-        textarea.focus();
         MentionAutocomplete.attach(textarea);
         attachImagePaste(textarea);
         attachEditPreview(textarea);
@@ -44,6 +43,9 @@ function showReplyForm(threadId, prefix = '') {
             replyFormThreadObserver.observe(threadEl);
         }
     }
+
+    // Focus after all layout ops so virtual-scroll repositioning doesn't lose focus.
+    textarea?.focus();
 }
 
 function hideReplyForm(threadId, prefix = '') {
@@ -117,7 +119,6 @@ function startEditComment(threadId, commentId, prefix = '') {
     const textarea = document.getElementById(`${prefix}edit-content-${threadId}-${commentId}`);
     if (textarea) {
         textarea._mentionMap = resolved.mentionMap;
-        textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length);
         MentionAutocomplete.attach(textarea);
         attachImagePaste(textarea);
         const { update } = attachEditPreview(textarea);
@@ -145,6 +146,12 @@ function startEditComment(threadId, commentId, prefix = '') {
             });
             editCommentThreadObserver.observe(threadEl);
         }
+    }
+
+    // Focus after all layout ops, with cursor at end of existing content.
+    if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
 }
 
