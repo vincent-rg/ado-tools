@@ -203,13 +203,16 @@
     border-bottom: 1px solid #e1dfdd;
 }
 .sbs-line-comment-side {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     padding: 8px 12px;
     background: #faf9f8;
 }
+.sbs-line-comment-form > :first-child {
+    flex: 0 0 var(--sbs-left-pct, 50%);
+}
 .sbs-line-comment-spacer {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     background: repeating-linear-gradient(
         -45deg,
