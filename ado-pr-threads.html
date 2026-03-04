@@ -4290,7 +4290,7 @@
                         for (const [idx, isCurrent] of hitSet) {
                             if (idx >= codeRows.length) continue;
                             const row = codeRows[idx];
-                            ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
+                            ctx.fillStyle = isCurrent ? '#1e64dc' : '#ff9800';
                             ctx.fillRect(1, Math.floor(row.top / totalH * h), w - 2, Math.max(Math.ceil(row.height / totalH * h), 2));
                         }
                     }
@@ -4313,7 +4313,7 @@
                         for (const [idx, isCurrent] of hitSet) {
                             if (idx >= posCache.length) continue;
                             const { top: elTop, height: elH } = posCache[idx];
-                            ctx.fillStyle = isCurrent ? '#e65100' : '#ff9800';
+                            ctx.fillStyle = isCurrent ? '#1e64dc' : '#ff9800';
                             ctx.fillRect(1, Math.floor(elTop / totalH * h), w - 2, Math.max(Math.ceil(elH / totalH * h), 2));
                         }
                     }

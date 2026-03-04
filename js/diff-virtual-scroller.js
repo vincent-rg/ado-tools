@@ -448,6 +448,7 @@ const DiffVirtualScroller = (() => {
         let _rowRenderedCallbacks = [];
         let _searchHighlights = null;  // Map<rowIndex, [{start, end}]> or null
         let _searchRegex = null;       // RegExp for applying highlights to rendered elements
+        let _currentSearchMatch = null; // {rowIndex, offsetIndex} or null
         let _mode = mode || 'inline';
 
         // Extra comment-form state (spliced between rows while editing)
@@ -579,7 +580,7 @@ const DiffVirtualScroller = (() => {
 
             // Apply search highlights if active
             if (_searchRegex && _searchHighlights?.has(row.index) && row.type === 'code') {
-                applySearchHighlightsToElement(el);
+                applySearchHighlightsToElement(el, row.index);
             }
 
             return el;
@@ -589,8 +590,12 @@ const DiffVirtualScroller = (() => {
          * Apply search highlights to a rendered element using the stored regex.
          * Uses the same text-node walking approach as the legacy search path.
          */
-        function applySearchHighlightsToElement(el) {
+        function applySearchHighlightsToElement(el, rowIndex) {
             if (!_searchRegex) return;
+
+            const currentOffsetIdx = (_currentSearchMatch && _currentSearchMatch.rowIndex === rowIndex)
+                ? _currentSearchMatch.offsetIndex : null;
+            let matchCount = 0;
 
             for (const cell of el.querySelectorAll('.diff-content')) {
                 const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
@@ -609,8 +614,11 @@ const DiffVirtualScroller = (() => {
                             parts.push(document.createTextNode(text.slice(lastIndex, match.index)));
                         const mark = document.createElement('mark');
                         mark.className = 'search-highlight';
+                        if (currentOffsetIdx !== null && matchCount === currentOffsetIdx)
+                            mark.classList.add('current');
                         mark.textContent = match[0];
                         parts.push(mark);
+                        matchCount++;
                         lastIndex = match.index + match[0].length;
                         if (match[0].length === 0) { _searchRegex.lastIndex++; break; }
                     }
@@ -942,11 +950,33 @@ const DiffVirtualScroller = (() => {
             return row.diffEntry?.content || '';
         }
 
+        function setCurrentSearchMatch(match) {
+            // match: {rowIndex, offsetIndex} or null
+            // Remove .current from previously rendered current mark
+            if (_currentSearchMatch) {
+                const el = _renderedElements.get(_currentSearchMatch.rowIndex);
+                if (el) {
+                    el.querySelectorAll('mark.search-highlight.current')
+                        .forEach(m => m.classList.remove('current'));
+                }
+            }
+            _currentSearchMatch = match;
+            // Add .current to new current mark if already rendered
+            if (match) {
+                const el = _renderedElements.get(match.rowIndex);
+                if (el) {
+                    const marks = el.querySelectorAll('mark.search-highlight');
+                    if (marks[match.offsetIndex]) marks[match.offsetIndex].classList.add('current');
+                }
+            }
+        }
+
         function setSearchHighlights(highlights, regex) {
             // highlights: Map<rowIndex, [{start, end}]> or null
             // regex: RegExp used for applying highlights to rendered DOM
             _searchHighlights = highlights;
             _searchRegex = regex || null;
+            if (!highlights) _currentSearchMatch = null;
             // Re-render visible rows that have highlight changes
             if (!_isSmallFile) {
                 // Force re-render of all currently visible rows
@@ -1117,6 +1147,7 @@ const DiffVirtualScroller = (() => {
             getTopVisibleCodeRow,
             getRowTextContent,
             setSearchHighlights,
+            setCurrentSearchMatch,
             invalidateHeights,
             recalcLayout,
             onRowRendered,

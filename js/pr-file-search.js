@@ -197,8 +197,17 @@ function getFileSearchTotalCount() {
 
 function updateFileSearchHighlightCurrent() {
     if (currentDiffScroller) {
-        // Scroller handles highlight rendering; we just need to re-render
-        // to update the "current" marker
+        if (fileSearchIndex < 0) { currentDiffScroller.setCurrentSearchMatch(null); return; }
+        let matchCounter = 0;
+        for (const dr of fileSearchDataResults) {
+            for (let oi = 0; oi < dr.offsets.length; oi++) {
+                if (matchCounter === fileSearchIndex) {
+                    currentDiffScroller.setCurrentSearchMatch({ rowIndex: dr.rowIndex, offsetIndex: oi });
+                    return;
+                }
+                matchCounter++;
+            }
+        }
         return;
     }
     for (let i = 0; i < fileSearchResults.length; i++)
