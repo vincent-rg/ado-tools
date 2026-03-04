@@ -138,6 +138,7 @@
 
                 // Check if iterations changed
                 if (newIterations.length !== allIterations.length) {
+                    const oldTotal = allIterations.length;
                     allIterations = newIterations;
 
                     // Update iterations count
@@ -164,15 +165,26 @@
                             const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, allIterations.length, 0);
                             const entries = changesData.changeEntries || [];
                             allChangeEntries = entries;
-                            fileDiffCache.clear();
-                            fileTreeBuilt = false;
                             currentFileChangeStats = calculateFileChangeStats(entries);
                             buildCumulativeRenameMaps(entries);
                             updateFileStats();
-                            // Rebuild file tree if currently in files view
                             if (currentView === 'files') {
+                                // Pin the iteration selection to the previous range to avoid
+                                // disrupting an active file review when a new iteration arrives.
+                                // If the user was in "All" mode (selectedIterationEnd === null),
+                                // they were implicitly viewing 1..oldTotal; lock that in explicitly
+                                // so the diff panel and selector don't jump to include the new iteration.
+                                if (selectedIterationEnd === null) {
+                                    selectedIterationStart = selectedIterationStart !== null ? selectedIterationStart : 1;
+                                    selectedIterationEnd = oldTotal;
+                                }
+                                // Don't clear fileDiffCache: the pinned range hasn't changed, so
+                                // all cached diffs remain valid and the diff panel won't reload.
                                 buildFileTree(allChangeEntries);
                                 buildIterationSelector();
+                            } else {
+                                fileDiffCache.clear();
+                                fileTreeBuilt = false;
                             }
                             // Update files tab count
                             const filesTabBtn = document.querySelector('.view-tab[data-view="files"]');
