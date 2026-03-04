@@ -370,6 +370,18 @@
 .sbs-empty .diff-line-number {
     visibility: hidden;
 }
+.sbs-gone {
+    display: none;
+}
+/* Single-pane mode for added/deleted files (both inline and SBS) */
+/* Inline: hide the always-empty line-number column */
+.diff-lines-add-only .diff-line .diff-line-number:nth-child(2) { display: none; }
+.diff-lines-delete-only .diff-line .diff-line-number:nth-child(3) { display: none; }
+/* SBS: hide the absent pane's spacer/side in thread rows */
+.diff-lines-add-only .sbs-thread-spacer.sbs-thread-left,
+.diff-lines-add-only .sbs-thread-side.sbs-thread-left { display: none; }
+.diff-lines-delete-only .sbs-thread-spacer:not(.sbs-thread-left),
+.diff-lines-delete-only .sbs-thread-side:not(.sbs-thread-left) { display: none; }
 /* Comment highlight is applied only via <mark> inside .diff-content */
 /* SBS thread positioning */
 .sbs-thread-row {

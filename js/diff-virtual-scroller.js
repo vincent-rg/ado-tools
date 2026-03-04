@@ -50,6 +50,8 @@ const DiffVirtualScroller = (() => {
         const startNew = options.startNewLine ?? 1;
         const getLinePrefix = options.getLinePrefix || null;
         const renderInlineThread = options.renderInlineThread || (() => '');
+        const isAddedFile = options.isAddedFile || false;
+        const isDeletedFile = options.isDeletedFile || false;
 
         const rows = [];
         // Clone thread ranges so we can mark insertion without mutating originals
@@ -89,14 +91,14 @@ const DiffVirtualScroller = (() => {
             } else if (entry.type === 'removed') {
                 if (!inChange) { hunkIdx = hunkIndex++; inChange = true; }
                 curOld = oldLineNum;
-                cssClass = 'diff-removed';
-                minimapColor = '#f85149';
+                cssClass = isDeletedFile ? 'diff-unchanged' : 'diff-removed';
+                minimapColor = isDeletedFile ? null : '#f85149';
                 oldLineNum++;
             } else if (entry.type === 'added') {
                 if (!inChange) { hunkIdx = hunkIndex++; inChange = true; }
                 curNew = newLineNum;
-                cssClass = 'diff-added';
-                minimapColor = '#3fb950';
+                cssClass = isAddedFile ? 'diff-unchanged' : 'diff-added';
+                minimapColor = isAddedFile ? null : '#3fb950';
                 newLineNum++;
             }
 
@@ -155,6 +157,8 @@ const DiffVirtualScroller = (() => {
         const startNew = options.startNewLine ?? 1;
         const getLinePrefix = options.getLinePrefix || null;
         const renderInlineThread = options.renderInlineThread || (() => '');
+        const isAddedFile = options.isAddedFile || false;
+        const isDeletedFile = options.isDeletedFile || false;
 
         const rows = [];
         const trClones = threadRanges.map(tr => ({ ...tr, inserted: false }));
@@ -196,8 +200,8 @@ const DiffVirtualScroller = (() => {
                     hunkIndex: null,
                     prefixHtml: '',  // not used in SBS
                     sbsMode: true,
-                    sbsLeft: { lineNum: oldLineNum, content: entry.content, cssClass: '', prefixHtml: leftPrefix },
-                    sbsRight: { lineNum: newLineNum, content: entry.content, cssClass: '', prefixHtml: rightPrefix },
+                    sbsLeft: isAddedFile ? { lineNum: null, content: '', cssClass: 'sbs-gone', prefixHtml: '' } : { lineNum: oldLineNum, content: entry.content, cssClass: '', prefixHtml: leftPrefix },
+                    sbsRight: isDeletedFile ? { lineNum: null, content: '', cssClass: 'sbs-gone', prefixHtml: '' } : { lineNum: newLineNum, content: entry.content, cssClass: '', prefixHtml: rightPrefix },
                 });
 
                 appendThreadSuffixesSbs(rows, trClones, newLineNum, oldLineNum, renderInlineThread);
@@ -226,19 +230,19 @@ const DiffVirtualScroller = (() => {
                     if (j < removed.length) {
                         curOld = oldLineNum;
                         const leftPrefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
-                        sbsLeft = { lineNum: oldLineNum, content: removed[j].content, cssClass: 'diff-removed', prefixHtml: leftPrefix };
+                        sbsLeft = { lineNum: oldLineNum, content: removed[j].content, cssClass: isDeletedFile ? '' : 'diff-removed', prefixHtml: leftPrefix };
                         oldLineNum++;
                     } else {
-                        sbsLeft = { lineNum: null, content: '', cssClass: 'sbs-empty', prefixHtml: '' };
+                        sbsLeft = { lineNum: null, content: '', cssClass: isAddedFile ? 'sbs-gone' : 'sbs-empty', prefixHtml: '' };
                     }
 
                     if (j < added.length) {
                         curNew = newLineNum;
                         const rightPrefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
-                        sbsRight = { lineNum: newLineNum, content: added[j].content, cssClass: 'diff-added', prefixHtml: rightPrefix };
+                        sbsRight = { lineNum: newLineNum, content: added[j].content, cssClass: isAddedFile ? '' : 'diff-added', prefixHtml: rightPrefix };
                         newLineNum++;
                     } else {
-                        sbsRight = { lineNum: null, content: '', cssClass: 'sbs-empty', prefixHtml: '' };
+                        sbsRight = { lineNum: null, content: '', cssClass: isDeletedFile ? 'sbs-gone' : 'sbs-empty', prefixHtml: '' };
                     }
 
                     // Minimap color
@@ -413,6 +417,8 @@ const DiffVirtualScroller = (() => {
             threadRangesRaw,   // original threadRanges for getHighlightedContent
             startOldLine,
             startNewLine,
+            isAddedFile,
+            isDeletedFile,
         } = options;
 
         // Build the virtual row data model
@@ -422,6 +428,8 @@ const DiffVirtualScroller = (() => {
             renderInlineThread: renderInlineThread || (() => ''),
             startOldLine,
             startNewLine,
+            isAddedFile,
+            isDeletedFile,
         });
 
         const { rows, lineNumMapRight, lineNumMapLeft, hunkStarts, threadIdMap } = built;
@@ -469,7 +477,7 @@ const DiffVirtualScroller = (() => {
                 ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || []));
             }
 
-            const indicator = entry.type === 'removed' ? '−' : (entry.type === 'added' ? '+' : ' ');
+            const indicator = row.cssClass === 'diff-removed' ? '−' : (row.cssClass === 'diff-added' ? '+' : ' ');
             const oldNum = row.oldLineNum != null ? row.oldLineNum : '';
             const newNum = row.newLineNum != null ? row.newLineNum : '';
 
@@ -485,12 +493,12 @@ const DiffVirtualScroller = (() => {
             const right = row.sbsRight;
 
             let leftContentHtml, rightContentHtml;
-            if (left.cssClass === 'sbs-empty') {
+            if (left.cssClass === 'sbs-empty' || left.cssClass === 'sbs-gone') {
                 leftContentHtml = '';
             } else {
                 ({ html: leftContentHtml } = DiffUtils.getHighlightedContent(left.content, left.lineNum, false, threadRangesRaw || []));
             }
-            if (right.cssClass === 'sbs-empty') {
+            if (right.cssClass === 'sbs-empty' || right.cssClass === 'sbs-gone') {
                 rightContentHtml = '';
             } else {
                 ({ html: rightContentHtml } = DiffUtils.getHighlightedContent(right.content, right.lineNum, true, threadRangesRaw || []));

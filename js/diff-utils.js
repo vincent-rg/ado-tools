@@ -351,12 +351,29 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
             : Promise.resolve('')
     ]);
 
-    const diffResult = diffAlgo.diff(oldContent, newContent);
-
-    let addedCount = 0, removedCount = 0;
-    for (const entry of diffResult) {
-        if (entry.type === 'added') addedCount++;
-        else if (entry.type === 'removed') removedCount++;
+    let diffResult, addedCount, removedCount;
+    if (!oldCommitId) {
+        // Added file: all lines are new, no diff needed
+        const lines = newContent.split('\n');
+        if (lines.at(-1) === '') lines.pop();
+        diffResult = lines.map(content => ({ type: 'added', content }));
+        addedCount = diffResult.length;
+        removedCount = 0;
+    } else if (!newCommitId) {
+        // Deleted file: all lines are gone, no diff needed
+        const lines = oldContent.split('\n');
+        if (lines.at(-1) === '') lines.pop();
+        diffResult = lines.map(content => ({ type: 'removed', content }));
+        addedCount = 0;
+        removedCount = diffResult.length;
+    } else {
+        diffResult = diffAlgo.diff(oldContent, newContent);
+        addedCount = 0;
+        removedCount = 0;
+        for (const entry of diffResult) {
+            if (entry.type === 'added') addedCount++;
+            else if (entry.type === 'removed') removedCount++;
+        }
     }
 
     const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldContent, newContent };

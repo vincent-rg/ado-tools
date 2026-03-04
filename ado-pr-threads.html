@@ -4870,8 +4870,10 @@
             if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
 
             const isSbs = fileDiffDisplayMode === 'side-by-side';
-            const sbsClass = isSbs ? ' diff-lines-sbs' : '';
-            const resizerHtml = isSbs ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
+            const isSinglePane = ct.includes('add') || ct.includes('delete');
+            const singlePaneClass = isSinglePane ? (ct.includes('add') ? ' diff-lines-add-only' : ' diff-lines-delete-only') : '';
+            const sbsClass = isSbs ? ` diff-lines-sbs${singlePaneClass}` : singlePaneClass;
+            const resizerHtml = (isSbs && !isSinglePane) ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
 
             // Render the scaffold with empty .diff-lines container
             diffPanel.innerHTML = `
@@ -4901,6 +4903,8 @@
                 getLinePrefix,
                 renderInlineThread,
                 threadRangesRaw: threadRanges,
+                isAddedFile: ct.includes('add'),
+                isDeletedFile: ct.includes('delete'),
             });
 
             currentDiffScroller.mount(scrollArea, diffLinesContainer);
@@ -4923,7 +4927,7 @@
             // Set up horizontal scroll sync, selection lock, and resizer for SBS mode.
             // Resizer must run first so it applies --sbs-left-pct before scroll sync measures widths.
             if (isSbs) {
-                setupSbsResizer(diffPanel);
+                if (!isSinglePane) setupSbsResizer(diffPanel);
                 setupSbsSelectionLock(diffPanel);
                 setupSbsScrollSync(diffPanel);
                 // Apply current horizontal scroll offset to newly rendered SBS rows
