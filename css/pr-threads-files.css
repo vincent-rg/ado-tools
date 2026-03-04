@@ -1049,21 +1049,16 @@ mark.search-highlight.current {
 /* Sticky scope lines bar */
 .sticky-lines-bar {
     display: flex;
-    position: absolute;
+    position: sticky;
     top: 0;
-    left: 0;
-    right: 0;
     z-index: 10;
-    border-bottom: 1px solid #d1d5db;
-    background: #f6f8fa;
     font-family: monospace;
     font-size: var(--diff-font-size, 12px);
-    overflow: hidden;
 }
 .sticky-lines-diff-part {
     flex: 1;
     display: flex;
-    overflow: hidden;
+    align-items: flex-start;
     min-width: 0;
 }
 .sticky-pane {
@@ -1071,17 +1066,15 @@ mark.search-highlight.current {
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    background: #f6f8fa;
+    border-bottom: 1px solid #d1d5db;
 }
+.sticky-pane:empty { border-bottom: none; }
 .sticky-pane-left {
     flex: 0 0 var(--sbs-left-pct, 50%);
     border-right: 1px solid #e1dfdd;
 }
 .sticky-pane-right, .sticky-pane-single { flex: 1; }
-.sticky-lines-minimap-spacer {
-    width: 14px;
-    flex-shrink: 0;
-    border-left: 1px solid #e1dfdd;
-}
 .sticky-line {
     display: flex;
     align-items: baseline;

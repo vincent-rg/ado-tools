@@ -4753,14 +4753,12 @@
                         '<div class="sticky-lines-diff-part">' +
                         '<div class="sticky-pane sticky-pane-left"></div>' +
                         '<div class="sticky-pane sticky-pane-right"></div>' +
-                        '</div>' +
-                        '<div class="sticky-lines-minimap-spacer"></div>';
+                        '</div>';
                 } else {
                     bar.innerHTML =
                         '<div class="sticky-lines-diff-part">' +
                         '<div class="sticky-pane sticky-pane-single"></div>' +
-                        '</div>' +
-                        '<div class="sticky-lines-minimap-spacer"></div>';
+                        '</div>';
                 }
                 bar.addEventListener('click', e => {
                     const el = e.target.closest('.sticky-line');
@@ -4768,7 +4766,7 @@
                     scrollToLine(parseInt(el.dataset.line, 10), el.dataset.side);
                 });
 
-                body.querySelector('.diff-scroll-row').appendChild(bar);
+                body.querySelector('.diff-scroll-area').prepend(bar);
                 _bar = bar;
 
                 _scrollArea = diffPanel.querySelector('.diff-scroll-area');
