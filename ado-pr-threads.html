@@ -3919,10 +3919,48 @@
                     // Destroy previous scroller if any
                     if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
 
+                    const stickyActiveUnchanged = stickyLinesEnabled ? ' active' : '';
                     diffPanel.innerHTML = `
                         <div class="file-diff-header">
                             <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
                             <span style="font-size: 12px; color: #a19f9d;">(unchanged file)</span>
+                            <div class="diff-display-mode-bar">
+                                <button id="stickyLinesToggleBtn" class="file-view-mode-btn${stickyActiveUnchanged}" onclick="toggleStickyLines()" title="Toggle sticky scope lines">Scope</button>
+                            </div>
+                            <div class="diff-font-size-control">
+                                <button class="diff-font-size-btn" onclick="adjustDiffFontSize(-1)" title="Decrease font size" ${diffFontSize <= 8 ? 'disabled' : ''}>−</button>
+                                <span class="diff-font-size-label" id="diffFontSizeLabel">${diffFontSize}px</span>
+                                <button class="diff-font-size-btn" onclick="adjustDiffFontSize(1)" title="Increase font size" ${diffFontSize >= 24 ? 'disabled' : ''}>+</button>
+                            </div>
+                            <div class="thread-nav" id="threadNav" style="display:none;">
+                                <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
+                                <span class="thread-nav-label" id="threadNavLabel"></span>
+                                <button class="thread-nav-btn" id="threadNavNext" onclick="jumpToNextThread()" title="Next thread (Alt+Down)">&#9660;</button>
+                            </div>
+                            <div class="thread-collapse-all-bar" id="threadCollapseAllBar" style="display:none;">
+                                <button class="thread-collapse-all-btn" onclick="setAllInlineThreadsCollapsed(true)" title="Collapse all threads">Collapse all</button>
+                                <button class="thread-collapse-all-btn" onclick="setAllInlineThreadsCollapsed(false)" title="Expand all threads">Expand all</button>
+                            </div>
+                            <div class="goto-line-widget" id="gotoLineWidget" style="display:none;">
+                                <span class="goto-line-label">Go to line</span>
+                                <input class="goto-line-input" id="gotoLineInput" type="number" min="1" placeholder="…">
+                                <button class="goto-line-close" onclick="closeGoToLine()" title="Close (Esc)">&#x2715;</button>
+                            </div>
+                            <div class="file-search-widget" id="fileSearchWidget" style="display:none;">
+                                <input class="file-search-input" id="fileSearchInput" type="text"
+                                       placeholder="Search in file…" autocomplete="off" spellcheck="false"
+                                       oninput="fileSearchInputChanged()">
+                                <button class="file-search-option-btn" id="fileSearchCaseBtn"
+                                        onclick="toggleFileSearchCase()" title="Match case (Alt+C)">Aa</button>
+                                <button class="file-search-option-btn" id="fileSearchWordBtn"
+                                        onclick="toggleFileSearchWord()" title="Whole word (Alt+W)">W</button>
+                                <span class="file-search-count" id="fileSearchCount"></span>
+                                <button class="file-search-nav-btn" id="fileSearchPrevBtn"
+                                        onclick="navigateFileSearch(-1)" title="Previous (Shift+Enter)">↑</button>
+                                <button class="file-search-nav-btn" id="fileSearchNextBtn"
+                                        onclick="navigateFileSearch(1)" title="Next (Enter)">↓</button>
+                                <button class="file-search-close" onclick="closeFileSearch()" title="Close (Escape)">&#x2715;</button>
+                            </div>
                         </div>
                         <div class="file-diff-body">
                             <div class="diff-scroll-row">
@@ -3947,6 +3985,7 @@
                         getLinePrefix,
                         renderInlineThread,
                         threadRangesRaw: threadRanges,
+                        isUnchangedFile: true,
                     });
                     currentDiffScroller.mount(scrollAreaUnchanged, diffLinesUnchanged);
 

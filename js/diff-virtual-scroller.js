@@ -419,6 +419,7 @@ const DiffVirtualScroller = (() => {
             startNewLine,
             isAddedFile,
             isDeletedFile,
+            isUnchangedFile,
         } = options;
 
         // Build the virtual row data model
@@ -480,8 +481,11 @@ const DiffVirtualScroller = (() => {
             const indicator = row.cssClass === 'diff-removed' ? '−' : (row.cssClass === 'diff-added' ? '+' : ' ');
             const oldNum = row.oldLineNum != null ? row.oldLineNum : '';
             const newNum = row.newLineNum != null ? row.newLineNum : '';
+            const lineNums = isUnchangedFile
+                ? `<span class="diff-line-number">${newNum}</span>`
+                : `<span class="diff-line-number">${oldNum}</span><span class="diff-line-number">${newNum}</span>`;
 
-            return `<div class="diff-line ${row.cssClass}"${hunkAttr}><span class="diff-avatar-slot">${row.prefixHtml}</span><span class="diff-line-number">${oldNum}</span><span class="diff-line-number">${newNum}</span><span class="diff-indicator">${indicator}</span><span class="diff-content">${contentHtml}</span></div>`;
+            return `<div class="diff-line ${row.cssClass}"${hunkAttr}><span class="diff-avatar-slot">${row.prefixHtml}</span>${lineNums}<span class="diff-indicator">${indicator}</span><span class="diff-content">${contentHtml}</span></div>`;
         }
 
         /**
