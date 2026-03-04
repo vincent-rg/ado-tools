@@ -1828,8 +1828,49 @@
             const cacheKey = `${selectedFilePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}`;
             const cached = fileDiffCache.get(cacheKey);
             if (cached) {
+                // Save thread collapse state from the scroller data model before re-render.
+                // renderFileDiff resets all rows to isThreadCollapsedByDefault(), wiping any
+                // manual expand/collapse the user applied (e.g. expanded a resolved thread,
+                // or collapsed an active one).
+                const savedCollapseState = new Map(); // threadId -> collapsed
+                if (currentDiffScroller) {
+                    for (const row of currentDiffScroller.getAllRows()) {
+                        if (row.type === 'thread' || row.type === 'sbs-thread') {
+                            savedCollapseState.set(row.threadId, row.collapsed);
+                        }
+                    }
+                }
+
                 const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
                 renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent);
+
+                // Restore collapse state for existing threads. New threads (from the reply
+                // just submitted) are not in savedCollapseState and keep their default state.
+                // For visible rows update DOM directly; for off-screen rows updating row.collapsed
+                // is enough — syncRowElement applies it when they scroll into view.
+                if (savedCollapseState.size > 0 && currentDiffScroller) {
+                    let needsLayout = false;
+                    for (const row of currentDiffScroller.getAllRows()) {
+                        if (row.type !== 'thread' && row.type !== 'sbs-thread') continue;
+                        if (!savedCollapseState.has(row.threadId)) continue;
+                        const saved = savedCollapseState.get(row.threadId);
+                        if (saved === row.collapsed) continue;
+                        row.collapsed = saved;
+                        row.measuredHeight = null;
+                        needsLayout = true;
+                        // Sync visible DOM element
+                        const threadEl = document.querySelector(`.inline-thread[data-thread-id="${row.threadId}"]`);
+                        if (threadEl) threadEl.classList.toggle('collapsed', saved);
+                        const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${row.threadId}"]`);
+                        if (avatarEl) {
+                            avatarEl.style.display = saved ? '' : 'none';
+                            const stack = avatarEl.closest('.diff-gutter-stack');
+                            if (stack) updateGutterStack(stack);
+                        }
+                    }
+                    if (needsLayout) currentDiffScroller.recalcLayout();
+                }
+
                 updateHunkNav();
                 updateThreadNav();
             }
