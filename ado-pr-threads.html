@@ -2759,7 +2759,7 @@
                 const _restoredFile = new URLSearchParams(window.location.search).get('file');
                 if (_restoredFile && !selectedFilePath) {
                     const entry = allChangeEntries.find(e => e.item?.path === _restoredFile);
-                    selectFileForDiff(_restoredFile, entry?.changeType || 'edit');
+                    selectFileForDiff(_restoredFile, entry?.changeType || 'none');
                 }
             } else if (currentView === 'updates') {
                 const overviewView = document.getElementById('overviewView');
