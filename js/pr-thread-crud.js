@@ -246,7 +246,7 @@ function attachEditPreview(textarea) {
     previewDiv.className = 'edit-preview';
     previewDiv.innerHTML = `
         <div class="edit-preview-header">Preview</div>
-        <div class="edit-preview-content pr-description" id="${previewId}">
+        <div class="edit-preview-content comment-content" id="${previewId}">
             <span style="color: #a19f9d; font-style: italic;">Nothing to preview</span>
         </div>
     `;
