@@ -4614,12 +4614,11 @@
 
                 // Scroller path: use data model directly
                 if (_scroller) {
-                    const topRow = _scroller.getTopVisibleCodeRow();
-                    if (!topRow) return null;
                     if (_isSbs) {
-                        return paneSelector?.includes('left') ? topRow.oldLineNum : topRow.newLineNum;
+                        const side = paneSelector?.includes('left') ? 'old' : 'new';
+                        return _scroller.getTopVisibleLineNum(side);
                     }
-                    return topRow.newLineNum ?? topRow.oldLineNum;
+                    return _scroller.getTopVisibleLineNum(null);
                 }
 
                 // Legacy DOM path

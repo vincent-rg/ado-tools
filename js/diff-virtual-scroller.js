@@ -942,6 +942,28 @@ const DiffVirtualScroller = (() => {
             return null;
         }
 
+        // Returns the first visible line number for the given side, skipping spacer rows.
+        // side: 'old' (left pane) | 'new' (right pane) | null (prefer new, fall back to old)
+        function getTopVisibleLineNum(side) {
+            if (!_scrollArea) return null;
+            const scrollTop = _scrollArea.scrollTop;
+            const idx = findFirstVisibleRow(rows, scrollTop);
+            for (let i = idx; i < rows.length; i++) {
+                const row = rows[i];
+                if (row.type !== 'code') continue;
+                let lineNum;
+                if (side === 'old') {
+                    lineNum = row.oldLineNum;
+                } else if (side === 'new') {
+                    lineNum = row.newLineNum;
+                } else {
+                    lineNum = row.newLineNum ?? row.oldLineNum;
+                }
+                if (lineNum != null) return lineNum;
+            }
+            return null;
+        }
+
         function getRowTextContent(row) {
             if (!row || row.type !== 'code') return '';
             if (row.sbsMode) {
@@ -1145,6 +1167,7 @@ const DiffVirtualScroller = (() => {
             scrollToRow,
             getRenderedElement,
             getTopVisibleCodeRow,
+            getTopVisibleLineNum,
             getRowTextContent,
             setSearchHighlights,
             setCurrentSearchMatch,
