@@ -1848,7 +1848,9 @@
                 const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
                 const oldCInfoCached = oldCommitId ? (baseCommitCache.get(oldCommitId) || null) : null;
                 const newCInfoCached = newCommitId ? (baseCommitCache.get(newCommitId) || null) : null;
+                const savedScroll = saveDiffScroll();
                 renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent, oldCInfoCached, newCInfoCached);
+                restoreDiffScroll(savedScroll);
 
                 // Restore collapse state for existing threads. New threads (from the reply
                 // just submitted) are not in savedCollapseState and keep their default state.
