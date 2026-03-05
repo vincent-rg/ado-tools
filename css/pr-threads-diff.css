@@ -381,6 +381,11 @@
 .diff-lines-delete-only .sbs-thread-spacer:not(.sbs-thread-left),
 .diff-lines-delete-only .sbs-thread-side:not(.sbs-thread-left) { display: none; }
 /* Comment highlight is applied only via <mark> inside .diff-content */
+/* Thread rows between code lines must not participate in code text selection */
+.diff-lines .inline-thread,
+.sbs-thread-row {
+    user-select: none;
+}
 /* SBS thread positioning */
 .sbs-thread-row {
     display: flex;
