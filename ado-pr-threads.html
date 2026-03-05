@@ -1846,7 +1846,9 @@
                 }
 
                 const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
-                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent);
+                const oldCInfoCached = oldCommitId ? (baseCommitCache.get(oldCommitId) || null) : null;
+                const newCInfoCached = newCommitId ? (baseCommitCache.get(newCommitId) || null) : null;
+                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent, oldCInfoCached, newCInfoCached);
 
                 // Restore collapse state for existing threads. New threads (from the reply
                 // just submitted) are not in savedCollapseState and keep their default state.
@@ -3828,6 +3830,36 @@
             }
         }
 
+        async function fetchCommitInfo(commitId) {
+            if (!commitId) return null;
+            if (baseCommitCache.has(commitId)) return baseCommitCache.get(commitId);
+            try {
+                const c = await ADOAPI.getCommit(currentConfig, commitId);
+                baseCommitCache.set(commitId, c);
+                return c;
+            } catch { return null; }
+        }
+
+        function buildCommitLabel(info) {
+            const sha = `<span class="pane-commit-sha">${ADOContent.escapeHtml(info.commitId.substring(0, 7))}</span>`;
+            const parts = [sha];
+            if (info.author?.date) {
+                const d = new Date(info.author.date);
+                const now = new Date();
+                const opts = { month: 'short', day: 'numeric', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) };
+                parts.push(`<span class="pane-commit-date">${d.toLocaleDateString('en-US', opts)}</span>`);
+            }
+            if (info.author?.name) {
+                parts.push(`<span class="pane-commit-author">${ADOContent.escapeHtml(info.author.name)}</span>`);
+            }
+            const msgRaw = (info.comment || '').split('\n')[0].trim();
+            if (msgRaw) {
+                const msgDisplay = msgRaw.length > 60 ? msgRaw.substring(0, 58) + '\u2026' : msgRaw;
+                parts.push(`<span class="pane-commit-msg" title="${ADOContent.escapeHtml(msgRaw)}">${ADOContent.escapeHtml(msgDisplay)}</span>`);
+            }
+            return parts.join('<span class="pane-commit-sep">\u00b7</span>');
+        }
+
         function getIterationCommits() {
             let baseCommit, sourceCommit;
             if (selectedIterationStart === null || selectedIterationEnd === null) {
@@ -3933,7 +3965,10 @@
 
                 // Non-changed file: show as read-only content with comment support
                 if (ct === 'none' || ct === '') {
-                    const content = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
+                    const [content, sourceInfo] = await Promise.all([
+                        ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' }),
+                        fetchCommitInfo(sourceCommit),
+                    ]);
                     if (selectedFilePath !== filePath) return;
 
                     // Build a synthetic diff (all unchanged lines) so we can reuse renderDiffLines
@@ -4008,7 +4043,7 @@
                             </div>
                         </div>
                         <div class="file-diff-body">
-                            <div class="diff-pane-labels"><span class="diff-commit-dot">&#x25cf;</span>${sourceCommit ? sourceCommit.substring(0, 7) : '—'}</div>
+                            <div class="diff-pane-labels">${sourceInfo ? buildCommitLabel(sourceInfo) : (sourceCommit ? sourceCommit.substring(0, 7) : '—')}</div>
                             <div class="diff-scroll-row">
                                 <div class="diff-scroll-area">
                                     <div class="diff-lines"></div>
@@ -4075,7 +4110,11 @@
                     oldFilePath = sourceServerItem || filePath;
                 }
 
-                const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff });
+                const [result, oldCInfo, newCInfo] = await Promise.all([
+                    DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff }),
+                    fetchCommitInfo(oldCommitId),
+                    fetchCommitInfo(newCommitId),
+                ]);
                 if (selectedFilePath !== filePath) return;
 
                 if (result.newFetchFailed) {
@@ -4086,7 +4125,7 @@
                 // the target branch) but the base commit doesn't have it — treat it as 'add'.
                 const effectiveChangeType = (result.oldFetchFailed && !ct.includes('delete')) ? 'add' : changeType;
 
-                renderFileDiff(filePath, effectiveChangeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent);
+                renderFileDiff(filePath, effectiveChangeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent, oldCInfo, newCInfo);
                 updateHunkNav();
                 updateThreadNav(scrollToThreadId);
                 if (scrollToThreadId) scrollToThread(scrollToThreadId);
@@ -4840,7 +4879,7 @@
             return { init, destroy };
         })();
 
-        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem, oldContent, newContent) {
+        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem, oldContent, newContent, oldCommitInfo = null, newCommitInfo = null) {
             clearSelectionComment();
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
@@ -4972,22 +5011,25 @@
             const sbsClass = isSbs ? ` diff-lines-sbs${singlePaneClass}` : singlePaneClass;
             const resizerHtml = (isSbs && !isSinglePane) ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
 
+            const _oldLabel = oldCommitInfo ? buildCommitLabel(oldCommitInfo) : (oldCommitShort || '—');
+            const _newLabel = newCommitInfo ? buildCommitLabel(newCommitInfo) : (newCommitShort || '—');
+
             let paneLabelsHtml = '';
             if (isSbs && !isSinglePane) {
                 paneLabelsHtml = `<div class="diff-pane-labels diff-pane-labels-sbs">
-                    <div class="diff-pane-label-old"><span class="diff-commit-dot old">&#x25cf;</span>${oldCommitShort || '—'}</div>
-                    <div class="diff-pane-label-new"><span class="diff-commit-dot new">&#x25cf;</span>${newCommitShort || '—'}</div>
+                    <div class="diff-pane-label-old"><span class="diff-commit-dot old">&#x25cf;</span>${_oldLabel}</div>
+                    <div class="diff-pane-label-new"><span class="diff-commit-dot new">&#x25cf;</span>${_newLabel}</div>
                 </div>`;
             } else if (isSinglePane) {
-                const singleShort = ct.includes('add') ? newCommitShort : oldCommitShort;
+                const singleLabel = ct.includes('add') ? _newLabel : _oldLabel;
                 const dotClass = ct.includes('add') ? 'new' : 'old';
-                paneLabelsHtml = `<div class="diff-pane-labels"><span class="diff-commit-dot ${dotClass}">&#x25cf;</span>${singleShort || '—'}</div>`;
+                paneLabelsHtml = `<div class="diff-pane-labels"><span class="diff-commit-dot ${dotClass}">&#x25cf;</span>${singleLabel}</div>`;
             } else {
                 // Inline, two versions
                 paneLabelsHtml = `<div class="diff-pane-labels">
-                    <span class="diff-pane-label-old"><span class="diff-commit-dot old">&#x25cf;</span>${oldCommitShort || '—'}</span>
+                    <span class="diff-pane-label-old"><span class="diff-commit-dot old">&#x25cf;</span>${_oldLabel}</span>
                     <span class="diff-pane-label-arrow">→</span>
-                    <span class="diff-pane-label-new"><span class="diff-commit-dot new">&#x25cf;</span>${newCommitShort || '—'}</span>
+                    <span class="diff-pane-label-new"><span class="diff-commit-dot new">&#x25cf;</span>${_newLabel}</span>
                 </div>`;
             }
 
