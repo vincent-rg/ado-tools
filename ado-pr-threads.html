@@ -242,6 +242,7 @@
         let urlRepo = null;     // Saved from initial URL
         let liveUpdatesEnabled = localStorage.getItem('prThreadsLiveUpdates') !== 'false'; // default: true
         let fileDiffDisplayMode = localStorage.getItem('fileDiffDisplayMode') || 'side-by-side';
+        let diffIgnoreWhitespace = localStorage.getItem('diffIgnoreWhitespace') !== 'false'; // default: true
         let stickyLinesEnabled = localStorage.getItem('stickyLinesEnabled') !== 'false';
         let diffFontSize = parseInt(localStorage.getItem('diffFontSize') || '12', 10);
         let goToLineSide = 'new'; // 'old' or 'new'; which version's line numbers to navigate
@@ -1829,7 +1830,7 @@
                 newCommitId = sourceCommit;
             }
 
-            const cacheKey = `${selectedFilePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}`;
+            const cacheKey = `${selectedFilePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}:iw${diffIgnoreWhitespace ? 1 : 0}`;
             const cached = fileDiffCache.get(cacheKey);
             if (cached) {
                 // Save thread collapse state from the scroller data model before re-render.
@@ -2247,7 +2248,7 @@
                     }
                 }
 
-                const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff });
+                const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff, diffOptions: { ignoreWhitespace: diffIgnoreWhitespace } });
                 if (result.newFetchFailed) {
                     throw new Error(`Could not load new file content (${filePath})`);
                 }
@@ -2975,6 +2976,33 @@
             localStorage.setItem('fileDiffDisplayMode', mode);
             clearSelectionComment();
             if (selectedFilePath) refreshInlineThreadsIfNeeded();
+        }
+
+        function toggleDiffKebabMenu(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('diffKebabDropdown');
+            if (!dropdown) return;
+            const opening = dropdown.style.display === 'none';
+            dropdown.style.display = opening ? 'block' : 'none';
+            if (opening) {
+                document.addEventListener('click', closeDiffKebabMenu, { once: true });
+            }
+        }
+
+        function closeDiffKebabMenu() {
+            const dropdown = document.getElementById('diffKebabDropdown');
+            if (dropdown) dropdown.style.display = 'none';
+        }
+
+        function toggleDiffIgnoreWhitespace() {
+            diffIgnoreWhitespace = !diffIgnoreWhitespace;
+            localStorage.setItem('diffIgnoreWhitespace', diffIgnoreWhitespace);
+            fileDiffCache.clear();
+            clearSelectionComment();
+            if (selectedFilePath) {
+                const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
+                selectFileForDiff(selectedFilePath, changeEntry?.changeType || 'edit');
+            }
         }
 
         function toggleStickyLines() {
@@ -4118,7 +4146,7 @@
                 }
 
                 const [result, oldCInfo, newCInfo] = await Promise.all([
-                    DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff }),
+                    DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff, diffOptions: { ignoreWhitespace: diffIgnoreWhitespace } }),
                     fetchCommitInfo(oldCommitId),
                     fetchCommitInfo(newCommitId),
                 ]);
@@ -4922,6 +4950,7 @@
             const inlineActive = fileDiffDisplayMode === 'inline' ? ' active' : '';
             const sbsActive = fileDiffDisplayMode === 'side-by-side' ? ' active' : '';
             const stickyActive = stickyLinesEnabled ? ' active' : '';
+            const iwChecked = diffIgnoreWhitespace ? ' checked' : '';
 
             let headerHtml = `
                 <div class="file-diff-header">
@@ -4978,6 +5007,15 @@
                         <button class="file-search-close" onclick="closeFileSearch()" title="Close (Escape)">&#x2715;</button>
                     </div>
                     ${renameInfo}
+                    <div class="diff-kebab-menu" id="diffKebabMenu">
+                        <button class="diff-kebab-btn" onclick="toggleDiffKebabMenu(event)" title="More options">&#xFE19;</button>
+                        <div class="diff-kebab-dropdown" id="diffKebabDropdown" style="display:none;">
+                            <label class="diff-kebab-item">
+                                <input type="checkbox" onchange="toggleDiffIgnoreWhitespace()"${iwChecked}>
+                                Ignore whitespace
+                            </label>
+                        </div>
+                    </div>
                 </div>
             `;
 

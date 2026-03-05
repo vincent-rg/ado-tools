@@ -334,9 +334,10 @@ async function getFilePathAtIteration(filePath, knownIterationId, targetIteratio
  * @returns {Promise<object>} { diff, addedCount, removedCount, oldFetchFailed, newFetchFailed }
  */
 async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, deps) {
-    const { config, cache, getFileContent, diff: diffAlgo } = deps;
+    const { config, cache, getFileContent, diff: diffAlgo, diffOptions = {} } = deps;
+    const ignoreWS = diffOptions.ignoreWhitespace !== false;
 
-    const cacheKey = `${filePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}`;
+    const cacheKey = `${filePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}:iw${ignoreWS ? 1 : 0}`;
     if (cache.has(cacheKey)) {
         return cache.get(cacheKey);
     }
@@ -367,7 +368,7 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
         addedCount = 0;
         removedCount = diffResult.length;
     } else {
-        diffResult = diffAlgo.diff(oldContent, newContent);
+        diffResult = diffAlgo.diff(oldContent, newContent, diffOptions);
         addedCount = 0;
         removedCount = 0;
         for (const entry of diffResult) {

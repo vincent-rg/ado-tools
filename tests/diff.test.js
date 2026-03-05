@@ -152,6 +152,82 @@ describe('HistogramDiff', () => {
         });
     });
 
+    describe('ignoreWhitespace (default true)', () => {
+        it('treats indentation-only changes as unchanged, showing new content', () => {
+            const old = 'if (x) {\n    foo();\n    bar();\n}';
+            const neu = 'foo();\nbar();';
+            const result = HistogramDiff.diff(old, neu);
+            // 'if (x) {' and '}' are removed; 'foo()' and 'bar()' match ignoring indentation
+            const removed = result.filter(e => e.type === 'removed').map(e => e.content);
+            const unchanged = result.filter(e => e.type === 'unchanged').map(e => e.content);
+            expect(removed).toContain('if (x) {');
+            expect(removed).toContain('}');
+            expect(unchanged).toContain('foo();');
+            expect(unchanged).toContain('bar();');
+        });
+
+        it('unchanged lines carry new-file content (dedented form)', () => {
+            const old = '    hello';
+            const neu = 'hello';
+            const result = HistogramDiff.diff(old, neu);
+            expect(result).toEqual([
+                { type: 'unchanged', content: 'hello', oldLine: 1, newLine: 1 },
+            ]);
+        });
+
+        it('matches the exact scenario from user report: if-block removal with indentation change', () => {
+            const old = [
+                'if ( focusedWindow )',
+                '{',
+                '    gs_toBeFocusedWindow = (wxWindow*)this;',
+                '    focusedWindow->KillFocus();',
+                '    gs_toBeFocusedWindow = nullptr;',
+                '}',
+            ].join('\n');
+            const neu = [
+                'gs_toBeFocusedWindow = (wxWindow*)this;',
+                'focusedWindow->KillFocus();',
+                'gs_toBeFocusedWindow = nullptr;',
+            ].join('\n');
+            const result = HistogramDiff.diff(old, neu);
+            const removed = result.filter(e => e.type === 'removed').map(e => e.content);
+            const unchanged = result.filter(e => e.type === 'unchanged').map(e => e.content);
+            const added = result.filter(e => e.type === 'added').map(e => e.content);
+            // Only the if/brace lines are removed, three body lines are unchanged
+            expect(removed).toContain('if ( focusedWindow )');
+            expect(removed).toContain('{');
+            expect(removed).toContain('}');
+            expect(unchanged).toContain('gs_toBeFocusedWindow = (wxWindow*)this;');
+            expect(unchanged).toContain('focusedWindow->KillFocus();');
+            expect(unchanged).toContain('gs_toBeFocusedWindow = nullptr;');
+            expect(added).toHaveLength(0);
+        });
+
+        it('with ignoreWhitespace:false treats indentation change as a full change', () => {
+            const old = '    hello';
+            const neu = 'hello';
+            const result = HistogramDiff.diff(old, neu, { ignoreWhitespace: false });
+            const types = result.map(e => e.type);
+            expect(types).not.toContain('unchanged');
+            expect(types).toContain('removed');
+            expect(types).toContain('added');
+        });
+
+        it('stats ignores whitespace-only changes by default', () => {
+            const old = '    foo\n    bar';
+            const neu = 'foo\nbar';
+            expect(HistogramDiff.stats(old, neu)).toEqual({ added: 0, removed: 0 });
+        });
+
+        it('stats counts whitespace changes when ignoreWhitespace:false', () => {
+            const old = '    foo\n    bar';
+            const neu = 'foo\nbar';
+            const result = HistogramDiff.stats(old, neu, { ignoreWhitespace: false });
+            expect(result.removed).toBe(2);
+            expect(result.added).toBe(2);
+        });
+    });
+
     describe('stats', () => {
         it('counts added and removed lines', () => {
             const result = HistogramDiff.stats('a\nb\nc', 'a\nx\ny\nc');

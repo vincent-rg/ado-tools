@@ -8,26 +8,45 @@
 
 const HistogramDiff = {
     /**
+     * Normalize a line for whitespace-insensitive comparison.
+     * Trims leading/trailing whitespace and collapses internal runs to a single space.
+     */
+    _normalizeWS(line) {
+        return line.trim().replace(/\s+/g, ' ');
+    },
+
+    /** Compare two lines, optionally ignoring whitespace differences */
+    _eq(a, b, ignoreWS) {
+        if (!ignoreWS) return a === b;
+        return this._normalizeWS(a) === this._normalizeWS(b);
+    },
+
+    /**
      * Compute a line-by-line diff between two texts
      * @param {string} oldText - Original text
      * @param {string} newText - New text
+     * @param {object} [options]
+     * @param {boolean} [options.ignoreWhitespace=true] - Treat lines that differ only in whitespace as unchanged
      * @returns {Array} Array of {type: 'unchanged'|'added'|'removed', content: string, oldLine?: number, newLine?: number}
      */
-    diff(oldText, newText) {
+    diff(oldText, newText, options = {}) {
         const oldLines = (oldText || '').split('\n');
         const newLines = (newText || '').split('\n');
-        return this.diffLines(oldLines, newLines);
+        return this.diffLines(oldLines, newLines, options);
     },
 
     /**
      * Compute a line-by-line diff between two arrays of lines
      * @param {string[]} oldLines - Original lines
      * @param {string[]} newLines - New lines
+     * @param {object} [options]
+     * @param {boolean} [options.ignoreWhitespace=true] - Treat lines that differ only in whitespace as unchanged
      * @returns {Array} Diff entries with type, content, and line numbers
      */
-    diffLines(oldLines, newLines) {
+    diffLines(oldLines, newLines, options = {}) {
+        const ignoreWS = options.ignoreWhitespace !== false;
         const diff = [];
-        this._diffRegion(oldLines, 0, oldLines.length, newLines, 0, newLines.length, diff);
+        this._diffRegion(oldLines, 0, oldLines.length, newLines, 0, newLines.length, diff, ignoreWS);
 
         // Add line numbers
         let oldLineNum = 1;
@@ -49,7 +68,7 @@ const HistogramDiff = {
     /**
      * Iteratively diff a region using histogram algorithm (avoids stack overflow on large files)
      */
-    _diffRegion(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result) {
+    _diffRegion(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result, ignoreWS) {
         // Use an explicit stack to avoid call stack overflow on large files.
         // Each task is either:
         //   { type: 'region', oldStart, oldEnd, newStart, newEnd }
@@ -90,21 +109,23 @@ const HistogramDiff = {
                 continue;
             }
 
-            // Trim common prefix: emit unchanged lines directly (they come first in output)
-            while (os < oe && ns < ne && oldLines[os] === newLines[ns]) {
-                result.push({ type: 'unchanged', content: oldLines[os] });
+            // Trim common prefix: emit unchanged lines directly (they come first in output).
+            // Use new-file content so whitespace-normalized matches show current indentation.
+            while (os < oe && ns < ne && this._eq(oldLines[os], newLines[ns], ignoreWS)) {
+                result.push({ type: 'unchanged', content: newLines[ns] });
                 os++;
                 ns++;
             }
 
-            // Trim common suffix: defer as a batch task (processed after middle region)
+            // Trim common suffix: defer as a batch task (processed after middle region).
+            // Store new-file indices so content reflects current indentation.
             let sfx = 0;
             while (oe - 1 - sfx >= os && ne - 1 - sfx >= ns &&
-                   oldLines[oe - 1 - sfx] === newLines[ne - 1 - sfx]) {
+                   this._eq(oldLines[oe - 1 - sfx], newLines[ne - 1 - sfx], ignoreWS)) {
                 sfx++;
             }
             if (sfx > 0) {
-                stack.push({ type: 'unchanged_batch', lines: oldLines, start: oe - sfx, end: oe });
+                stack.push({ type: 'unchanged_batch', lines: newLines, start: ne - sfx, end: ne });
                 oe -= sfx;
                 ne -= sfx;
             }
@@ -122,15 +143,15 @@ const HistogramDiff = {
 
             // Small region: use simple LCS
             if ((oe - os) + (ne - ns) <= 10) {
-                this._simpleLCS(oldLines, os, oe, newLines, ns, ne, result);
+                this._simpleLCS(oldLines, os, oe, newLines, ns, ne, result, ignoreWS);
                 continue;
             }
 
             // Build histogram and find best anchor
-            const anchor = this._findAnchor(oldLines, os, oe, newLines, ns, ne);
+            const anchor = this._findAnchor(oldLines, os, oe, newLines, ns, ne, ignoreWS);
 
             if (!anchor) {
-                this._simpleLCS(oldLines, os, oe, newLines, ns, ne, result);
+                this._simpleLCS(oldLines, os, oe, newLines, ns, ne, result, ignoreWS);
                 continue;
             }
 
@@ -146,15 +167,15 @@ const HistogramDiff = {
      * Find the best anchor line using histogram approach
      * Prefers lines with low occurrence count (unique lines are best)
      */
-    _findAnchor(oldLines, oldStart, oldEnd, newLines, newStart, newEnd) {
-        // Build histogram for old region
+    _findAnchor(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, ignoreWS) {
+        // Build histogram for old region. Key is normalized content when ignoring whitespace.
         const oldHist = new Map();
         for (let i = oldStart; i < oldEnd; i++) {
-            const line = oldLines[i];
-            if (!oldHist.has(line)) {
-                oldHist.set(line, { count: 0, indices: [] });
+            const key = ignoreWS ? this._normalizeWS(oldLines[i]) : oldLines[i];
+            if (!oldHist.has(key)) {
+                oldHist.set(key, { count: 0, indices: [] });
             }
-            const entry = oldHist.get(line);
+            const entry = oldHist.get(key);
             entry.count++;
             entry.indices.push(i);
         }
@@ -166,11 +187,11 @@ const HistogramDiff = {
         // Build histogram for new region and find matches
         const newHist = new Map();
         for (let j = newStart; j < newEnd; j++) {
-            const line = newLines[j];
-            if (!newHist.has(line)) {
-                newHist.set(line, { count: 0, indices: [] });
+            const key = ignoreWS ? this._normalizeWS(newLines[j]) : newLines[j];
+            if (!newHist.has(key)) {
+                newHist.set(key, { count: 0, indices: [] });
             }
-            const entry = newHist.get(line);
+            const entry = newHist.get(key);
             entry.count++;
             entry.indices.push(j);
         }
@@ -184,11 +205,11 @@ const HistogramDiff = {
         // This avoids picking a moved line as anchor (it would have a large positional
         // delta), which would incorrectly mark all stable lines as added/removed.
         let bestPosDelta = Infinity;
-        for (const [line, oldEntry] of oldHist) {
+        for (const [key, oldEntry] of oldHist) {
             // Skip empty or whitespace-only lines as anchors
-            if (!line.trim()) continue;
+            if (!key.trim()) continue;
 
-            const newEntry = newHist.get(line);
+            const newEntry = newHist.get(key);
             if (!newEntry) continue;
 
             // Score = product of occurrences (lower is better, 1 = unique in both)
@@ -203,7 +224,8 @@ const HistogramDiff = {
                 if (score < bestScore || posDelta < bestPosDelta) {
                     bestScore = score;
                     bestPosDelta = posDelta;
-                    bestAnchor = { line, oldIndex, newIndex };
+                    // Emit new-file content so whitespace-normalized anchors show current indentation
+                    bestAnchor = { line: newLines[newIndex], oldIndex, newIndex };
                 }
             }
         }
@@ -214,7 +236,7 @@ const HistogramDiff = {
     /**
      * Simple LCS for small regions - O(n*m) but fine for small inputs
      */
-    _simpleLCS(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result) {
+    _simpleLCS(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result, ignoreWS) {
         const m = oldEnd - oldStart;
         const n = newEnd - newStart;
 
@@ -222,7 +244,7 @@ const HistogramDiff = {
         const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
         for (let i = 1; i <= m; i++) {
             for (let j = 1; j <= n; j++) {
-                if (oldLines[oldStart + i - 1] === newLines[newStart + j - 1]) {
+                if (this._eq(oldLines[oldStart + i - 1], newLines[newStart + j - 1], ignoreWS)) {
                     dp[i][j] = dp[i - 1][j - 1] + 1;
                 } else {
                     dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
@@ -230,12 +252,13 @@ const HistogramDiff = {
             }
         }
 
-        // Backtrack to build diff (collect in reverse, then add to result)
+        // Backtrack to build diff (collect in reverse, then add to result).
+        // Use new-file content for unchanged lines (correct indentation when ignoring whitespace).
         const localDiff = [];
         let i = m, j = n;
         while (i > 0 || j > 0) {
-            if (i > 0 && j > 0 && oldLines[oldStart + i - 1] === newLines[newStart + j - 1]) {
-                localDiff.push({ type: 'unchanged', content: oldLines[oldStart + i - 1] });
+            if (i > 0 && j > 0 && this._eq(oldLines[oldStart + i - 1], newLines[newStart + j - 1], ignoreWS)) {
+                localDiff.push({ type: 'unchanged', content: newLines[newStart + j - 1] });
                 i--; j--;
             } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
                 localDiff.push({ type: 'added', content: newLines[newStart + j - 1] });
@@ -256,10 +279,11 @@ const HistogramDiff = {
      * Count added and removed lines (for stats)
      * @param {string} oldText - Original text
      * @param {string} newText - New text
+     * @param {object} [options] - Same options as diff()
      * @returns {{added: number, removed: number}}
      */
-    stats(oldText, newText) {
-        const diff = this.diff(oldText, newText);
+    stats(oldText, newText, options = {}) {
+        const diff = this.diff(oldText, newText, options);
         let added = 0, removed = 0;
         for (const entry of diff) {
             if (entry.type === 'added') added++;

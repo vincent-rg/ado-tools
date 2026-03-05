@@ -827,6 +827,56 @@
     color: #cf222e;
 }
 
+/* Kebab (more options) menu in diff header */
+.diff-kebab-menu {
+    position: relative;
+    flex-shrink: 0;
+}
+.diff-kebab-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 16px;
+    color: #605e5c;
+    border-radius: 3px;
+    line-height: 1;
+}
+.diff-kebab-btn:hover {
+    background: #edebe9;
+    color: #323130;
+}
+.diff-kebab-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    min-width: 180px;
+    z-index: 200;
+    padding: 4px 0;
+}
+.diff-kebab-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: #323130;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+.diff-kebab-item:hover {
+    background: #f3f2f1;
+}
+.diff-kebab-item input[type="checkbox"] {
+    cursor: pointer;
+    margin: 0;
+}
+
 /* Hunk/thread jump navigation (shared styles) */
 .hunk-nav, .thread-nav {
     display: flex;
