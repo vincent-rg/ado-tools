@@ -4563,11 +4563,11 @@
             track.appendChild(thumb);
             body.appendChild(track);
 
-            const scrollRange = maxScrollRange;
+            let scrollRange = maxScrollRange;
             const trackWidth = track.clientWidth;
             const thumbWidth = Math.max(30, trackWidth * (limitingClientWidth / limitingScrollWidth));
             thumb.style.width = thumbWidth + 'px';
-            const maxThumbLeft = trackWidth - thumbWidth;
+            let maxThumbLeft = trackWidth - thumbWidth;
 
             let currentOffset = 0;
             // When virtual scroller is active, we can't cache content elements
@@ -4584,7 +4584,21 @@
                 }
             }
 
-            sbsScrollSync = { applyScroll, scrollRange, getCurrentOffset: () => currentOffset };
+            // Expand scroll range when a newly rendered row is wider than what was measured at setup.
+            // In virtual scroll mode only visible rows exist in the DOM at setup time, so wider
+            // off-screen rows are discovered lazily as they scroll into the overscan area.
+            function expandRange(newRange, pane) {
+                if (newRange <= scrollRange) return;
+                scrollRange = newRange;
+                const newThumbWidth = Math.max(30, trackWidth * (pane.clientWidth / (pane.clientWidth + newRange)));
+                thumb.style.width = newThumbWidth + 'px';
+                maxThumbLeft = trackWidth - newThumbWidth;
+                if (currentOffset > 0 && scrollRange > 0) {
+                    thumb.style.left = Math.min(currentOffset / scrollRange, 1) * maxThumbLeft + 'px';
+                }
+            }
+
+            sbsScrollSync = { applyScroll, get scrollRange() { return scrollRange; }, getCurrentOffset: () => currentOffset, expandRange };
 
             // Restore previous scroll position clamped to new range (e.g. after pane resize)
             if (previousOffset > 0) {
@@ -5107,6 +5121,11 @@
                                 c.style.transform = `translateX(-${offset}px)`;
                             }
                         }
+                        // Expand scrollbar range if this row is wider than what was measured at setup time.
+                        for (const pane of el.querySelectorAll('.sbs-left, .sbs-right')) {
+                            const range = pane.scrollWidth - pane.clientWidth;
+                            if (range > sync.scrollRange) sync.expandRange(range, pane);
+                        }
                     });
                 }
             }
@@ -5310,7 +5329,7 @@
             return tempRange.toString().length;
         }
 
-        function handleDiffSelection() {
+        function handleDiffSelection(mouseX, mouseY) {
             const sel = window.getSelection();
             if (!sel || sel.isCollapsed || !sel.rangeCount) return;
 
@@ -5328,36 +5347,39 @@
             // Only show button for multi-character selections
             if (parsed.startLine === parsed.endLine && parsed.startOffset === parsed.endOffset) return;
 
-            showSelectionCommentButton(sel, parsed);
+            showSelectionCommentButton(sel, parsed, mouseX, mouseY);
         }
 
-        function showSelectionCommentButton(sel, parsed) {
+        function showSelectionCommentButton(sel, parsed, mouseX, mouseY) {
             // Remove any existing button
             const existing = document.querySelector('.selection-comment-btn');
             if (existing) existing.remove();
 
-            const range = sel.getRangeAt(0);
-            const rangeRect = range.getBoundingClientRect();
             const diffBody = document.querySelector('.file-diff-body');
             if (!diffBody) return;
             const bodyRect = diffBody.getBoundingClientRect();
 
-            // In SBS flex layout, range.getBoundingClientRect().left can be wrong
-            // (returns left edge of the row instead of the pane). Use the pane's
-            // own bounding rect for left positioning.
-            let leftPos = rangeRect.left - bodyRect.left;
-            if (parsed.endRow) {
-                const paneEl = parsed.endRow.querySelector(
-                    parsed.side === 'right' ? '.sbs-right' : '.sbs-left'
-                );
-                if (paneEl) leftPos = paneEl.getBoundingClientRect().left - bodyRect.left;
-            }
-
             const btn = document.createElement('button');
             btn.className = 'selection-comment-btn';
             btn.innerHTML = COMMENT_BUBBLE_SVG + ' Comment';
-            btn.style.top = (rangeRect.bottom - bodyRect.top + 4) + 'px';
-            btn.style.left = leftPos + 'px';
+
+            // Position near mouse cursor if coordinates available, otherwise fall back to selection range
+            if (mouseX !== undefined && mouseY !== undefined) {
+                btn.style.top = (mouseY - bodyRect.top + 8) + 'px';
+                btn.style.left = (mouseX - bodyRect.left + 8) + 'px';
+            } else {
+                const range = sel.getRangeAt(0);
+                const rangeRect = range.getBoundingClientRect();
+                let leftPos = rangeRect.left - bodyRect.left;
+                if (parsed.endRow) {
+                    const paneEl = parsed.endRow.querySelector(
+                        parsed.side === 'right' ? '.sbs-right' : '.sbs-left'
+                    );
+                    if (paneEl) leftPos = paneEl.getBoundingClientRect().left - bodyRect.left;
+                }
+                btn.style.top = (rangeRect.bottom - bodyRect.top + 4) + 'px';
+                btn.style.left = leftPos + 'px';
+            }
 
             btn.addEventListener('mousedown', (e) => {
                 e.preventDefault();
@@ -5576,8 +5598,10 @@
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
 
-            diffPanel.addEventListener('mouseup', () => {
-                setTimeout(handleDiffSelection, 10);
+            diffPanel.addEventListener('mouseup', (e) => {
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+                setTimeout(() => handleDiffSelection(mouseX, mouseY), 10);
             });
 
             diffPanel.addEventListener('mousedown', (e) => {
