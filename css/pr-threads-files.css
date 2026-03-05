@@ -995,7 +995,7 @@ mark.search-highlight.current {
     padding: 3px 10px;
     font-size: 11px;
     color: #888;
-    background: #f6f8fa;
+    background: #f8f8f8;
     border-bottom: 1px solid #e1dfdd;
     flex-shrink: 0;
     min-width: 0;
@@ -1006,7 +1006,7 @@ mark.search-highlight.current {
     padding-right: 14px;
     box-sizing: border-box;
     background: linear-gradient(to right,
-        #f6f8fa calc(100% - 15px),
+        #f8f8f8 calc(100% - 15px),
         #e1dfdd calc(100% - 15px),
         #e1dfdd calc(100% - 14px),
         #f0f0f0 calc(100% - 14px));

@@ -123,7 +123,7 @@
     white-space: nowrap;
 }
 .diff-gutter-stack-item:hover {
-    background: #f6f8fa;
+    background: #f8f8f8;
 }
 .diff-gutter-stack-item.expanded {
     opacity: 0.5;
@@ -216,8 +216,8 @@
     min-width: 0;
     background: repeating-linear-gradient(
         -45deg,
-        #f6f8fa,
-        #f6f8fa 4px,
+        #f8f8f8,
+        #f8f8f8 4px,
         #eef0f2 4px,
         #eef0f2 8px
     );
@@ -276,8 +276,8 @@
 }
 
 .diff-unchanged {
-    background: #f6f8fa;
-    color: #24292f;
+    background: #f8f8f8;
+    color: #000;
 }
 
 .diff-added {
@@ -306,11 +306,6 @@
     font-family: monospace;
     line-height: 1.5;
     position: relative;
-}
-.sbs-row.diff-unchanged .sbs-left,
-.sbs-row.diff-unchanged .sbs-right {
-    background: #f6f8fa;
-    color: #24292f;
 }
 .sbs-left, .sbs-right {
     display: flex;
@@ -364,8 +359,8 @@
 .sbs-empty {
     background: repeating-linear-gradient(
         -45deg,
-        #f6f8fa,
-        #f6f8fa 4px,
+        #f8f8f8,
+        #f8f8f8 4px,
         #eef0f2 4px,
         #eef0f2 8px
     );
@@ -403,8 +398,8 @@
     min-width: 0;
     background: repeating-linear-gradient(
         -45deg,
-        #f6f8fa,
-        #f6f8fa 4px,
+        #f8f8f8,
+        #f8f8f8 4px,
         #eef0f2 4px,
         #eef0f2 8px
     );
