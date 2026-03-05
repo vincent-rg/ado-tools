@@ -1066,8 +1066,8 @@ mark.search-highlight.current {
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
-    background: #f6f8fa;
-    border-bottom: 1px solid #d1d5db;
+    background: #faf9f8;
+    border-bottom: 1px solid #e1dfdd;
 }
 .sticky-pane:empty { border-bottom: none; }
 .sticky-pane-left {
