@@ -47,51 +47,60 @@ const HistogramDiff = {
     },
 
     /**
-     * Recursively diff a region using histogram algorithm
+     * Iteratively diff a region using histogram algorithm (avoids stack overflow on large files)
      */
     _diffRegion(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result) {
-        // Base case: empty regions
-        if (oldStart >= oldEnd && newStart >= newEnd) {
-            return;
-        }
+        // Use an explicit stack to avoid call stack overflow on large files.
+        // Each task is either:
+        //   { type: 'region', oldStart, oldEnd, newStart, newEnd }
+        //   { type: 'line', entry }  — a pre-resolved anchor line to emit
+        const stack = [{ type: 'region', oldStart, oldEnd, newStart, newEnd }];
 
-        // All old lines removed
-        if (oldStart >= oldEnd) {
-            for (let j = newStart; j < newEnd; j++) {
-                result.push({ type: 'added', content: newLines[j] });
+        while (stack.length > 0) {
+            const task = stack.pop();
+
+            if (task.type === 'line') {
+                result.push(task.entry);
+                continue;
             }
-            return;
-        }
 
-        // All new lines added
-        if (newStart >= newEnd) {
-            for (let i = oldStart; i < oldEnd; i++) {
-                result.push({ type: 'removed', content: oldLines[i] });
+            const { oldStart: os, oldEnd: oe, newStart: ns, newEnd: ne } = task;
+
+            // Empty region
+            if (os >= oe && ns >= ne) continue;
+
+            // All old lines removed
+            if (os >= oe) {
+                for (let j = ns; j < ne; j++) result.push({ type: 'added', content: newLines[j] });
+                continue;
             }
-            return;
+
+            // All new lines added
+            if (ns >= ne) {
+                for (let i = os; i < oe; i++) result.push({ type: 'removed', content: oldLines[i] });
+                continue;
+            }
+
+            // Small region: use simple LCS
+            if ((oe - os) + (ne - ns) <= 10) {
+                this._simpleLCS(oldLines, os, oe, newLines, ns, ne, result);
+                continue;
+            }
+
+            // Build histogram and find best anchor
+            const anchor = this._findAnchor(oldLines, os, oe, newLines, ns, ne);
+
+            if (!anchor) {
+                this._simpleLCS(oldLines, os, oe, newLines, ns, ne, result);
+                continue;
+            }
+
+            // Push tasks in reverse order (stack is LIFO) to process left-to-right:
+            // after-anchor first (processed last), then anchor line, then before-anchor (processed first)
+            stack.push({ type: 'region', oldStart: anchor.oldIndex + 1, oldEnd: oe, newStart: anchor.newIndex + 1, newEnd: ne });
+            stack.push({ type: 'line', entry: { type: 'unchanged', content: anchor.line } });
+            stack.push({ type: 'region', oldStart: os, oldEnd: anchor.oldIndex, newStart: ns, newEnd: anchor.newIndex });
         }
-
-        // Small region: use simple LCS
-        const oldLen = oldEnd - oldStart;
-        const newLen = newEnd - newStart;
-        if (oldLen + newLen <= 10) {
-            this._simpleLCS(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result);
-            return;
-        }
-
-        // Build histogram and find best anchor
-        const anchor = this._findAnchor(oldLines, oldStart, oldEnd, newLines, newStart, newEnd);
-
-        if (!anchor) {
-            // No good anchor found, fall back to LCS
-            this._simpleLCS(oldLines, oldStart, oldEnd, newLines, newStart, newEnd, result);
-            return;
-        }
-
-        // Recursively diff regions before and after anchor
-        this._diffRegion(oldLines, oldStart, anchor.oldIndex, newLines, newStart, anchor.newIndex, result);
-        result.push({ type: 'unchanged', content: anchor.line });
-        this._diffRegion(oldLines, anchor.oldIndex + 1, oldEnd, newLines, anchor.newIndex + 1, newEnd, result);
     },
 
     /**
