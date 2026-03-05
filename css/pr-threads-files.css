@@ -974,7 +974,7 @@
 .file-search-close:hover { color: #323130; }
 /* Search result highlights in diff content */
 mark.search-highlight {
-    background: rgba(255, 152, 0, 0.4);
+    background: rgba(30, 100, 220, 0.2);
     color: inherit; border-radius: 2px; padding: 0;
 }
 mark.search-highlight.current {
