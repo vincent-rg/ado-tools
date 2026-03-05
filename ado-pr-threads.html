@@ -3015,32 +3015,34 @@
             } else if (selectedFilePath) {
                 refreshInlineThreadsIfNeeded();
             }
-            const btn = document.getElementById('stickyLinesToggleBtn');
-            if (btn) btn.classList.toggle('active', stickyLinesEnabled);
+            const cb = document.getElementById('stickyLinesCheckbox');
+            if (cb) cb.checked = stickyLinesEnabled;
         }
 
         function applyDiffFontSize() {
             document.documentElement.style.setProperty('--diff-font-size', diffFontSize + 'px');
         }
 
-        function adjustDiffFontSize(delta) {
-            const newSize = Math.max(8, Math.min(24, diffFontSize + delta));
+        function setDiffFontSize(size) {
+            const newSize = Math.max(8, Math.min(24, size));
             if (newSize === diffFontSize) return;
             diffFontSize = newSize;
             localStorage.setItem('diffFontSize', diffFontSize);
             applyDiffFontSize();
-            // Update label and button states in any rendered header
-            const label = document.getElementById('diffFontSizeLabel');
-            if (label) label.textContent = diffFontSize + 'px';
-            document.querySelectorAll('.diff-font-size-btn').forEach(btn => {
-                const isDecrement = btn.textContent.trim() === '−';
-                btn.disabled = isDecrement ? diffFontSize <= 8 : diffFontSize >= 24;
+            document.querySelectorAll('.diff-font-size-label-kebab').forEach(el => el.textContent = diffFontSize + 'px');
+            document.querySelectorAll('.diff-kebab-subitem[data-size]').forEach(el => {
+                el.classList.toggle('active', parseInt(el.dataset.size) === diffFontSize);
             });
-            // Recalc scroller layout after font size change
             if (currentDiffScroller) {
                 currentDiffScroller.invalidateHeights();
                 currentDiffScroller.recalcLayout();
             }
+        }
+
+        function buildFontSizeSubitemsHtml() {
+            return [8, 10, 11, 12, 13, 14, 16, 18, 20, 24].map(s =>
+                `<div class="diff-kebab-subitem${diffFontSize === s ? ' active' : ''}" data-size="${s}" onclick="setDiffFontSize(${s})">${s}px</div>`
+            ).join('');
         }
 
         function addFileToTree(root, filePath, changeType, sourceServerItem) {
@@ -4034,19 +4036,12 @@
                     // Destroy previous scroller if any
                     if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
 
-                    const stickyActiveUnchanged = stickyLinesEnabled ? ' active' : '';
+                    const stickyCheckedUnchanged = stickyLinesEnabled ? ' checked' : '';
+                    const iwCheckedUnchanged = diffIgnoreWhitespace ? ' checked' : '';
                     diffPanel.innerHTML = `
                         <div class="file-diff-header">
                             <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
                             <span style="font-size: 12px; color: #a19f9d;">(unchanged file)</span>
-                            <div class="diff-display-mode-bar">
-                                <button id="stickyLinesToggleBtn" class="file-view-mode-btn${stickyActiveUnchanged}" onclick="toggleStickyLines()" title="Toggle sticky scope lines">Scope</button>
-                            </div>
-                            <div class="diff-font-size-control">
-                                <button class="diff-font-size-btn" onclick="adjustDiffFontSize(-1)" title="Decrease font size" ${diffFontSize <= 8 ? 'disabled' : ''}>−</button>
-                                <span class="diff-font-size-label" id="diffFontSizeLabel">${diffFontSize}px</span>
-                                <button class="diff-font-size-btn" onclick="adjustDiffFontSize(1)" title="Increase font size" ${diffFontSize >= 24 ? 'disabled' : ''}>+</button>
-                            </div>
                             <div class="thread-nav" id="threadNav" style="display:none;">
                                 <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
                                 <span class="thread-nav-label" id="threadNavLabel"></span>
@@ -4075,6 +4070,25 @@
                                 <button class="file-search-nav-btn" id="fileSearchNextBtn"
                                         onclick="navigateFileSearch(1)" title="Next (Enter)">↓</button>
                                 <button class="file-search-close" onclick="closeFileSearch()" title="Close (Escape)">&#x2715;</button>
+                            </div>
+                            <div class="diff-kebab-menu" id="diffKebabMenu">
+                                <button class="diff-kebab-btn" onclick="toggleDiffKebabMenu(event)" title="More options">&#xFE19;</button>
+                                <div class="diff-kebab-dropdown" id="diffKebabDropdown" style="display:none;">
+                                    <label class="diff-kebab-item">
+                                        <input type="checkbox" onchange="toggleDiffIgnoreWhitespace()"${iwCheckedUnchanged}>
+                                        Ignore whitespace
+                                    </label>
+                                    <label class="diff-kebab-item">
+                                        <input type="checkbox" id="stickyLinesCheckbox" onchange="toggleStickyLines()"${stickyCheckedUnchanged}>
+                                        Scope
+                                    </label>
+                                    <div class="diff-kebab-item diff-kebab-submenu-trigger">
+                                        <span>Font size</span>
+                                        <span class="diff-font-size-label-kebab">${diffFontSize}px</span>
+                                        <span class="diff-kebab-submenu-arrow">&#9654;</span>
+                                        <div class="diff-kebab-submenu">${buildFontSizeSubitemsHtml()}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="file-diff-body">
@@ -4949,7 +4963,7 @@
 
             const inlineActive = fileDiffDisplayMode === 'inline' ? ' active' : '';
             const sbsActive = fileDiffDisplayMode === 'side-by-side' ? ' active' : '';
-            const stickyActive = stickyLinesEnabled ? ' active' : '';
+            const stickyChecked = stickyLinesEnabled ? ' checked' : '';
             const iwChecked = diffIgnoreWhitespace ? ' checked' : '';
 
             let headerHtml = `
@@ -4959,13 +4973,6 @@
                     <div class="diff-display-mode-bar">
                         <button class="file-view-mode-btn${inlineActive}" onclick="setDiffDisplayMode('inline')">Inline</button>
                         <button class="file-view-mode-btn${sbsActive}" onclick="setDiffDisplayMode('side-by-side')">Side by Side</button>
-                        <span style="margin: 0 2px; color: #999;">|</span>
-                        <button id="stickyLinesToggleBtn" class="file-view-mode-btn${stickyActive}" onclick="toggleStickyLines()" title="Toggle sticky scope lines">Scope</button>
-                    </div>
-                    <div class="diff-font-size-control">
-                        <button class="diff-font-size-btn" onclick="adjustDiffFontSize(-1)" title="Decrease font size" ${diffFontSize <= 8 ? 'disabled' : ''}>−</button>
-                        <span class="diff-font-size-label" id="diffFontSizeLabel">${diffFontSize}px</span>
-                        <button class="diff-font-size-btn" onclick="adjustDiffFontSize(1)" title="Increase font size" ${diffFontSize >= 24 ? 'disabled' : ''}>+</button>
                     </div>
                     <div class="file-diff-stats">
                         <span class="stat-added">+${addedCount}</span>
@@ -5014,6 +5021,16 @@
                                 <input type="checkbox" onchange="toggleDiffIgnoreWhitespace()"${iwChecked}>
                                 Ignore whitespace
                             </label>
+                            <label class="diff-kebab-item">
+                                <input type="checkbox" id="stickyLinesCheckbox" onchange="toggleStickyLines()"${stickyChecked}>
+                                Scope
+                            </label>
+                            <div class="diff-kebab-item diff-kebab-submenu-trigger">
+                                <span>Font size</span>
+                                <span class="diff-font-size-label-kebab">${diffFontSize}px</span>
+                                <span class="diff-kebab-submenu-arrow">&#9654;</span>
+                                <div class="diff-kebab-submenu">${buildFontSizeSubitemsHtml()}</div>
+                            </div>
                         </div>
                     </div>
                 </div>

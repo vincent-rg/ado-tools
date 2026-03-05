@@ -876,6 +876,47 @@
     cursor: pointer;
     margin: 0;
 }
+.diff-kebab-submenu-trigger {
+    position: relative;
+}
+.diff-kebab-submenu {
+    display: none;
+    position: absolute;
+    right: 100%;
+    top: -4px;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    padding: 4px 0;
+    z-index: 201;
+}
+.diff-kebab-submenu-trigger:hover .diff-kebab-submenu {
+    display: block;
+}
+.diff-font-size-label-kebab {
+    margin-left: auto;
+    color: #605e5c;
+    font-size: 12px;
+}
+.diff-kebab-submenu-arrow {
+    font-size: 10px;
+    color: #605e5c;
+}
+.diff-kebab-subitem {
+    padding: 5px 20px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    color: #323130;
+}
+.diff-kebab-subitem:hover {
+    background: #f3f2f1;
+}
+.diff-kebab-subitem.active {
+    font-weight: 600;
+    color: #0078d4;
+}
 
 /* Hunk/thread jump navigation (shared styles) */
 .hunk-nav, .thread-nav {
