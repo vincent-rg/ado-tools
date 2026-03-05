@@ -31,6 +31,8 @@ function showReplyForm(threadId, prefix = '') {
         if (row && threadEl) {
             row.measuredHeight = null;
             currentDiffScroller.recalcLayout();
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
             if (replyFormThreadObserver) replyFormThreadObserver.disconnect();
             replyFormThreadObserver = new ResizeObserver(() => {
                 if (!currentDiffScroller) return;
@@ -38,6 +40,8 @@ function showReplyForm(threadId, prefix = '') {
                 if (newH > 0 && Math.abs(newH - (row.measuredHeight || 0)) > 1) {
                     row.measuredHeight = newH;
                     currentDiffScroller.recalcLayout();
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
                 }
             });
             replyFormThreadObserver.observe(threadEl);
@@ -64,6 +68,8 @@ function hideReplyForm(threadId, prefix = '') {
         if (row) {
             row.measuredHeight = null;
             currentDiffScroller.recalcLayout();
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
             const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
             requestAnimationFrame(() => {
                 if (!currentDiffScroller || !threadEl) return;
@@ -71,6 +77,8 @@ function hideReplyForm(threadId, prefix = '') {
                 if (actualH > 0 && actualH !== row.measuredHeight) {
                     row.measuredHeight = actualH;
                     currentDiffScroller.recalcLayout();
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
                 }
             });
         }
@@ -135,6 +143,8 @@ function startEditComment(threadId, commentId, prefix = '') {
         if (row && threadEl) {
             row.measuredHeight = null;
             currentDiffScroller.recalcLayout();
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
             if (editCommentThreadObserver) editCommentThreadObserver.disconnect();
             editCommentThreadObserver = new ResizeObserver(() => {
                 if (!currentDiffScroller) return;
@@ -142,6 +152,8 @@ function startEditComment(threadId, commentId, prefix = '') {
                 if (newH > 0 && Math.abs(newH - (row.measuredHeight || 0)) > 1) {
                     row.measuredHeight = newH;
                     currentDiffScroller.recalcLayout();
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
                 }
             });
             editCommentThreadObserver.observe(threadEl);
@@ -175,6 +187,8 @@ function cancelEditComment(threadId, commentId, prefix = '') {
         if (row) {
             row.measuredHeight = null;
             currentDiffScroller.recalcLayout();
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
             const threadEl = document.querySelector(`.inline-thread[data-thread-id="${threadId}"]`);
             requestAnimationFrame(() => {
                 if (!currentDiffScroller || !threadEl) return;
@@ -182,6 +196,8 @@ function cancelEditComment(threadId, commentId, prefix = '') {
                 if (actualH > 0 && actualH !== row.measuredHeight) {
                     row.measuredHeight = actualH;
                     currentDiffScroller.recalcLayout();
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
                 }
             });
         }

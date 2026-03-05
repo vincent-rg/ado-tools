@@ -755,7 +755,11 @@
         // Small files and non-virtual-scroll contexts fall back to insertAdjacentElement.
         function insertCommentFormAfterRow(formEl, rowEl) {
             if (currentDiffScroller && !currentDiffScroller.isSmallFile()) {
-                currentDiffScroller.insertFormRow(formEl, rowEl);
+                currentDiffScroller.insertFormRow(formEl, rowEl, () => {
+                    diffMinimapInvalidate?.();
+                    diffMinimapDraw?.();
+                    stickyLinesInvalidate?.();
+                });
                 diffMinimapInvalidate?.();
                 diffMinimapDraw?.();
                 stickyLinesInvalidate?.();
@@ -4260,11 +4264,13 @@
             const viewport = minimapWrap.querySelector('.diff-minimap-viewport');
 
             // When scroller is available, read code rows from data model (no DOM iteration)
-            let codeRows = null;   // [{minimapColor, top, height}] from scroller
+            let codeRows = null;      // code rows only — for search marker index mapping
+            let allMinimapRows = null; // all rows — for minimap color bars (includes thread rows)
             let lineItems = null;  // [{el, color}] legacy fallback
 
             if (scroller) {
                 codeRows = scroller.getCodeRows();
+                allMinimapRows = scroller.getAllRows();
                 if (codeRows.length === 0) return;
             } else {
                 const diffContainer = scrollArea.querySelector('.diff-lines');
@@ -4315,11 +4321,19 @@
                 ctx.clearRect(0, 0, w, h);
 
                 if (scroller) {
-                    // Data-model driven: read positions directly from row objects
-                    for (const row of codeRows) {
+                    // Data-model driven: read positions directly from row objects.
+                    // Iterate all rows so thread rows with inherited minimapColor are also drawn.
+                    for (const row of allMinimapRows) {
                         if (!row.minimapColor) continue;
                         ctx.fillStyle = row.minimapColor;
                         ctx.fillRect(1, Math.floor(row.top / totalH * h), w - 2, Math.max(Math.ceil(row.height / totalH * h), 1));
+                    }
+                    // Paint the spliced comment-creation form with the same color as the line
+                    // it's attached to, so its space doesn't appear as unmodified while editing.
+                    const formInfo = scroller.getExtraFormInfo();
+                    if (formInfo?.minimapColor) {
+                        ctx.fillStyle = formInfo.minimapColor;
+                        ctx.fillRect(1, Math.floor(formInfo.top / totalH * h), w - 2, Math.max(Math.ceil(formInfo.height / totalH * h), 1));
                     }
                     // Search markers
                     if (fileSearchHitLineIndices.length > 0) {

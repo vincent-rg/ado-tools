@@ -346,6 +346,34 @@ const DiffVirtualScroller = (() => {
             }
         }
 
+        // Assign minimapColor to thread rows: inherit from the preceding code row when the
+        // surrounding context is a contiguous zone of a single change type. This ensures that
+        // expanded thread panels inside an all-added / all-removed / all-modified zone are
+        // painted with that zone's color instead of appearing as unmodified space.
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (row.type !== 'thread' && row.type !== 'sbs-thread') continue;
+
+            // Color of the code row this thread is attached to
+            let precedingColor = null;
+            for (let j = i - 1; j >= 0; j--) {
+                if (rows[j].type === 'code') { precedingColor = rows[j].minimapColor; break; }
+            }
+            if (!precedingColor) continue;
+
+            // Color of the next code row after this thread block
+            let followingColor = undefined; // undefined = end of diff
+            for (let j = i + 1; j < rows.length; j++) {
+                if (rows[j].type === 'code') { followingColor = rows[j].minimapColor; break; }
+            }
+
+            // Apply only when the zone is contiguous and single-type:
+            // following row is unchanged (null), end of diff (undefined), or same color.
+            if (followingColor === undefined || followingColor === null || followingColor === precedingColor) {
+                row.minimapColor = precedingColor;
+            }
+        }
+
         return { rows, lineNumMapRight, lineNumMapLeft, hunkStarts, threadIdMap };
     }
 
@@ -1049,7 +1077,7 @@ const DiffVirtualScroller = (() => {
          * shifting all subsequent rows down so the form pushes content rather than overlaying it.
          * No-op for small files (which use normal DOM flow and don't need this).
          */
-        function insertFormRow(formEl, afterElement) {
+        function insertFormRow(formEl, afterElement, onLayoutChange) {
             if (_isSmallFile) return;
 
             // Reverse-lookup: find the row index that owns afterElement
@@ -1111,6 +1139,7 @@ const DiffVirtualScroller = (() => {
                 for (const [idx, el] of _renderedElements) {
                     if (idx > _extraFormAfterIndex) el.style.top = rows[idx].top + 'px';
                 }
+                onLayoutChange?.();
             });
             _extraFormObserver.observe(formEl);
         }
@@ -1137,6 +1166,16 @@ const DiffVirtualScroller = (() => {
             for (const [idx, el] of _renderedElements) {
                 if (idx > afterIndex) el.style.top = rows[idx].top + 'px';
             }
+        }
+
+        /**
+         * Return position and color of the spliced comment-form for minimap rendering,
+         * or null when no form is currently inserted.
+         */
+        function getExtraFormInfo() {
+            if (_extraFormAfterIndex < 0 || !_extraFormEl) return null;
+            const r = rows[_extraFormAfterIndex];
+            return { top: r.top + r.height, height: _extraFormShift, minimapColor: r.minimapColor ?? null };
         }
 
         function onRowRendered(callback) {
@@ -1179,6 +1218,7 @@ const DiffVirtualScroller = (() => {
             getTotalHeight,
             insertFormRow,
             removeFormRow,
+            getExtraFormInfo,
         };
     }
 
