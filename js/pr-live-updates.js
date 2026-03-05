@@ -141,6 +141,13 @@
                     const oldTotal = allIterations.length;
                     allIterations = newIterations;
 
+                    // Update merge base to reflect the new iteration's commonRefCommit.
+                    // A rebase creates a new iteration with a different merge base, so
+                    // currentMergeBase must be refreshed or "All" mode diffs will use the
+                    // old pre-rebase base commit.
+                    const newMergeBase = newIterations[newIterations.length - 1]?.commonRefCommit?.commitId;
+                    if (newMergeBase) currentMergeBase = newMergeBase;
+
                     // Update iterations count
                     const container = document.getElementById('updatesStatsContainer');
                     if (container) {

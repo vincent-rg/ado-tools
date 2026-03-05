@@ -3863,7 +3863,8 @@
         function getIterationCommits() {
             let baseCommit, sourceCommit;
             if (selectedIterationStart === null || selectedIterationEnd === null) {
-                // "All" mode
+                // "All" mode: use latest iteration's merge base so that rebased PRs
+                // compare against the current target, not the original pre-rebase base.
                 baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
                 sourceCommit = currentPRData.lastMergeSourceCommit?.commitId;
             } else {
@@ -3872,7 +3873,11 @@
                 const startIdx = selectedIterationStart - 2;
                 sourceCommit = allIterations[endIdx]?.sourceRefCommit?.commitId;
                 if (selectedIterationStart <= 1 || startIdx < 0) {
-                    baseCommit = currentMergeBase || currentPRData.lastMergeTargetCommit?.commitId;
+                    // Range starts at iteration 1: use that iteration's own merge base so that
+                    // each iteration range is anchored to the correct historical base commit.
+                    baseCommit = allIterations[0]?.commonRefCommit?.commitId
+                        || currentMergeBase
+                        || currentPRData.lastMergeTargetCommit?.commitId;
                 } else {
                     baseCommit = allIterations[startIdx]?.sourceRefCommit?.commitId;
                 }

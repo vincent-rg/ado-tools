@@ -109,9 +109,11 @@
 
             if (!sourceCommit || !targetBranchCommit) return null;
 
-            // Try iteration commonRefCommit first
-            if (allIterations.length > 0 && allIterations[0].commonRefCommit?.commitId) {
-                return allIterations[0].commonRefCommit.commitId;
+            // Try the last iteration's commonRefCommit — it reflects the current merge base,
+            // which may differ from iteration[0] when the PR branch was rebased.
+            const lastIter = allIterations.length > 0 ? allIterations[allIterations.length - 1] : null;
+            if (lastIter?.commonRefCommit?.commitId) {
+                return lastIter.commonRefCommit.commitId;
             }
 
             // Fallback: merge bases API
