@@ -988,6 +988,44 @@ mark.search-highlight.current {
     width: 100%;
 }
 
+.diff-pane-labels {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 10px;
+    font-size: 11px;
+    color: #888;
+    background: #f6f8fa;
+    border-bottom: 1px solid #e1dfdd;
+    font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+    flex-shrink: 0;
+}
+.diff-pane-labels-sbs {
+    gap: 0;
+}
+.diff-pane-label-old,
+.diff-pane-label-new {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.diff-pane-labels-sbs .diff-pane-label-old {
+    flex: 0 0 var(--sbs-left-pct, 50%);
+    border-right: 1px solid #e1dfdd;
+    padding-right: 8px;
+}
+.diff-pane-labels-sbs .diff-pane-label-new {
+    flex: 1 1 0;
+    padding-left: 8px;
+}
+.diff-commit-dot {
+    font-size: 9px;
+    line-height: 1;
+}
+.diff-commit-dot.old { color: #cf222e; }
+.diff-commit-dot.new { color: #1a7f37; }
+.diff-pane-label-arrow { color: #bbb; }
+
 .file-diff-body {
     flex: 1;
     display: flex;

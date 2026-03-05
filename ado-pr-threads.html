@@ -4008,6 +4008,7 @@
                             </div>
                         </div>
                         <div class="file-diff-body">
+                            <div class="diff-pane-labels"><span class="diff-commit-dot">&#x25cf;</span>${sourceCommit ? sourceCommit.substring(0, 7) : '—'}</div>
                             <div class="diff-scroll-row">
                                 <div class="diff-scroll-area">
                                     <div class="diff-lines"></div>
@@ -4848,6 +4849,11 @@
             const indicator = getChangeIndicator(changeType);
             const ct = changeType.toLowerCase();
 
+            const { baseCommit, sourceCommit } = getIterationCommits();
+            const _shortSha = s => s ? s.substring(0, 7) : null;
+            const oldCommitShort = ct.includes('add') ? null : _shortSha(baseCommit);
+            const newCommitShort = ct.includes('delete') ? null : _shortSha(sourceCommit);
+
             let renameInfo = '';
             if (ct.includes('rename') && sourceServerItem) {
                 renameInfo = `<div class="file-diff-rename-info">Renamed from ${ADOContent.escapeHtml(sourceServerItem)}</div>`;
@@ -4966,10 +4972,30 @@
             const sbsClass = isSbs ? ` diff-lines-sbs${singlePaneClass}` : singlePaneClass;
             const resizerHtml = (isSbs && !isSinglePane) ? '<div class="sbs-resizer" id="sbsResizer"></div>' : '';
 
+            let paneLabelsHtml = '';
+            if (isSbs && !isSinglePane) {
+                paneLabelsHtml = `<div class="diff-pane-labels diff-pane-labels-sbs">
+                    <div class="diff-pane-label-old"><span class="diff-commit-dot old">&#x25cf;</span>${oldCommitShort || '—'}</div>
+                    <div class="diff-pane-label-new"><span class="diff-commit-dot new">&#x25cf;</span>${newCommitShort || '—'}</div>
+                </div>`;
+            } else if (isSinglePane) {
+                const singleShort = ct.includes('add') ? newCommitShort : oldCommitShort;
+                const dotClass = ct.includes('add') ? 'new' : 'old';
+                paneLabelsHtml = `<div class="diff-pane-labels"><span class="diff-commit-dot ${dotClass}">&#x25cf;</span>${singleShort || '—'}</div>`;
+            } else {
+                // Inline, two versions
+                paneLabelsHtml = `<div class="diff-pane-labels">
+                    <span class="diff-pane-label-old"><span class="diff-commit-dot old">&#x25cf;</span>${oldCommitShort || '—'}</span>
+                    <span class="diff-pane-label-arrow">→</span>
+                    <span class="diff-pane-label-new"><span class="diff-commit-dot new">&#x25cf;</span>${newCommitShort || '—'}</span>
+                </div>`;
+            }
+
             // Render the scaffold with empty .diff-lines container
             diffPanel.innerHTML = `
                 ${headerHtml}
                 <div class="file-diff-body">
+                    ${paneLabelsHtml}
                     <div class="diff-scroll-row">
                         ${resizerHtml}
                         <div class="diff-scroll-area">
