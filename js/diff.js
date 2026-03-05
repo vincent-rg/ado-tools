@@ -54,6 +54,7 @@ const HistogramDiff = {
         // Each task is either:
         //   { type: 'region', oldStart, oldEnd, newStart, newEnd }
         //   { type: 'line', entry }  — a pre-resolved anchor line to emit
+        //   { type: 'unchanged_batch', lines, start, end }  — contiguous unchanged lines (suffix)
         const stack = [{ type: 'region', oldStart, oldEnd, newStart, newEnd }];
 
         while (stack.length > 0) {
@@ -64,7 +65,15 @@ const HistogramDiff = {
                 continue;
             }
 
-            const { oldStart: os, oldEnd: oe, newStart: ns, newEnd: ne } = task;
+            if (task.type === 'unchanged_batch') {
+                const { lines, start, end } = task;
+                for (let i = start; i < end; i++) {
+                    result.push({ type: 'unchanged', content: lines[i] });
+                }
+                continue;
+            }
+
+            let { oldStart: os, oldEnd: oe, newStart: ns, newEnd: ne } = task;
 
             // Empty region
             if (os >= oe && ns >= ne) continue;
@@ -76,6 +85,36 @@ const HistogramDiff = {
             }
 
             // All new lines added
+            if (ns >= ne) {
+                for (let i = os; i < oe; i++) result.push({ type: 'removed', content: oldLines[i] });
+                continue;
+            }
+
+            // Trim common prefix: emit unchanged lines directly (they come first in output)
+            while (os < oe && ns < ne && oldLines[os] === newLines[ns]) {
+                result.push({ type: 'unchanged', content: oldLines[os] });
+                os++;
+                ns++;
+            }
+
+            // Trim common suffix: defer as a batch task (processed after middle region)
+            let sfx = 0;
+            while (oe - 1 - sfx >= os && ne - 1 - sfx >= ns &&
+                   oldLines[oe - 1 - sfx] === newLines[ne - 1 - sfx]) {
+                sfx++;
+            }
+            if (sfx > 0) {
+                stack.push({ type: 'unchanged_batch', lines: oldLines, start: oe - sfx, end: oe });
+                oe -= sfx;
+                ne -= sfx;
+            }
+
+            // Re-check after trimming
+            if (os >= oe && ns >= ne) continue;
+            if (os >= oe) {
+                for (let j = ns; j < ne; j++) result.push({ type: 'added', content: newLines[j] });
+                continue;
+            }
             if (ns >= ne) {
                 for (let i = os; i < oe; i++) result.push({ type: 'removed', content: oldLines[i] });
                 continue;
