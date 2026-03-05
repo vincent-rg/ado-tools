@@ -26,6 +26,11 @@ function scrollToThread(threadId) {
                     if (actualH > 0 && actualH !== row.measuredHeight) {
                         row.measuredHeight = actualH;
                         currentDiffScroller.recalcLayout();
+                        // recalcLayout re-targets the smooth scroll if still in progress.
+                        // If it already settled, snap to the corrected position instantly.
+                        if (!currentDiffScroller.hasPendingScrollTarget()) {
+                            currentDiffScroller.scrollToRow(row, { block: 'center' });
+                        }
                     }
                 }
                 // Update gutter avatar

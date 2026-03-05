@@ -477,6 +477,7 @@ const DiffVirtualScroller = (() => {
         let _searchHighlights = null;  // Map<rowIndex, [{start, end}]> or null
         let _searchRegex = null;       // RegExp for applying highlights to rendered elements
         let _currentSearchMatch = null; // {rowIndex, offsetIndex} or null
+        let _pendingScrollTarget = null; // { row, block } set during smooth navigation; cleared on arrival
         let _mode = mode || 'inline';
 
         // Extra comment-form state (spliced between rows while editing)
@@ -729,6 +730,13 @@ const DiffVirtualScroller = (() => {
             _rafId = requestAnimationFrame(() => {
                 _rafId = null;
                 if (_destroyed) return;
+                // Clear pending navigation target once smooth scroll has settled
+                if (_pendingScrollTarget) {
+                    const expected = computeScrollTargetTop(_pendingScrollTarget.row, _pendingScrollTarget.block);
+                    if (Math.abs(_scrollArea.scrollTop - expected) <= 2) {
+                        _pendingScrollTarget = null;
+                    }
+                }
                 renderVisibleRows();
             });
         }
@@ -863,8 +871,14 @@ const DiffVirtualScroller = (() => {
                 _extraFormEl.style.top = (r.top + r.height) + 'px';
             }
 
-            // Anchor scroll position to prevent jump
-            if (_scrollArea) {
+            // If a navigation scroll is in progress, re-apply it to the updated row
+            // position rather than anchoring — anchoring would cancel the smooth scroll
+            // and land the viewport at the wrong place.
+            if (_pendingScrollTarget) {
+                const newTarget = computeScrollTargetTop(_pendingScrollTarget.row, _pendingScrollTarget.block);
+                _scrollArea.scrollTo({ top: newTarget, behavior: 'smooth' });
+            } else {
+                // Anchor scroll position to prevent jump during normal scrolling
                 _scrollArea.scrollTop = rows[anchorIdx].top + anchorOffset;
             }
         }
@@ -908,6 +922,19 @@ const DiffVirtualScroller = (() => {
             return rows;
         }
 
+        function computeScrollTargetTop(row, block) {
+            const viewportH = _scrollArea.clientHeight;
+            let top;
+            if (block === 'center') {
+                top = row.top + row.height / 2 - viewportH / 2;
+            } else if (block === 'start') {
+                top = row.top;
+            } else {
+                top = row.top + row.height - viewportH;
+            }
+            return Math.max(0, Math.min(top, _scrollArea.scrollHeight - viewportH));
+        }
+
         function scrollToRow(row, opts = {}) {
             if (!_scrollArea || !row) return;
             const block = opts.block || 'center';
@@ -915,22 +942,16 @@ const DiffVirtualScroller = (() => {
             // Ensure the row is rendered first
             ensureRowRendered(row);
 
-            const viewportH = _scrollArea.clientHeight;
-            let targetScrollTop;
-
-            if (block === 'center') {
-                targetScrollTop = row.top + row.height / 2 - viewportH / 2;
-            } else if (block === 'start') {
-                targetScrollTop = row.top;
-            } else {
-                targetScrollTop = row.top + row.height - viewportH;
-            }
-
-            targetScrollTop = Math.max(0, Math.min(targetScrollTop, _scrollArea.scrollHeight - viewportH));
+            const targetScrollTop = computeScrollTargetTop(row, block);
 
             if (opts.behavior === 'smooth') {
+                // Track the navigation target so recalcLayoutInternal can re-apply
+                // it (instead of doing scroll anchoring) if heights are measured
+                // and layout shifts during the smooth scroll animation.
+                _pendingScrollTarget = { row, block };
                 _scrollArea.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
             } else {
+                _pendingScrollTarget = null;
                 _scrollArea.scrollTop = targetScrollTop;
             }
 
@@ -1204,6 +1225,7 @@ const DiffVirtualScroller = (() => {
             getCodeRows,
             getAllRows,
             scrollToRow,
+            hasPendingScrollTarget: () => _pendingScrollTarget !== null,
             getRenderedElement,
             getTopVisibleCodeRow,
             getTopVisibleLineNum,
