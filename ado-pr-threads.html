@@ -2821,11 +2821,13 @@
                     buildIterationSelector();
                     fileTreeBuilt = true;
                 }
-                // Restore selected file from URL
-                const _restoredFile = new URLSearchParams(window.location.search).get('file');
+                // Restore selected file (and thread) from URL
+                const _restoredParams = new URLSearchParams(window.location.search);
+                const _restoredFile = _restoredParams.get('file');
                 if (_restoredFile && !selectedFilePath) {
                     const entry = allChangeEntries.find(e => e.item?.path === _restoredFile);
-                    selectFileForDiff(_restoredFile, entry?.changeType || 'none');
+                    const _restoredThread = parseInt(_restoredParams.get('thread')) || null;
+                    selectFileForDiff(_restoredFile, entry?.changeType || 'none', _restoredThread);
                 }
             } else if (currentView === 'updates') {
                 const overviewView = document.getElementById('overviewView');
@@ -3715,11 +3717,16 @@
             refreshFilesForIterationRange();
         }
 
-        function viewChangesSinceThread(fromIter) {
+        async function viewChangesSinceThread(fromIter, threadId) {
+            const filePath = selectedFilePath;
             selectedIterationStart = fromIter + 1;
             selectedIterationEnd = allIterations.length;
             buildIterationSelector();
-            refreshFilesForIterationRange();
+            await refreshFilesForIterationRange();
+            if (filePath) {
+                const entry = allChangeEntries.find(e => e.item?.path === filePath);
+                await selectFileForDiff(filePath, entry?.changeType || 'edit', threadId);
+            }
         }
 
         // Drag logic for iteration range handles
@@ -4034,9 +4041,14 @@
 
             selectedFilePath = filePath;
 
-            // Reflect selected file in URL for shareability
+            // Reflect selected file (and optionally thread) in URL for shareability
             const _fileUrl = new URL(window.location);
             _fileUrl.searchParams.set('file', filePath);
+            if (scrollToThreadId) {
+                _fileUrl.searchParams.set('thread', scrollToThreadId);
+            } else {
+                _fileUrl.searchParams.delete('thread');
+            }
             history.replaceState(null, '', _fileUrl);
 
             const diffPanel = document.getElementById('fileDiffPanel');
