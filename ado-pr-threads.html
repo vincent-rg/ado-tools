@@ -3577,7 +3577,9 @@
 
             container.style.display = '';
             const isUpdateMode = selectedIterationStart !== null;
-            const panelWasOpen = document.getElementById('iterationPanel')?.classList.contains('open') ?? true;
+            const existingPanel = document.getElementById('iterationPanel');
+            const panelWasOpen = existingPanel?.classList.contains('open') ?? true;
+            const panelScrollTop = existingPanel?.scrollTop ?? 0;
             const chevron = panelWasOpen ? '\u25BE' : '\u25B8';
 
             let html = '<div class="iteration-selector-bar">';
@@ -3642,6 +3644,10 @@
             }
 
             container.innerHTML = html;
+            if (panelScrollTop) {
+                const newPanel = document.getElementById('iterationPanel');
+                if (newPanel) newPanel.scrollTop = panelScrollTop;
+            }
         }
 
         function toggleIterationPanel() {
