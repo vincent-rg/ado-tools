@@ -46,13 +46,13 @@
                     <div class="filter-section">
                         <h4>Thread Status</h4>
                         <div class="status-chips-vertical">
-                            <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this)">Active</button>
-                            <button class="status-chip selected" data-status="fixed" onclick="toggleStatusChip(this)">Resolved</button>
-                            <button class="status-chip selected" data-status="closed" onclick="toggleStatusChip(this)">Closed</button>
-                            <button class="status-chip selected" data-status="wontFix" onclick="toggleStatusChip(this)">Won't Fix</button>
-                            <button class="status-chip selected" data-status="pending" onclick="toggleStatusChip(this)">Pending</button>
-                            <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this)">Unknown</button>
-                            <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this)">No status</button>
+                            <button class="status-chip selected" data-status="active" onclick="toggleStatusChip(this, event)">Active</button>
+                            <button class="status-chip selected" data-status="fixed" onclick="toggleStatusChip(this, event)">Resolved</button>
+                            <button class="status-chip selected" data-status="closed" onclick="toggleStatusChip(this, event)">Closed</button>
+                            <button class="status-chip selected" data-status="wontFix" onclick="toggleStatusChip(this, event)">Won't Fix</button>
+                            <button class="status-chip selected" data-status="pending" onclick="toggleStatusChip(this, event)">Pending</button>
+                            <button class="status-chip" data-status="unknown" onclick="toggleStatusChip(this, event)">Unknown</button>
+                            <button class="status-chip" data-status="noStatus" onclick="toggleStatusChip(this, event)">No status</button>
                         </div>
                         <label class="checkbox-label">
                             <input type="checkbox" id="showDeleted" onchange="applyThreadFilters()">
@@ -1415,8 +1415,14 @@
             localStorage.setItem('threadFiltersSidebarCollapsed', isCollapsed ? '1' : '0');
         }
 
-        function toggleStatusChip(button) {
-            button.classList.toggle('selected');
+        function toggleStatusChip(button, event) {
+            if (event && event.ctrlKey) {
+                const allChips = document.querySelectorAll('.sidebar .status-chip');
+                allChips.forEach(chip => chip.classList.remove('selected'));
+                button.classList.add('selected');
+            } else {
+                button.classList.toggle('selected');
+            }
             applyThreadFilters();
         }
 
