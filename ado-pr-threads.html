@@ -4328,7 +4328,7 @@
             if (!appliesToView) html += `<span style="color: #a19f9d; font-size: 10px; font-style: italic;">from update ${threadIter}</span>`;
             if (commentCount > 1) html += `<span style="color: #8a8886; font-size: 11px;">${commentCount} comments</span>`;
             if (statusControl) html += statusControl;
-            if (threadIter !== undefined && threadIter < allIterations.length) html += `<button class="btn-secondary" onclick="viewChangesSinceThread(${threadIter})" style="padding: 1px 6px; font-size: 10px;" title="Show changes after update ${threadIter} (update ${threadIter + 1} to ${allIterations.length})">Since update ${threadIter} →</button>`;
+            if (threadIter !== undefined && threadIter < allIterations.length) html += `<button class="btn-secondary" onclick="viewChangesSinceThread(${threadIter}, ${threadId})" style="padding: 1px 6px; font-size: 10px;" title="Show changes after update ${threadIter} (update ${threadIter + 1} to ${allIterations.length})">Since update ${threadIter} →</button>`;
             html += `<span style="margin-left: auto; cursor: pointer; color: #605e5c; font-size: 14px;" onclick="toggleInlineThread(${threadId})" title="Collapse thread">&times;</span>`;
             html += `</div>`;
 
