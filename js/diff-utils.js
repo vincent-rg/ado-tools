@@ -67,7 +67,22 @@ function applyThreadHighlight(rawContent, lineNum, tr) {
     }
 }
 
-function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges) {
+function buildCharDiffHtml(charDiff, isNewLine) {
+    let result = '';
+    for (const token of charDiff) {
+        const escaped = _escapeHtml(token.text);
+        if (token.type === 'unchanged') {
+            result += escaped;
+        } else if (token.type === 'added' && isNewLine) {
+            result += `<span class="diff-char-added">${escaped}</span>`;
+        } else if (token.type === 'removed' && !isNewLine) {
+            result += `<span class="diff-char-removed">${escaped}</span>`;
+        }
+    }
+    return result;
+}
+
+function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges, charDiff = null) {
     for (const tr of threadRanges) {
         if (!tr.appliesToView) continue;
         const matchesRight = tr.useRight && isNewLine && lineNum >= tr.startLine && lineNum <= tr.endLine;
@@ -75,6 +90,9 @@ function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges) {
         if (matchesRight || matchesLeft) {
             return { html: applyThreadHighlight(rawContent, lineNum, tr), commented: true };
         }
+    }
+    if (charDiff) {
+        return { html: buildCharDiffHtml(charDiff, isNewLine), commented: false };
     }
     return { html: _escapeHtml(rawContent), commented: false };
 }
@@ -142,14 +160,14 @@ function renderDiffLines(diff, threadRanges, options = {}) {
         } else if (entry.type === 'removed') {
             if (!inChange) { hunkAttr = ` data-hunk="${hunkIndex++}"`; inChange = true; }
             curOld = oldLineNum;
-            ({ html: contentHtml } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges));
+            ({ html: contentHtml } = getHighlightedContent(entry.content, oldLineNum, false, threadRanges, entry.charDiff || null));
             const prefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
             html += `<div class="diff-line diff-removed"${hunkAttr}><span class="diff-avatar-slot">${prefix}</span><span class="diff-line-number">${oldLineNum}</span><span class="diff-line-number"></span><span class="diff-indicator">−</span><span class="diff-content">${contentHtml}</span></div>`;
             oldLineNum++;
         } else if (entry.type === 'added') {
             if (!inChange) { hunkAttr = ` data-hunk="${hunkIndex++}"`; inChange = true; }
             curNew = newLineNum;
-            ({ html: contentHtml } = getHighlightedContent(entry.content, newLineNum, true, threadRanges));
+            ({ html: contentHtml } = getHighlightedContent(entry.content, newLineNum, true, threadRanges, entry.charDiff || null));
             const prefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
             html += `<div class="diff-line diff-added"${hunkAttr}><span class="diff-avatar-slot">${prefix}</span><span class="diff-line-number"></span><span class="diff-line-number">${newLineNum}</span><span class="diff-indicator">+</span><span class="diff-content">${contentHtml}</span></div>`;
             newLineNum++;
@@ -209,7 +227,7 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
 
                 if (j < removed.length) {
                     curOld = oldLineNum;
-                    const { html: cHtml } = getHighlightedContent(removed[j].content, oldLineNum, false, threadRanges);
+                    const { html: cHtml } = getHighlightedContent(removed[j].content, oldLineNum, false, threadRanges, removed[j].charDiff || null);
                     const leftSlot = `<span class="diff-avatar-slot">${getLinePrefix ? getLinePrefix(null, oldLineNum) : ''}</span>`;
                     leftHtml = `<div class="sbs-left diff-removed">${leftSlot}<span class="diff-line-number">${oldLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
                     oldLineNum++;
@@ -219,7 +237,7 @@ function renderDiffLinesSideBySide(diff, threadRanges, options = {}) {
 
                 if (j < added.length) {
                     curNew = newLineNum;
-                    const { html: cHtml } = getHighlightedContent(added[j].content, newLineNum, true, threadRanges);
+                    const { html: cHtml } = getHighlightedContent(added[j].content, newLineNum, true, threadRanges, added[j].charDiff || null);
                     const rightSlot = `<span class="diff-avatar-slot">${getLinePrefix ? getLinePrefix(newLineNum, null) : ''}</span>`;
                     rightHtml = `<div class="sbs-right diff-added">${rightSlot}<span class="diff-line-number">${newLineNum}</span><span class="diff-content">${cHtml}</span></div>`;
                     newLineNum++;
@@ -369,6 +387,7 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
         removedCount = diffResult.length;
     } else {
         diffResult = diffAlgo.diff(oldContent, newContent, diffOptions);
+        if (diffAlgo.addCharDiffs) diffAlgo.addCharDiffs(diffResult);
         addedCount = 0;
         removedCount = 0;
         for (const entry of diffResult) {
@@ -392,6 +411,7 @@ const DiffUtils = {
     cropDiffToRegion,
     buildThreadRange,
     applyThreadHighlight,
+    buildCharDiffHtml,
     getHighlightedContent,
     renderDiffLines,
     renderDiffLinesSideBySide,

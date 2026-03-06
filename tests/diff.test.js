@@ -228,6 +228,43 @@ describe('HistogramDiff', () => {
         });
     });
 
+    describe('addCharDiffs', () => {
+        it('annotates paired removed/added lines with charDiff', () => {
+            const diff = HistogramDiff.diff('hello world\nfoo', 'hello earth\nfoo');
+            HistogramDiff.addCharDiffs(diff);
+            const removed = diff.find(e => e.type === 'removed');
+            const added = diff.find(e => e.type === 'added');
+            expect(removed.charDiff).toBeDefined();
+            expect(added.charDiff).toBeDefined();
+            expect(removed.charDiff).toBe(added.charDiff); // same array
+        });
+
+        it('charDiff tokens reconstruct both original lines', () => {
+            const diff = HistogramDiff.diff('foo bar baz', 'foo qux baz');
+            HistogramDiff.addCharDiffs(diff);
+            const removed = diff.find(e => e.type === 'removed');
+            const added = diff.find(e => e.type === 'added');
+            const oldText = removed.charDiff.filter(t => t.type !== 'added').map(t => t.text).join('');
+            const newText = added.charDiff.filter(t => t.type !== 'removed').map(t => t.text).join('');
+            expect(oldText).toBe('foo bar baz');
+            expect(newText).toBe('foo qux baz');
+        });
+
+        it('does not annotate completely different lines (low similarity)', () => {
+            const diff = HistogramDiff.diff('aaaaaaaaaa', 'zzzzzzzzzz');
+            HistogramDiff.addCharDiffs(diff);
+            const removed = diff.find(e => e.type === 'removed');
+            expect(removed.charDiff).toBeUndefined();
+        });
+
+        it('leaves unchanged lines unaffected', () => {
+            const diff = HistogramDiff.diff('same\nfoo', 'same\nbar');
+            HistogramDiff.addCharDiffs(diff);
+            const unchanged = diff.find(e => e.type === 'unchanged');
+            expect(unchanged.charDiff).toBeUndefined();
+        });
+    });
+
     describe('stats', () => {
         it('counts added and removed lines', () => {
             const result = HistogramDiff.stats('a\nb\nc', 'a\nx\ny\nc');

@@ -230,19 +230,19 @@ const DiffVirtualScroller = (() => {
                     if (j < removed.length) {
                         curOld = oldLineNum;
                         const leftPrefix = getLinePrefix ? getLinePrefix(null, oldLineNum) : '';
-                        sbsLeft = { lineNum: oldLineNum, content: removed[j].content, cssClass: isDeletedFile ? '' : 'diff-removed', prefixHtml: leftPrefix };
+                        sbsLeft = { lineNum: oldLineNum, content: removed[j].content, cssClass: isDeletedFile ? '' : 'diff-removed', prefixHtml: leftPrefix, charDiff: removed[j].charDiff || null };
                         oldLineNum++;
                     } else {
-                        sbsLeft = { lineNum: null, content: '', cssClass: isAddedFile ? 'sbs-gone' : 'sbs-empty', prefixHtml: '' };
+                        sbsLeft = { lineNum: null, content: '', cssClass: isAddedFile ? 'sbs-gone' : 'sbs-empty', prefixHtml: '', charDiff: null };
                     }
 
                     if (j < added.length) {
                         curNew = newLineNum;
                         const rightPrefix = getLinePrefix ? getLinePrefix(newLineNum, null) : '';
-                        sbsRight = { lineNum: newLineNum, content: added[j].content, cssClass: isAddedFile ? '' : 'diff-added', prefixHtml: rightPrefix };
+                        sbsRight = { lineNum: newLineNum, content: added[j].content, cssClass: isAddedFile ? '' : 'diff-added', prefixHtml: rightPrefix, charDiff: added[j].charDiff || null };
                         newLineNum++;
                     } else {
-                        sbsRight = { lineNum: null, content: '', cssClass: isDeletedFile ? 'sbs-gone' : 'sbs-empty', prefixHtml: '' };
+                        sbsRight = { lineNum: null, content: '', cssClass: isDeletedFile ? 'sbs-gone' : 'sbs-empty', prefixHtml: '', charDiff: null };
                     }
 
                     // Minimap color
@@ -503,9 +503,9 @@ const DiffVirtualScroller = (() => {
                     contentHtml = r.html;
                 }
             } else if (entry.type === 'removed') {
-                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || []));
+                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || [], entry.charDiff || null));
             } else if (entry.type === 'added') {
-                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || []));
+                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || [], entry.charDiff || null));
             }
 
             const indicator = row.cssClass === 'diff-removed' ? '−' : (row.cssClass === 'diff-added' ? '+' : ' ');
@@ -530,12 +530,12 @@ const DiffVirtualScroller = (() => {
             if (left.cssClass === 'sbs-empty' || left.cssClass === 'sbs-gone') {
                 leftContentHtml = '';
             } else {
-                ({ html: leftContentHtml } = DiffUtils.getHighlightedContent(left.content, left.lineNum, false, threadRangesRaw || []));
+                ({ html: leftContentHtml } = DiffUtils.getHighlightedContent(left.content, left.lineNum, false, threadRangesRaw || [], left.charDiff || null));
             }
             if (right.cssClass === 'sbs-empty' || right.cssClass === 'sbs-gone') {
                 rightContentHtml = '';
             } else {
-                ({ html: rightContentHtml } = DiffUtils.getHighlightedContent(right.content, right.lineNum, true, threadRangesRaw || []));
+                ({ html: rightContentHtml } = DiffUtils.getHighlightedContent(right.content, right.lineNum, true, threadRangesRaw || [], right.charDiff || null));
             }
 
             const leftNum = left.lineNum != null ? left.lineNum : '';

@@ -276,6 +276,93 @@ const HistogramDiff = {
     },
 
     /**
+     * Tokenize a line into words, whitespace runs, and individual symbols.
+     * Preserves all characters so tokens can be concatenated back to the original.
+     */
+    _tokenize(line) {
+        return line.match(/\s+|[A-Za-z0-9_]+|[^A-Za-z0-9_\s]/g) || [];
+    },
+
+    /**
+     * Compute a word-level diff between two lines.
+     * @returns {Array} [{type: 'unchanged'|'added'|'removed', text: string}]
+     */
+    _diffWords(oldLine, newLine) {
+        const oldToks = this._tokenize(oldLine);
+        const newToks = this._tokenize(newLine);
+        const m = oldToks.length, n = newToks.length;
+
+        const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                dp[i][j] = oldToks[i - 1] === newToks[j - 1]
+                    ? dp[i - 1][j - 1] + 1
+                    : Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+
+        const result = [];
+        let i = m, j = n;
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && oldToks[i - 1] === newToks[j - 1]) {
+                result.push({ type: 'unchanged', text: oldToks[i - 1] });
+                i--; j--;
+            } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                result.push({ type: 'added', text: newToks[j - 1] });
+                j--;
+            } else {
+                result.push({ type: 'removed', text: oldToks[i - 1] });
+                i--;
+            }
+        }
+        return result.reverse();
+    },
+
+    /**
+     * Annotate a line-level diff with word-level char diffs on changed line pairs.
+     * Mutates diff entries in-place by adding a `charDiff` property on paired
+     * removed/added entries. Only annotates pairs with ≥20% unchanged characters.
+     * Lines longer than 500 chars are skipped (too expensive / noisy).
+     * @param {Array} lineDiff - Output of diff() or diffLines()
+     * @returns {Array} Same array, mutated
+     */
+    addCharDiffs(lineDiff) {
+        let i = 0;
+        while (i < lineDiff.length) {
+            if (lineDiff[i].type !== 'removed') { i++; continue; }
+
+            const removedStart = i;
+            while (i < lineDiff.length && lineDiff[i].type === 'removed') i++;
+            const addedStart = i;
+            while (i < lineDiff.length && lineDiff[i].type === 'added') i++;
+            const addedEnd = i;
+
+            const removed = lineDiff.slice(removedStart, addedStart);
+            const added = lineDiff.slice(addedStart, addedEnd);
+            const pairs = Math.min(removed.length, added.length);
+
+            for (let j = 0; j < pairs; j++) {
+                const oldLine = removed[j].content;
+                const newLine = added[j].content;
+                if (oldLine.length > 500 || newLine.length > 500) continue;
+
+                const wordDiff = this._diffWords(oldLine, newLine);
+
+                let unchanged = 0, total = 0;
+                for (const t of wordDiff) {
+                    if (t.type === 'unchanged') unchanged += t.text.length;
+                    total += t.text.length;
+                }
+                if (total > 0 && unchanged / total >= 0.2) {
+                    removed[j].charDiff = wordDiff;
+                    added[j].charDiff = wordDiff;
+                }
+            }
+        }
+        return lineDiff;
+    },
+
+    /**
      * Count added and removed lines (for stats)
      * @param {string} oldText - Original text
      * @param {string} newText - New text

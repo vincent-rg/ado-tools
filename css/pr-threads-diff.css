@@ -298,6 +298,19 @@
     color: #cf222e;
 }
 
+/* Character-level diff highlights within changed lines */
+.diff-added .diff-char-added,
+.sbs-right.diff-added .diff-char-added {
+    background: #abf2bc;
+    border-radius: 2px;
+}
+
+.diff-removed .diff-char-removed,
+.sbs-left.diff-removed .diff-char-removed {
+    background: #ffc1ba;
+    border-radius: 2px;
+}
+
 /* Comment highlight is applied only on the selected character range via <mark> */
 
 /* Side-by-side diff mode */
