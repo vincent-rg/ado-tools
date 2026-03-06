@@ -1088,6 +1088,9 @@
                 if (selectedFilePath) {
                     params.set('file', selectedFilePath);
                 }
+                if (selectedIterationStart !== null) {
+                    params.set('iter', selectedIterationStart === selectedIterationEnd ? `${selectedIterationStart}` : `${selectedIterationStart}-${selectedIterationEnd}`);
+                }
             }
 
             const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
@@ -1213,11 +1216,18 @@
                 currentPRData = prData;
                 currentConfig = config;
 
-                // Fetch file change stats from the latest iteration compared to base (cumulative)
+                // Fetch file change stats — use iteration range from URL if restoring, otherwise full PR
                 let fileChangeStats = null;
                 if (allIterations.length > 0) {
                     try {
-                        const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, allIterations.length, 0);
+                        // Clamp URL-restored iteration bounds to actual iteration count
+                        if (selectedIterationStart !== null) {
+                            selectedIterationStart = Math.max(1, Math.min(selectedIterationStart, allIterations.length));
+                            selectedIterationEnd = Math.max(selectedIterationStart, Math.min(selectedIterationEnd, allIterations.length));
+                        }
+                        const _fetchEnd = selectedIterationStart !== null ? selectedIterationEnd : allIterations.length;
+                        const _fetchStart = selectedIterationStart !== null ? selectedIterationStart - 1 : 0;
+                        const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, _fetchEnd, _fetchStart);
                         const entries = changesData.changeEntries || [];
                         allChangeEntries = entries;
                         fileDiffCache.clear();
@@ -2947,11 +2957,19 @@
             const url = new URL(window.location);
             if (view === 'files') {
                 url.searchParams.set('view', 'files');
+                if (selectedIterationStart !== null) {
+                    url.searchParams.set('iter', selectedIterationStart === selectedIterationEnd ? `${selectedIterationStart}` : `${selectedIterationStart}-${selectedIterationEnd}`);
+                } else {
+                    url.searchParams.delete('iter');
+                }
             } else if (view === 'updates') {
                 url.searchParams.set('view', 'updates');
+                url.searchParams.delete('iter');
+                url.searchParams.delete('file');
             } else {
                 url.searchParams.delete('view');
                 url.searchParams.delete('file');
+                url.searchParams.delete('iter');
             }
             history.replaceState(null, '', url);
         }
@@ -3878,6 +3896,16 @@
                     const fileCount = allChangeEntries.filter(e => e.item?.path && e.item.gitObjectType !== 'tree' && !e.item.path.endsWith('/')).length;
                     filesTabBtn.textContent = `Files (${fileCount})`;
                 }
+
+                // Sync iter (and clear stale file) in URL
+                const _iterUrl = new URL(window.location);
+                if (selectedIterationStart !== null) {
+                    _iterUrl.searchParams.set('iter', selectedIterationStart === selectedIterationEnd ? `${selectedIterationStart}` : `${selectedIterationStart}-${selectedIterationEnd}`);
+                } else {
+                    _iterUrl.searchParams.delete('iter');
+                }
+                _iterUrl.searchParams.delete('file');
+                history.replaceState(null, '', _iterUrl);
             } catch (e) {
                 console.error('Failed to refresh files for iteration range:', e);
             }
@@ -5253,6 +5281,17 @@
             if (params.get('view') === 'files' || params.get('file')) {
                 // Will be applied after PR loads — just set the variable
                 currentView = 'files';
+                // Restore iteration mode: iter=2-3 means update mode with range 2→3
+                const iterParam = params.get('iter');
+                if (iterParam) {
+                    const parts = iterParam.split('-');
+                    const s = parseInt(parts[0]);
+                    const e = parseInt(parts[1] ?? parts[0]);
+                    if (!isNaN(s) && !isNaN(e) && s >= 1 && e >= s) {
+                        selectedIterationStart = s;
+                        selectedIterationEnd = e;
+                    }
+                }
             } else if (params.get('view') === 'updates') {
                 currentView = 'updates';
             }
