@@ -3576,63 +3576,70 @@
             }
 
             container.style.display = '';
-            const hasSel = selectedIterationStart !== null;
+            const isUpdateMode = selectedIterationStart !== null;
             const panelWasOpen = document.getElementById('iterationPanel')?.classList.contains('open') ?? true;
             const chevron = panelWasOpen ? '\u25BE' : '\u25B8';
-            const selText = hasSel
-                ? (selectedIterationStart === selectedIterationEnd ? `Update ${selectedIterationStart}` : `Updates ${selectedIterationStart}-${selectedIterationEnd}`)
-                : 'All';
 
             let html = '<div class="iteration-selector-bar">';
-            html += `<button class="iteration-collapse-toggle" onclick="toggleIterationPanel()">${chevron}</button>`;
-            html += '<span class="iteration-selector-label">Updates:</span>';
-            html += `<button class="iteration-btn${!hasSel ? ' active' : ''}" onclick="selectIterationAll()">All</button>`;
-            html += `<span class="iteration-selection-text">${selText}</span>`;
+            html += '<span class="iteration-selector-label">Compare:</span>';
+            html += '<div class="iteration-mode-group">';
+            html += `<button class="iteration-mode-btn${!isUpdateMode ? ' active' : ''}" onclick="selectModePRDiff()">vs. Target</button>`;
+            html += `<button class="iteration-mode-btn${isUpdateMode ? ' active' : ''}" onclick="selectModeByUpdate()">By update</button>`;
             html += '</div>';
-
-            html += `<div class="iteration-panel${panelWasOpen ? ' open' : ''}" id="iterationPanel">`;
-            const total = allIterations.length;
-            for (let i = 1; i <= total; i++) {
-                const iter = allIterations[i - 1];
-
-                if (i > 1) {
-                    const prevBase = allIterations[i - 2].commonRefCommit?.commitId;
-                    const currBase = iter.commonRefCommit?.commitId;
-                    if (prevBase && currBase && prevBase !== currBase) {
-                        const short = id => id.substring(0, 7);
-                        html += `<div class="iteration-rebase-separator" title="Base changed: ${short(prevBase)} \u2192 ${short(currBase)}">`;
-                        html += '<div class="iteration-node-col"></div>';
-                        html += '<div class="iteration-rebase-label">\u21bb rebased</div>';
-                        html += '</div>';
-                    }
-                }
-
-                const inRange = !hasSel || (i >= selectedIterationStart && i <= selectedIterationEnd);
-                const isStart = !hasSel ? i === 1 : i === selectedIterationStart;
-                const isEnd = !hasSel ? i === total : i === selectedIterationEnd;
-                const isEdge = isStart || isEnd;
-                let cls = 'iteration-row';
-                if (isEdge) cls += ' range-edge';
-                else if (inRange) cls += ' in-range';
-                if (isStart) cls += ' range-edge-start';
-                if (isEnd) cls += ' range-edge-end';
-
-                const date = formatIterationDate(iter.createdDate);
-                const commits = iter.commits || [];
-                const lastCommitMsg = commits.length > 0
-                    ? (commits[commits.length - 1].comment || '').split('\n')[0]
-                    : '';
-
-                html += `<div class="${cls}" data-iteration="${i}" onclick="selectIteration(${i})">`;
-                html += `<div class="iteration-node-col"><div class="iteration-node"${isEdge ? ` onmousedown="startIterationDrag(event, ${i})"` : ''}></div></div>`;
-                html += '<div class="iteration-info">';
-                html += `<div class="iteration-info-top"><span class="iteration-number">${i}</span><span class="iteration-date">${date}</span></div>`;
-                if (lastCommitMsg) {
-                    html += `<div class="iteration-commit">${lastCommitMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
-                }
-                html += '</div></div>';
+            if (isUpdateMode) {
+                const selText = selectedIterationStart === selectedIterationEnd
+                    ? `Update ${selectedIterationStart}`
+                    : `Updates ${selectedIterationStart}-${selectedIterationEnd}`;
+                html += `<span class="iteration-selection-text">${selText}</span>`;
+                html += `<button class="iteration-collapse-toggle" onclick="toggleIterationPanel()">${chevron}</button>`;
             }
             html += '</div>';
+
+            if (isUpdateMode) {
+                html += `<div class="iteration-panel${panelWasOpen ? ' open' : ''}" id="iterationPanel">`;
+                const total = allIterations.length;
+                for (let i = 1; i <= total; i++) {
+                    const iter = allIterations[i - 1];
+
+                    if (i > 1) {
+                        const prevBase = allIterations[i - 2].commonRefCommit?.commitId;
+                        const currBase = iter.commonRefCommit?.commitId;
+                        if (prevBase && currBase && prevBase !== currBase) {
+                            const short = id => id.substring(0, 7);
+                            html += `<div class="iteration-rebase-separator" title="Base changed: ${short(prevBase)} \u2192 ${short(currBase)}">`;
+                            html += '<div class="iteration-node-col"></div>';
+                            html += '<div class="iteration-rebase-label">\u21bb rebased</div>';
+                            html += '</div>';
+                        }
+                    }
+
+                    const inRange = i >= selectedIterationStart && i <= selectedIterationEnd;
+                    const isStart = i === selectedIterationStart;
+                    const isEnd = i === selectedIterationEnd;
+                    const isEdge = isStart || isEnd;
+                    let cls = 'iteration-row';
+                    if (isEdge) cls += ' range-edge';
+                    else if (inRange) cls += ' in-range';
+                    if (isStart) cls += ' range-edge-start';
+                    if (isEnd) cls += ' range-edge-end';
+
+                    const date = formatIterationDate(iter.createdDate);
+                    const commits = iter.commits || [];
+                    const lastCommitMsg = commits.length > 0
+                        ? (commits[commits.length - 1].comment || '').split('\n')[0]
+                        : '';
+
+                    html += `<div class="${cls}" data-iteration="${i}" onclick="selectIteration(${i})">`;
+                    html += `<div class="iteration-node-col"><div class="iteration-node"${isEdge ? ` onmousedown="startIterationDrag(event, ${i})"` : ''}></div></div>`;
+                    html += '<div class="iteration-info">';
+                    html += `<div class="iteration-info-top"><span class="iteration-number">${i}</span><span class="iteration-date">${date}</span></div>`;
+                    if (lastCommitMsg) {
+                        html += `<div class="iteration-commit">${lastCommitMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+                    }
+                    html += '</div></div>';
+                }
+                html += '</div>';
+            }
 
             container.innerHTML = html;
         }
@@ -3647,10 +3654,26 @@
             }
         }
 
-        function selectIterationAll() {
+        function selectModePRDiff() {
             if (selectedIterationStart === null) return;
             selectedIterationStart = null;
             selectedIterationEnd = null;
+            buildIterationSelector();
+            refreshFilesForIterationRange();
+        }
+
+        function selectModeByUpdate() {
+            if (selectedIterationStart !== null) {
+                // Already in update mode — open the panel if collapsed
+                const panel = document.getElementById('iterationPanel');
+                if (panel && !panel.classList.contains('open')) {
+                    toggleIterationPanel();
+                }
+                return;
+            }
+            // Switch from PR diff to update mode — default to the latest iteration
+            selectedIterationStart = allIterations.length;
+            selectedIterationEnd = allIterations.length;
             buildIterationSelector();
             refreshFilesForIterationRange();
         }
@@ -3749,24 +3772,22 @@
                 // Update selection text
                 const selText = document.querySelector('.iteration-selection-text');
                 if (selText) {
-                    const hasSel = selectedIterationStart !== null;
-                    selText.textContent = hasSel
-                        ? (selectedIterationStart === selectedIterationEnd ? `Update ${selectedIterationStart}` : `Updates ${selectedIterationStart}-${selectedIterationEnd}`)
-                        : 'All';
+                    selText.textContent = selectedIterationStart === selectedIterationEnd
+                        ? `Update ${selectedIterationStart}`
+                        : `Updates ${selectedIterationStart}-${selectedIterationEnd}`;
                 }
                 refreshFilesForIterationRange();
             }
         }
 
         function updateIterationDropdownVisuals() {
+            // Called during drag which only happens in update mode (selectedIterationStart !== null)
             const rows = document.querySelectorAll('.iteration-row');
-            const hasSel = selectedIterationStart !== null;
-            const total = allIterations.length;
             rows.forEach(row => {
                 const num = parseInt(row.dataset.iteration);
-                const inRange = !hasSel || (num >= selectedIterationStart && num <= selectedIterationEnd);
-                const isStart = !hasSel ? num === 1 : num === selectedIterationStart;
-                const isEnd = !hasSel ? num === total : num === selectedIterationEnd;
+                const inRange = num >= selectedIterationStart && num <= selectedIterationEnd;
+                const isStart = num === selectedIterationStart;
+                const isEnd = num === selectedIterationEnd;
                 const isEdge = isStart || isEnd;
 
                 row.classList.remove('range-edge', 'in-range', 'range-edge-start', 'range-edge-end');
@@ -3795,15 +3816,9 @@
             // Update selection text
             const selText = document.querySelector('.iteration-selection-text');
             if (selText) {
-                selText.textContent = hasSel
-                    ? (selectedIterationStart === selectedIterationEnd ? `Update ${selectedIterationStart}` : `Updates ${selectedIterationStart}-${selectedIterationEnd}`)
-                    : 'All';
-            }
-
-            // Update All button
-            const allBtn = document.querySelector('.iteration-selector .iteration-btn');
-            if (allBtn) {
-                allBtn.classList.toggle('active', !hasSel);
+                selText.textContent = selectedIterationStart === selectedIterationEnd
+                    ? `Update ${selectedIterationStart}`
+                    : `Updates ${selectedIterationStart}-${selectedIterationEnd}`;
             }
         }
 
