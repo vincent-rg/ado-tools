@@ -3599,12 +3599,14 @@
                     const th = handle.closest('th');
                     const startX = e.clientX;
                     const startWidth = th.offsetWidth;
+                    let dragged = false;
 
                     // Add resizing class
                     document.body.classList.add('column-resizing');
                     th.classList.add('resizing');
 
                     const onMouseMove = (e) => {
+                        dragged = true;
                         const delta = e.clientX - startX;
                         const newWidth = Math.max(50, startWidth + delta); // Minimum 50px
 
@@ -3638,6 +3640,17 @@
                         th.classList.remove('resizing');
                         document.removeEventListener('mousemove', onMouseMove);
                         document.removeEventListener('mouseup', onMouseUp);
+
+                        // After a drag, suppress the click event that fires on the th
+                        // (which would trigger sorting). Use capture phase to intercept
+                        // before the th's onclick handler.
+                        if (dragged) {
+                            const suppressClick = (e) => {
+                                e.stopPropagation();
+                                document.removeEventListener('click', suppressClick, true);
+                            };
+                            document.addEventListener('click', suppressClick, true);
+                        }
 
                         // Save column widths to localStorage
                         saveColumnWidths();
