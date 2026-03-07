@@ -1215,6 +1215,10 @@ const DiffVirtualScroller = (() => {
             return _totalHeight;
         }
 
+        function getCodeRowHeight() {
+            return _codeRowHeight;
+        }
+
         return {
             mount,
             destroy,
@@ -1238,6 +1242,7 @@ const DiffVirtualScroller = (() => {
             isSmallFile,
             getMode,
             getTotalHeight,
+            getCodeRowHeight,
             insertFormRow,
             removeFormRow,
             getExtraFormInfo,

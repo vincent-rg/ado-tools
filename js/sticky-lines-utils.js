@@ -219,7 +219,54 @@ const StickyLinesUtils = (() => {
         return lang === 'python' ? buildPythonTree(lines) : buildBraceTree(lines);
     }
 
-    return { getLanguage, isStructuralLine, findExtendedSignature, buildBraceTree, buildPythonTree, buildTree };
+    // Returns [{openLine, closeLine, content}] sorted outermost-first (by openLine),
+    // or null for unsupported languages.
+    // minBlockLines: scopes shorter than this (closeLine - openLine + 1 < minBlockLines) are excluded.
+    function buildScopeList(content, filePath, minBlockLines = 0) {
+        const result = buildTree(content, filePath);
+        if (!result) return null;
+        const { tree, blockEndLines } = result;
+        const seen = new Set();
+        const scopes = [];
+        for (const ancestors of tree.values()) {
+            for (const a of ancestors) {
+                if (!seen.has(a.lineNum)) {
+                    seen.add(a.lineNum);
+                    const closeLine = blockEndLines.get(a.lineNum);
+                    if (closeLine != null) {
+                        if (closeLine - a.lineNum + 1 >= minBlockLines) {
+                            scopes.push({ openLine: a.lineNum, closeLine, content: a.content });
+                        }
+                    }
+                }
+            }
+        }
+        scopes.sort((a, b) => a.openLine - b.openLine);
+        return scopes;
+    }
+
+    // Pure implementation of the sticky-bar visibility algorithm.
+    // scopes: [{openLine, closeLine, content}] sorted outermost-first.
+    // scrollTop: current scroll position (pixels).
+    // H: height of one code row (pixels) — used as the bar-slot height per shown scope.
+    // getLineTop: (lineNum) => pixelOffset | null — maps line number to top-of-row pixel offset.
+    // Returns the subset of scopes that should be shown in the sticky bar, in order.
+    function computeVisible(scopes, scrollTop, H, getLineTop) {
+        const shown = [];
+        let barHeight = 0;
+        for (const scope of scopes) {
+            const openTop = getLineTop(scope.openLine);
+            const closeTop = getLineTop(scope.closeLine);
+            if (openTop == null || closeTop == null) continue;
+            if (openTop <= scrollTop + barHeight && closeTop > scrollTop + barHeight + H) {
+                shown.push(scope);
+                barHeight += H;
+            }
+        }
+        return shown;
+    }
+
+    return { getLanguage, isStructuralLine, findExtendedSignature, buildBraceTree, buildPythonTree, buildTree, buildScopeList, computeVisible };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

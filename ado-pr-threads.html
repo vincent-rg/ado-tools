@@ -4771,117 +4771,96 @@
             const MIN_BLOCK_LINES = 8; // Minimum source lines a block must span to appear in sticky bar
             let _scrollArea = null;
             let _scrollHandler = null;
-            let _oldTree = null; // { tree: Map<lineNum, ancestor[]>, blockEndLines: Map<lineNum, endLineNum> }
-            let _newTree = null; // same shape
+            let _oldScopes = null; // [{openLine, closeLine, content}] sorted outermost-first, or null
+            let _newScopes = null; // same shape
             let _bar = null;
             let _isSbs = false;
             let _rafPending = false;
             let _scroller = null; // optional DiffVirtualScroller instance
-            // Position caches: [{bottom, lineNum}] sorted by bottom (scroll-relative coords).
-            // Built lazily on first getTopLineNum call, invalidated on resize / thread toggle.
-            // Only used when no scroller is available (legacy path).
-            let _cacheLeft = null;
-            let _cacheRight = null;
-            let _cacheInline = null;
+            // Position caches: Map<lineNum, topOffset> — built lazily on first update call.
+            // Invalidated on resize / thread toggle. Only used when no scroller is available.
+            let _lineTopLeft = null;
+            let _lineTopRight = null;
+            let _lineTopInline = null;
+            // Row element maps for scrollToLine legacy DOM path.
             let _rowMapLeft = null;
             let _rowMapRight = null;
             let _rowMapInline = null;
             let _resizeObserver = null;
 
-            // Pure tree-building functions are in sticky-lines-utils.js (StickyLinesUtils).
-            const getLanguage = StickyLinesUtils.getLanguage;
-            const buildTree = StickyLinesUtils.buildTree;
-
-            function filterAncestors(ancestors, blockEndLines) {
-                if (!ancestors || !ancestors.length) return ancestors;
-                return ancestors.filter(a => {
-                    const endLine = blockEndLines?.get(a.lineNum);
-                    if (!endLine) return true;
-                    return (endLine - a.lineNum + 1) >= MIN_BLOCK_LINES;
-                });
-            }
-
-            // Legacy: build scroll-relative position caches from DOM
+            // Legacy: build scroll-relative position caches from DOM.
+            // Populates Map<lineNum, topOffset> (for computeVisible) and Map<lineNum, rowEl>
+            // (for scrollToLine).
             function buildPositionCaches() {
                 if (!_scrollArea) return;
                 const areaRect = _scrollArea.getBoundingClientRect();
                 const scrollTop = _scrollArea.scrollTop;
                 if (_isSbs) {
-                    _cacheLeft = [];
-                    _cacheRight = [];
+                    _lineTopLeft = new Map();
+                    _lineTopRight = new Map();
                     _rowMapLeft = new Map();
                     _rowMapRight = new Map();
                     for (const row of _scrollArea.querySelectorAll('.sbs-row')) {
                         const rowRect = row.getBoundingClientRect();
-                        const bottom = rowRect.bottom - areaRect.top + scrollTop;
+                        const top = rowRect.top - areaRect.top + scrollTop;
                         const leftN = row.querySelector('.sbs-left .diff-line-number')?.textContent?.trim();
                         const rightN = row.querySelector('.sbs-right .diff-line-number')?.textContent?.trim();
-                        if (leftN) { const n = parseInt(leftN, 10); _cacheLeft.push({ bottom, lineNum: n }); _rowMapLeft.set(n, row); }
-                        if (rightN) { const n = parseInt(rightN, 10); _cacheRight.push({ bottom, lineNum: n }); _rowMapRight.set(n, row); }
+                        if (leftN) { const n = parseInt(leftN, 10); _lineTopLeft.set(n, top); _rowMapLeft.set(n, row); }
+                        if (rightN) { const n = parseInt(rightN, 10); _lineTopRight.set(n, top); _rowMapRight.set(n, row); }
                     }
                 } else {
-                    _cacheInline = [];
+                    _lineTopInline = new Map();
                     _rowMapInline = new Map();
                     for (const row of _scrollArea.querySelectorAll('.diff-line')) {
                         const rowRect = row.getBoundingClientRect();
-                        const bottom = rowRect.bottom - areaRect.top + scrollTop;
+                        const top = rowRect.top - areaRect.top + scrollTop;
                         const spans = row.querySelectorAll('.diff-line-number');
                         const n = spans[1]?.textContent?.trim() || spans[0]?.textContent?.trim();
-                        if (n) { const ln = parseInt(n, 10); _cacheInline.push({ bottom, lineNum: ln }); _rowMapInline.set(ln, row); }
+                        if (n) { const ln = parseInt(n, 10); _lineTopInline.set(ln, top); _rowMapInline.set(ln, row); }
                     }
                 }
             }
 
-            function firstVisibleLineNum(cache, scrollTop) {
-                let lo = 0, hi = cache.length - 1, result = -1;
-                while (lo <= hi) {
-                    const mid = (lo + hi) >> 1;
-                    if (cache[mid].bottom > scrollTop) { result = mid; hi = mid - 1; }
-                    else lo = mid + 1;
-                }
-                return result === -1 ? null : cache[result].lineNum;
-            }
-
-            function getTopLineNum(paneSelector) {
-                if (!_scrollArea) return null;
-
-                // Scroller path: use data model directly
+            // Returns a getLineTop function for the given side.
+            // Scroller path: queries the data model directly.
+            // Legacy DOM path: builds position caches lazily, then looks up the Map.
+            function makeGetLineTop(side) {
                 if (_scroller) {
-                    if (_isSbs) {
-                        const side = paneSelector?.includes('left') ? 'old' : 'new';
-                        return _scroller.getTopVisibleLineNum(side);
-                    }
-                    return _scroller.getTopVisibleLineNum(null);
+                    return lineNum => {
+                        const row = _scroller.getRowByLineNum(lineNum, side);
+                        return row ? row.top : null;
+                    };
                 }
-
-                // Legacy DOM path
-                const scrollTop = _scrollArea.scrollTop;
-                if (_isSbs) {
-                    const cache = paneSelector?.includes('left') ? _cacheLeft : _cacheRight;
-                    if (!cache) { buildPositionCaches(); }
-                    const c = paneSelector?.includes('left') ? _cacheLeft : _cacheRight;
-                    return c ? firstVisibleLineNum(c, scrollTop) : null;
-                } else {
-                    if (!_cacheInline) buildPositionCaches();
-                    return _cacheInline ? firstVisibleLineNum(_cacheInline, scrollTop) : null;
-                }
+                // Legacy DOM path: ensure caches built.
+                if (!_lineTopLeft && !_lineTopRight && !_lineTopInline) buildPositionCaches();
+                const map = _isSbs
+                    ? (side === 'old' ? _lineTopLeft : _lineTopRight)
+                    : _lineTopInline;
+                return lineNum => map?.get(lineNum) ?? null;
             }
 
-            function renderPane(paneEl, ancestors, side) {
+            // Fallback code-row height measurement for the legacy DOM path.
+            function _getCodeRowHeightFromDom() {
+                const el = _scrollArea?.querySelector('.diff-line') || _scrollArea?.querySelector('.sbs-row');
+                if (el) return el.getBoundingClientRect().height || 19;
+                return 19;
+            }
+
+            function renderPane(paneEl, scopes, side) {
                 if (!paneEl) return;
-                if (!ancestors || !ancestors.length) { paneEl.innerHTML = ''; return; }
-                const shown = ancestors.slice(-MAX_LINES);
-                paneEl.innerHTML = shown.map(a => {
+                if (!scopes || !scopes.length) { paneEl.innerHTML = ''; return; }
+                const shown = scopes.slice(-MAX_LINES);
+                paneEl.innerHTML = shown.map(scope => {
                     const cols = _isSbs
                         ? `<span class="sticky-avatar-spacer"></span>` +
-                          `<span class="sticky-line-num">${a.lineNum}</span>`
+                          `<span class="sticky-line-num">${scope.openLine}</span>`
                         : `<span class="sticky-avatar-spacer"></span>` +
                           `<span class="sticky-line-num"></span>` +
-                          `<span class="sticky-line-num">${a.lineNum}</span>` +
+                          `<span class="sticky-line-num">${scope.openLine}</span>` +
                           `<span class="sticky-indicator-spacer"></span>`;
-                    return `<div class="sticky-line" data-line="${a.lineNum}" data-side="${side}">` +
+                    return `<div class="sticky-line" data-line="${scope.openLine}" data-side="${side}">` +
                         cols +
-                        `<span class="sticky-line-content">${ADOContent.escapeHtml(a.content)}</span>` +
+                        `<span class="sticky-line-content">${ADOContent.escapeHtml(scope.content)}</span>` +
                         `</div>`;
                 }).join('');
             }
@@ -4898,8 +4877,8 @@
                 }
 
                 // Legacy DOM path
-                if (_isSbs && !_cacheLeft) buildPositionCaches();
-                if (!_isSbs && !_cacheInline) buildPositionCaches();
+                if (_isSbs && !_rowMapLeft) buildPositionCaches();
+                if (!_isSbs && !_rowMapInline) buildPositionCaches();
                 let target = null;
                 if (_isSbs) {
                     target = (side === 'left' ? _rowMapLeft : _rowMapRight)?.get(lineNum) ?? null;
@@ -4916,25 +4895,38 @@
                 requestAnimationFrame(() => {
                     _rafPending = false;
                     if (!_bar || !_scrollArea) return;
+                    const rawScrollTop = _scrollArea.scrollTop;
+                    // The bar is position:sticky inside the scroll area and participates in
+                    // normal flow, so its height pushes .diff-lines down by prevBarHeight px.
+                    // For the scroller path, row.top values are relative to .diff-lines (not
+                    // the scroll area), so we subtract prevBarHeight to get the correct
+                    // content-relative scroll position for computeVisible.
+                    // For the legacy DOM path, position caches are built from bounding rects
+                    // which already include the bar offset, so rawScrollTop is correct there.
+                    const prevBarHeight = _bar.offsetHeight;
+                    const effectiveScrollTop = _scroller ? rawScrollTop - prevBarHeight : rawScrollTop;
+                    const H = _scroller ? _scroller.getCodeRowHeight() : _getCodeRowHeightFromDom();
                     if (_isSbs) {
                         const lPane = _bar.querySelector('.sticky-pane-left');
                         const rPane = _bar.querySelector('.sticky-pane-right');
-                        const lLine = getTopLineNum('.sbs-left');
-                        const rLine = getTopLineNum('.sbs-right');
-                        const lAnc = (lLine && _oldTree) ? (_oldTree.tree.get(lLine) || null) : null;
-                        const rAnc = (rLine && _newTree) ? (_newTree.tree.get(rLine) || null) : null;
-                        const filteredL = filterAncestors(lAnc, _oldTree?.blockEndLines);
-                        const filteredR = filterAncestors(rAnc, _newTree?.blockEndLines);
-                        renderPane(lPane, filteredL, 'left');
-                        renderPane(rPane, filteredR, 'right');
-                        _bar.style.display = ((filteredL?.length || 0) + (filteredR?.length || 0)) > 0 ? '' : 'none';
+                        const lScopes = _oldScopes ? StickyLinesUtils.computeVisible(_oldScopes, effectiveScrollTop, H, makeGetLineTop('old')) : [];
+                        const rScopes = _newScopes ? StickyLinesUtils.computeVisible(_newScopes, effectiveScrollTop, H, makeGetLineTop('new')) : [];
+                        renderPane(lPane, lScopes, 'left');
+                        renderPane(rPane, rScopes, 'right');
+                        _bar.style.display = (lScopes.length + rScopes.length) > 0 ? '' : 'none';
                     } else {
                         const sPane = _bar.querySelector('.sticky-pane-single');
-                        const line = getTopLineNum(null);
-                        const anc = (line && _newTree) ? (_newTree.tree.get(line) || null) : null;
-                        const filtered = filterAncestors(anc, _newTree?.blockEndLines);
-                        renderPane(sPane, filtered, 'right');
-                        _bar.style.display = (filtered?.length || 0) > 0 ? '' : 'none';
+                        const scopes = StickyLinesUtils.computeVisible(_newScopes || [], effectiveScrollTop, H, makeGetLineTop('new'));
+                        renderPane(sPane, scopes, 'right');
+                        _bar.style.display = scopes.length > 0 ? '' : 'none';
+                    }
+                    // Compensate scrollTop for any change in bar height so the diff content
+                    // doesn't jump. When the bar grows/shrinks, .diff-lines shifts by the
+                    // same amount; adding the delta to scrollTop keeps the visible rows stable.
+                    const newBarHeight = _bar.offsetHeight;
+                    const delta = newBarHeight - prevBarHeight;
+                    if (delta !== 0) {
+                        _scrollArea.scrollTop = rawScrollTop + delta;
                     }
                 });
             }
@@ -4949,15 +4941,15 @@
                 }
                 _scrollArea = null;
                 _scrollHandler = null;
-                _oldTree = null;
-                _newTree = null;
+                _oldScopes = null;
+                _newScopes = null;
                 _bar = null;
                 _isSbs = false;
                 _rafPending = false;
                 _scroller = null;
-                _cacheLeft = null;
-                _cacheRight = null;
-                _cacheInline = null;
+                _lineTopLeft = null;
+                _lineTopRight = null;
+                _lineTopInline = null;
                 _rowMapLeft = null;
                 _rowMapRight = null;
                 _rowMapInline = null;
@@ -4966,13 +4958,13 @@
 
             function init(diffPanel, oldContent, newContent, filePath, isSbs, scroller) {
                 destroy();
-                if (!getLanguage(filePath)) return;
+                if (!StickyLinesUtils.getLanguage(filePath)) return;
                 _isSbs = isSbs;
                 _scroller = scroller || null;
-                _oldTree = oldContent ? buildTree(oldContent, filePath) : null;
-                _newTree = newContent ? buildTree(newContent, filePath) : null;
-                if (!_oldTree && !_newTree) return;
-                if (!isSbs && !_newTree) return;
+                _oldScopes = oldContent ? StickyLinesUtils.buildScopeList(oldContent, filePath, MIN_BLOCK_LINES) : null;
+                _newScopes = newContent ? StickyLinesUtils.buildScopeList(newContent, filePath, MIN_BLOCK_LINES) : null;
+                if (!_oldScopes?.length && !_newScopes?.length) return;
+                if (!isSbs && !_newScopes?.length) return;
 
                 const body = diffPanel.querySelector('.file-diff-body');
                 if (!body) return;
@@ -5006,8 +4998,11 @@
                 _scrollHandler = () => update();
                 _scrollArea.addEventListener('scroll', _scrollHandler, { passive: true });
 
-                // Invalidate position cache on resize (row positions shift when container resizes)
-                stickyLinesInvalidate = () => { _cacheLeft = null; _cacheRight = null; _cacheInline = null; _rowMapLeft = null; _rowMapRight = null; _rowMapInline = null; };
+                // Invalidate position caches on resize (row positions shift when container resizes)
+                stickyLinesInvalidate = () => {
+                    _lineTopLeft = null; _lineTopRight = null; _lineTopInline = null;
+                    _rowMapLeft = null; _rowMapRight = null; _rowMapInline = null;
+                };
                 _resizeObserver = new ResizeObserver(stickyLinesInvalidate);
                 _resizeObserver.observe(_scrollArea);
 
