@@ -4926,7 +4926,15 @@
                     const newBarHeight = _bar.offsetHeight;
                     const delta = newBarHeight - prevBarHeight;
                     if (delta !== 0) {
-                        _scrollArea.scrollTop = rawScrollTop + delta;
+                        if (_scroller?.hasPendingScrollTarget()) {
+                            // A navigation scroll is in progress. Setting scrollTop directly
+                            // would cancel it. Instead, re-apply the target — computeScrollTargetTop
+                            // now reads the updated container offset (including the new bar height),
+                            // so the smooth scroll re-targets to the correct position.
+                            _scroller.reapplyPendingScrollTarget();
+                        } else {
+                            _scrollArea.scrollTop = rawScrollTop + delta;
+                        }
                     }
                 });
             }

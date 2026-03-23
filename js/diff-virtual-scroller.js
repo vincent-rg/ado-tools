@@ -924,13 +924,20 @@ const DiffVirtualScroller = (() => {
 
         function computeScrollTargetTop(row, block) {
             const viewportH = _scrollArea.clientHeight;
+            // Offset of _container's top within the scroll content. Normally 0, but
+            // non-zero when elements are prepended to _scrollArea above _container
+            // (e.g. the sticky-lines-bar). row.top values are relative to _container,
+            // so we must add containerOffset to convert to scroll-area coordinates.
+            const containerOffset = _scrollArea.scrollTop +
+                _container.getBoundingClientRect().top -
+                _scrollArea.getBoundingClientRect().top;
             let top;
             if (block === 'center') {
-                top = row.top + row.height / 2 - viewportH / 2;
+                top = containerOffset + row.top + row.height / 2 - viewportH / 2;
             } else if (block === 'start') {
-                top = row.top;
+                top = containerOffset + row.top;
             } else {
-                top = row.top + row.height - viewportH;
+                top = containerOffset + row.top + row.height - viewportH;
             }
             return Math.max(0, Math.min(top, _scrollArea.scrollHeight - viewportH));
         }
@@ -1230,6 +1237,12 @@ const DiffVirtualScroller = (() => {
             getAllRows,
             scrollToRow,
             hasPendingScrollTarget: () => _pendingScrollTarget !== null,
+            reapplyPendingScrollTarget: () => {
+                if (_pendingScrollTarget && _scrollArea) {
+                    const newTarget = computeScrollTargetTop(_pendingScrollTarget.row, _pendingScrollTarget.block);
+                    _scrollArea.scrollTo({ top: newTarget, behavior: 'smooth' });
+                }
+            },
             getRenderedElement,
             getTopVisibleCodeRow,
             getTopVisibleLineNum,
