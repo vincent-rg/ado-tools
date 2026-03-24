@@ -21,6 +21,10 @@ function showReplyForm(threadId, prefix = '') {
         MentionAutocomplete.attach(textarea);
         attachImagePaste(textarea);
         attachEditPreview(textarea);
+        const _k = 'reply\x00' + threadId;
+        saveDraft(_k, commentDrafts.get(_k)?.content ?? ''); // mark form as open immediately
+        if (commentDrafts.has(_k)) textarea.value = commentDrafts.get(_k).content || '';
+        textarea.addEventListener('input', () => saveDraft(_k, textarea.value));
     }
 
     // Notify virtual scroller that this thread row grew, and watch for further
@@ -33,8 +37,8 @@ function showReplyForm(threadId, prefix = '') {
             currentDiffScroller.recalcLayout();
             diffMinimapInvalidate?.();
             diffMinimapDraw?.();
-            if (replyFormThreadObserver) replyFormThreadObserver.disconnect();
-            replyFormThreadObserver = new ResizeObserver(() => {
+            replyFormObservers.get(threadId)?.disconnect();
+            const obs = new ResizeObserver(() => {
                 if (!currentDiffScroller) return;
                 const newH = threadEl.getBoundingClientRect().height;
                 if (newH > 0 && Math.abs(newH - (row.measuredHeight || 0)) > 1) {
@@ -44,12 +48,16 @@ function showReplyForm(threadId, prefix = '') {
                     diffMinimapDraw?.();
                 }
             });
-            replyFormThreadObserver.observe(threadEl);
+            replyFormObservers.set(threadId, obs);
+            obs.observe(threadEl);
         }
     }
 
     // Focus after all layout ops so virtual-scroll repositioning doesn't lose focus.
     textarea?.focus();
+
+    // Show draft indicator in file tree
+    updateFileTreeDraftInfo(getFilePathForThread(threadId));
 }
 
 function hideReplyForm(threadId, prefix = '') {
@@ -59,10 +67,11 @@ function hideReplyForm(threadId, prefix = '') {
     if (btn) btn.style.display = '';
 
     // Stop watching and notify scroller the thread shrank back
-    if (replyFormThreadObserver) {
-        replyFormThreadObserver.disconnect();
-        replyFormThreadObserver = null;
-    }
+    const _replyFilePath = getFilePathForThread(threadId);
+    replyFormObservers.get(threadId)?.disconnect();
+    replyFormObservers.delete(threadId);
+    clearDraft('reply\x00' + threadId);
+    updateFileTreeDraftInfo(_replyFilePath);
     if (currentDiffScroller) {
         const row = currentDiffScroller.getRowByThreadId(threadId);
         if (row) {
@@ -93,6 +102,7 @@ async function submitReply(threadId, prefix = '') {
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
     try {
+        clearDraft('reply\x00' + threadId);
         await ADOAPI.addComment(currentConfig, currentPRId, threadId, content);
         const saved = saveDiffScroll();
         await refreshThreadsFromAPI();
@@ -131,6 +141,10 @@ function startEditComment(threadId, commentId, prefix = '') {
         attachImagePaste(textarea);
         const { update } = attachEditPreview(textarea);
         update();
+        const _k = 'edit\x00' + threadId + '\x00' + commentId;
+        saveDraft(_k, commentDrafts.get(_k)?.content ?? ''); // mark form as open immediately
+        if (commentDrafts.has(_k)) textarea.value = commentDrafts.get(_k).content || '';
+        textarea.addEventListener('input', () => saveDraft(_k, textarea.value));
     }
 
     const actions = commentDiv?.querySelector('.comment-actions');
@@ -145,8 +159,9 @@ function startEditComment(threadId, commentId, prefix = '') {
             currentDiffScroller.recalcLayout();
             diffMinimapInvalidate?.();
             diffMinimapDraw?.();
-            if (editCommentThreadObserver) editCommentThreadObserver.disconnect();
-            editCommentThreadObserver = new ResizeObserver(() => {
+            const obsKey = threadId + '-' + commentId;
+            editCommentObservers.get(obsKey)?.disconnect();
+            const obs = new ResizeObserver(() => {
                 if (!currentDiffScroller) return;
                 const newH = threadEl.getBoundingClientRect().height;
                 if (newH > 0 && Math.abs(newH - (row.measuredHeight || 0)) > 1) {
@@ -156,7 +171,8 @@ function startEditComment(threadId, commentId, prefix = '') {
                     diffMinimapDraw?.();
                 }
             });
-            editCommentThreadObserver.observe(threadEl);
+            editCommentObservers.set(obsKey, obs);
+            obs.observe(threadEl);
         }
     }
 
@@ -165,6 +181,8 @@ function startEditComment(threadId, commentId, prefix = '') {
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
+
+    updateFileTreeDraftInfo(getFilePathForThread(threadId));
 }
 
 function cancelEditComment(threadId, commentId, prefix = '') {
@@ -178,10 +196,12 @@ function cancelEditComment(threadId, commentId, prefix = '') {
     if (actions) actions.style.display = '';
 
     // Stop watching and notify scroller the thread shrank back
-    if (editCommentThreadObserver) {
-        editCommentThreadObserver.disconnect();
-        editCommentThreadObserver = null;
-    }
+    const _obsKey = threadId + '-' + commentId;
+    const _editFilePath = getFilePathForThread(threadId);
+    editCommentObservers.get(_obsKey)?.disconnect();
+    editCommentObservers.delete(_obsKey);
+    clearDraft('edit\x00' + threadId + '\x00' + commentId);
+    updateFileTreeDraftInfo(_editFilePath);
     if (currentDiffScroller) {
         const row = currentDiffScroller.getRowByThreadId(threadId);
         if (row) {
@@ -212,6 +232,7 @@ async function saveEditComment(threadId, commentId, prefix = '') {
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
     try {
+        clearDraft('edit\x00' + threadId + '\x00' + commentId);
         await ADOAPI.updateComment(currentConfig, currentPRId, threadId, commentId, content);
         await refreshThreadsFromAPI();
     } catch (error) {

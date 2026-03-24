@@ -566,6 +566,25 @@
     color: #a19f9d;
 }
 
+/* Draft (unsaved new-thread) indicators */
+.file-tree-thread.draft-thread {
+    opacity: 0.75;
+    font-style: italic;
+}
+
+.thread-status-dot.draft {
+    background: transparent;
+    border: 2px dashed #a19f9d;
+    box-sizing: border-box;
+}
+
+.draft-count-badge {
+    color: #a19f9d;
+    font-size: 10px;
+    margin-left: 1px;
+    vertical-align: middle;
+}
+
 /* Lazy-loading directory indicator */
 .file-tree-dir-loading {
     padding: 3px 8px;

@@ -258,8 +258,8 @@
         let stickyLinesInvalidate = null; // call to bust sticky-lines position cache (resize / thread toggle)
         let sbsScrollSync = null;     // { applyScroll, scrollRange, getCurrentOffset } set by setupSbsScrollSync
         let currentDiffScroller = null; // DiffVirtualScroller instance for current file diff
-        let replyFormThreadObserver = null;    // ResizeObserver watching inline thread height while reply form is open
-        let editCommentThreadObserver = null;  // ResizeObserver watching inline thread height while edit-comment editor is open
+        const replyFormObservers = new Map();  // threadId → ResizeObserver watching inline thread height while reply form is open
+        const editCommentObservers = new Map(); // `${threadId}-${commentId}` → ResizeObserver while edit-comment editor is open
 
         // Cache for iteration changes and file path history
         let iterationChangesCache = new Map(); // iterationId → changes array
@@ -612,7 +612,7 @@
                 <div class="comment-editor">
                     <textarea id="fileCommentContent" placeholder="Write a comment on this file..."></textarea>
                     <div class="comment-editor-actions">
-                        <button class="btn-cancel" onclick="hideFileCommentForm()">Cancel</button>
+                        <button class="btn-cancel" onclick="cancelFileComment()">Cancel</button>
                         <button class="btn-save" onclick="createFileComment('${ADOContent.escapeJs(filePath)}')" id="fileCommentSubmitBtn">Create</button>
                     </div>
                 </div>
@@ -622,6 +622,9 @@
 
             const textarea = document.getElementById('fileCommentContent');
             if (textarea) {
+                const _k = 'file\x00' + filePath;
+                if (commentDrafts.has(_k)) textarea.value = commentDrafts.get(_k).content || '';
+                textarea.addEventListener('input', () => saveDraft(_k, textarea.value));
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
                 attachImagePaste(textarea);
@@ -632,6 +635,11 @@
         function hideFileCommentForm() {
             const form = document.querySelector('.file-comment-form');
             if (form) form.remove();
+        }
+
+        function cancelFileComment() {
+            clearDraft('file\x00' + selectedFilePath);
+            hideFileCommentForm();
         }
 
         async function createFileComment(filePath) {
@@ -651,6 +659,7 @@
                 );
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
+                clearDraft('file\x00' + filePath);
                 hideFileCommentForm();
                 const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
@@ -769,21 +778,58 @@
             }
         }
 
-        // Remove the spliced comment form and restore layout.
-        function restoreCommentFormContainerHeight() {
-            if (currentDiffScroller) {
-                currentDiffScroller.removeFormRow();
-                diffMinimapInvalidate?.();
-                diffMinimapDraw?.();
-                stickyLinesInvalidate?.();
-            }
+        // Per-form cleanup helpers
+        function clearFormHighlight(formEl) {
+            const el = formEl._highlightContentEl;
+            if (el) restoreHighlightEl(el, '.line-comment-highlight-mark');
+            (formEl._highlightEls || []).forEach(e => restoreHighlightEl(e, '.selection-highlight-mark'));
+        }
+
+        function restoreHighlightEl(el, markSelector) {
+            const mark = el?.querySelector(markSelector);
+            if (!mark) return;
+            const parent = mark.parentNode;
+            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+            parent.removeChild(mark);
+            parent.normalize();
+        }
+
+        function cancelLineComment(btn) {
+            const formEl = btn.closest('.line-comment-form, .sbs-line-comment-form');
+            if (!formEl) return;
+            const submit = formEl.querySelector('.line-comment-submit');
+            const draftFile = submit?.dataset.file;
+            if (submit) clearDraft('line\x00' + submit.dataset.formId + '\x00' + submit.dataset.file + '\x00' + submit.dataset.line + '\x00' + submit.dataset.side);
+            clearFormHighlight(formEl);
+            if (currentDiffScroller) currentDiffScroller.removeFormRow(formEl);
+            formEl.remove();
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
+            stickyLinesInvalidate?.();
+            updateFileTreeDraftInfo(draftFile);
+        }
+
+        function cancelSelectionComment(btn) {
+            const formEl = btn.closest('.selection-comment-form-row');
+            if (!formEl) return;
+            const submit = formEl.querySelector('.selection-comment-submit');
+            const draftFile = submit?.dataset.file;
+            if (submit) clearDraft('sel\x00' + submit.dataset.formId + '\x00' + submit.dataset.file + '\x00' + submit.dataset.startLine + '\x00' + submit.dataset.endLine + '\x00' + submit.dataset.startOffset + '\x00' + submit.dataset.endOffset + '\x00' + submit.dataset.side);
+            clearFormHighlight(formEl);
+            if (currentDiffScroller) currentDiffScroller.removeFormRow(formEl);
+            formEl.remove();
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
+            stickyLinesInvalidate?.();
+            updateFileTreeDraftInfo(draftFile);
         }
 
         function openLineCommentEditor(filePath, lineNum, side, bubbleEl, lineLen) {
-            hideLineCommentForm();
-            hideSelectionCommentForm();
+            const formId = _nextFormId++;
             const escapedFile = ADOContent.escapeJs(filePath);
+            const escapedFileHtml = ADOContent.escapeHtml(filePath);
             const endOffset = lineLen + 1;
+            const _k = 'line\x00' + formId + '\x00' + filePath + '\x00' + lineNum + '\x00' + side;
 
             // Highlight the line content with <mark>
             const effectiveMode = getEffectiveDisplayMode();
@@ -795,55 +841,61 @@
                 contentEl.innerHTML = `<mark class="line-comment-highlight-mark" style="background: #ffe082; color: inherit;">${ADOContent.escapeHtml(text)}</mark>`;
             }
 
+            let formEl;
             if (effectiveMode === 'side-by-side') {
                 const sbsRow = bubbleEl.closest('.sbs-row');
                 if (!sbsRow) return;
 
-                const formRow = document.createElement('div');
-                formRow.className = 'sbs-line-comment-form';
+                formEl = document.createElement('div');
+                formEl.className = 'sbs-line-comment-form';
 
                 const editorHtml = `
                     <div class="comment-editor">
                         <textarea class="line-comment-textarea" placeholder="Write a comment on line ${lineNum}..."></textarea>
                         <div class="comment-editor-actions">
-                            <button class="btn-cancel" onclick="hideLineCommentForm()">Cancel</button>
-                            <button class="btn-save line-comment-submit" data-file="${ADOContent.escapeHtml(filePath)}" data-line="${lineNum}" data-side="${side}" data-end-offset="${endOffset}">Create</button>
+                            <button class="btn-cancel" onclick="cancelLineComment(this)">Cancel</button>
+                            <button class="btn-save line-comment-submit" data-form-id="${formId}" data-file="${escapedFileHtml}" data-line="${lineNum}" data-side="${side}" data-end-offset="${endOffset}">Create</button>
                         </div>
                     </div>
                 `;
 
                 if (side === 'left') {
-                    formRow.innerHTML = `<div class="sbs-line-comment-side">${editorHtml}</div><div class="sbs-line-comment-spacer"></div>`;
+                    formEl.innerHTML = `<div class="sbs-line-comment-side">${editorHtml}</div><div class="sbs-line-comment-spacer"></div>`;
                 } else {
-                    formRow.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
+                    formEl.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
                 }
 
-                insertCommentFormAfterRow(formRow, sbsRow);
+                insertCommentFormAfterRow(formEl, sbsRow);
             } else {
                 const diffLine = bubbleEl.closest('.diff-line');
                 if (!diffLine) return;
 
-                const formDiv = document.createElement('div');
-                formDiv.className = 'line-comment-form';
-                formDiv.innerHTML = `
+                formEl = document.createElement('div');
+                formEl.className = 'line-comment-form';
+                formEl.innerHTML = `
                     <div class="comment-editor">
                         <textarea class="line-comment-textarea" placeholder="Write a comment on line ${lineNum}..."></textarea>
                         <div class="comment-editor-actions">
-                            <button class="btn-cancel" onclick="hideLineCommentForm()">Cancel</button>
-                            <button class="btn-save line-comment-submit" data-file="${ADOContent.escapeHtml(filePath)}" data-line="${lineNum}" data-side="${side}" data-end-offset="${endOffset}">Create</button>
+                            <button class="btn-cancel" onclick="cancelLineComment(this)">Cancel</button>
+                            <button class="btn-save line-comment-submit" data-form-id="${formId}" data-file="${escapedFileHtml}" data-line="${lineNum}" data-side="${side}" data-end-offset="${endOffset}">Create</button>
                         </div>
                     </div>
                 `;
 
-                insertCommentFormAfterRow(formDiv, diffLine);
+                insertCommentFormAfterRow(formEl, diffLine);
             }
 
-            const textarea = document.querySelector('.line-comment-textarea');
+            // Track highlight element for per-form cleanup
+            formEl._highlightContentEl = contentEl ?? null;
+
+            const textarea = formEl.querySelector('.line-comment-textarea');
             if (textarea) {
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
                 attachImagePaste(textarea);
                 attachEditPreview(textarea);
+                saveDraft(_k, '', { lineLen });
+                textarea.addEventListener('input', () => { saveDraft(_k, textarea.value, { lineLen }); updateFileTreeDraftInfo(filePath); });
                 textarea.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
@@ -851,21 +903,26 @@
                         if (submitBtn) createLineComment(submitBtn);
                     } else if (e.key === 'Escape') {
                         e.preventDefault();
-                        hideLineCommentForm();
+                        const cancelBtn = textarea.closest('.comment-editor').querySelector('.btn-cancel');
+                        if (cancelBtn) cancelBtn.click();
                     }
                 });
             }
+
+            updateFileTreeDraftInfo(filePath);
+            return formEl;
         }
 
         function hideLineCommentForm() {
-            document.querySelectorAll('.line-comment-form, .sbs-line-comment-form').forEach(el => el.remove());
-            restoreCommentFormContainerHeight();
-            document.querySelectorAll('.line-comment-highlight-mark').forEach(mark => {
-                const parent = mark.parentNode;
-                while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-                parent.removeChild(mark);
-                parent.normalize();
+            // "Hide all" path — does NOT clear drafts (forms will be restored on next render)
+            document.querySelectorAll('.line-comment-form:not(.selection-comment-form-row), .sbs-line-comment-form:not(.selection-comment-form-row)').forEach(formEl => {
+                clearFormHighlight(formEl);
+                if (currentDiffScroller) currentDiffScroller.removeFormRow(formEl);
+                formEl.remove();
             });
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
+            stickyLinesInvalidate?.();
         }
 
         async function createLineComment(btn) {
@@ -898,7 +955,14 @@
                 }
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
-                hideLineCommentForm();
+                clearDraft('line\x00' + btn.dataset.formId + '\x00' + filePath + '\x00' + lineNum + '\x00' + side);
+                const formEl = btn.closest('.line-comment-form, .sbs-line-comment-form');
+                if (formEl) {
+                    clearFormHighlight(formEl);
+                    if (currentDiffScroller) currentDiffScroller.removeFormRow(formEl);
+                    formEl.remove();
+                }
+                diffMinimapInvalidate?.();
                 const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
                 restoreDiffScroll(saved);
@@ -1484,6 +1548,21 @@
                 }
             }
         }
+
+        // ==================== Comment draft store ====================
+        // Drafts survive diff re-renders (live updates, file/tab switches).
+        // Keys: 'line\x00{formId}\x00{filePath}\x00{lineNum}\x00{side}'
+        //       'sel\x00{formId}\x00{filePath}\x00{startLine}\x00{endLine}\x00{startOffset}\x00{endOffset}\x00{side}'
+        //       'file\x00{filePath}'
+        //       'reply\x00{threadId}'
+        //       'edit\x00{threadId}\x00{commentId}'
+        const commentDrafts = new Map();
+        function saveDraft(key, content, meta) {
+            const existing = commentDrafts.get(key) || {};
+            commentDrafts.set(key, { ...existing, ...meta, content });
+        }
+        function clearDraft(key) { commentDrafts.delete(key); }
+        let _nextFormId = 1; // unique ID per created form (for same-line multi-form support)
 
         // ==================== Comment CRUD Functions ====================
 
@@ -3094,9 +3173,67 @@
             return PRThreadsUtils.stripMarkdown(text);
         }
 
+        function getFilePathForThread(threadId) {
+            for (const [fp, threads] of threadsByFilePath) {
+                if (threads.some(t => t.id === threadId)) return fp;
+            }
+            return null;
+        }
+
+        function getDraftsForFile(filePath) {
+            const drafts = [];
+            for (const [key, val] of commentDrafts) {
+                const parts = key.split('\x00');
+                const content = val.content || '';
+                if (parts[0] === 'line' && parts[2] === filePath) {
+                    drafts.push({ type: 'line', lineNum: parseInt(parts[3]), side: parts[4], key, content });
+                } else if (parts[0] === 'sel' && parts[2] === filePath) {
+                    drafts.push({ type: 'sel', startLine: parseInt(parts[3]), endLine: parseInt(parts[4]), key, content });
+                } else if (parts[0] === 'file' && parts[1] === filePath) {
+                    drafts.push({ type: 'file', key, content });
+                }
+            }
+            return drafts;
+        }
+
+        function updateFileTreeDraftInfo(filePath) {
+            if (!filePath) return;
+            const container = document.getElementById('fileTreeContainer');
+            if (!container) return;
+            const fileEl = container.querySelector(`.file-tree-file[data-path="${CSS.escape(filePath)}"]`);
+            if (!fileEl) return;
+
+            // Update thread count badge (includes draft count)
+            const existingBadge = fileEl.querySelector('.file-thread-count');
+            const newBadgeHtml = getThreadCountBadge(filePath);
+            if (existingBadge) {
+                if (newBadgeHtml) existingBadge.outerHTML = newBadgeHtml;
+                else existingBadge.remove();
+            } else if (newBadgeHtml) {
+                const kebab = fileEl.querySelector('.file-kebab-wrapper');
+                if (kebab) kebab.insertAdjacentHTML('beforebegin', newBadgeHtml);
+                else fileEl.insertAdjacentHTML('beforeend', newBadgeHtml);
+            }
+
+            // Update thread sub-list (includes draft entries)
+            const nextSibling = fileEl.nextElementSibling;
+            const hasSubList = nextSibling && nextSibling.classList.contains('file-tree-threads');
+            const depth = parseInt(fileEl.style.getPropertyValue('--depth') || '0', 10);
+            const newSubListHtml = renderThreadSubList(filePath, depth);
+            if (hasSubList) {
+                if (newSubListHtml) nextSibling.outerHTML = newSubListHtml;
+                else nextSibling.remove();
+            } else if (newSubListHtml) {
+                fileEl.insertAdjacentHTML('afterend', newSubListHtml);
+            }
+
+            AvatarLoader.loadPending();
+        }
+
         function renderThreadSubList(filePath, depth) {
             const threads = getVisibleThreadsForFile(filePath);
-            if (!threads || threads.length === 0) return '';
+            const drafts = getDraftsForFile(filePath);
+            if ((!threads || threads.length === 0) && drafts.length === 0) return '';
             // Sort by line number (order of appearance in file), then by offset within the line
             const sorted = [...threads].sort((a, b) => {
                 const lineA = a.threadContext?.rightFileStart?.line || a.threadContext?.leftFileStart?.line || 0;
@@ -3116,7 +3253,15 @@
                 const preview = content.length > 60 ? content.substring(0, 60) + '...' : content;
                 const statusCls = thread.status || 'active';
                 const lineInfo = thread.threadContext?.rightFileStart?.line || thread.threadContext?.leftFileStart?.line;
-                const lineLabel = lineInfo ? `L${lineInfo}: ` : '';
+                const replyDraft = commentDrafts.get('reply\x00' + thread.id);
+                const hasEditDraft = [...commentDrafts.keys()].some(k => k.startsWith('edit\x00' + thread.id + '\x00'));
+                const hasReplyDraft = !!replyDraft || hasEditDraft;
+                const lineLabel = lineInfo ? `${hasReplyDraft ? '*' : ''}L${lineInfo}: ` : (hasReplyDraft ? '*' : '');
+                // When there's a reply draft, show its content as the preview
+                const draftReplyContent = replyDraft?.content;
+                const displayPreview = draftReplyContent
+                    ? (draftReplyContent.length > 60 ? draftReplyContent.substring(0, 60) + '...' : draftReplyContent)
+                    : preview;
                 const cachedUrl = authorId ? AvatarLoader.getCached(authorId) : null;
                 let avatarHtml;
                 if (cachedUrl) {
@@ -3129,20 +3274,52 @@
                 html += `<div class="file-tree-thread" data-thread-id="${thread.id}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
                 html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
                 html += avatarHtml;
-                const previewHtml = ADOContent.escapeHtml(preview).replace(/\[code\]/g, '<span class="code-tag">[code]</span>');
+                const previewHtml = ADOContent.escapeHtml(displayPreview).replace(/\[code\]/g, '<span class="code-tag">[code]</span>');
                 html += `<span class="thread-preview">${lineLabel}${previewHtml}</span>`;
                 html += '</div>';
             }
+
+            // Draft (unsaved new-thread) entries — shown below existing threads
+            const cachedCurrentUserUrl = currentUserId ? AvatarLoader.getCached(currentUserId) : null;
+            const draftAvatarHtml = cachedCurrentUserUrl
+                ? `<span class="tree-thread-avatar-wrap"><img src="${cachedCurrentUserUrl}" alt="me" title="me"></span>`
+                : currentUserId
+                    ? `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder" title="me"></span><img data-user-id="${currentUserId}" alt="me" title="me" class="avatar-pending"></span>`
+                    : `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder"></span></span>`;
+            for (const d of drafts) {
+                const changeType = changedFilePaths.has(filePath) ? 'edit' : 'none';
+                let lineLabel;
+                if (d.type === 'file') {
+                    lineLabel = '(file): ';
+                } else if (d.type === 'line') {
+                    lineLabel = `*L${d.lineNum}: `;
+                } else {
+                    lineLabel = d.startLine === d.endLine
+                        ? `*L${d.startLine}: `
+                        : `*L${d.startLine}–${d.endLine}: `;
+                }
+                html += `<div class="file-tree-thread draft-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changeType)}')">`;
+                html += `<span class="thread-status-dot draft"></span>`;
+                html += draftAvatarHtml;
+                const draftPreview = d.content
+                    ? (d.content.length > 60 ? d.content.substring(0, 60) + '...' : d.content)
+                    : 'draft';
+                html += `<span class="thread-preview">${ADOContent.escapeHtml(lineLabel)}${ADOContent.escapeHtml(draftPreview)}</span>`;
+                html += '</div>';
+            }
+
             html += '</div>';
             return html;
         }
 
         function getThreadCountBadge(filePath) {
             const threads = getVisibleThreadsForFile(filePath);
-            if (!threads || threads.length === 0) return '';
-            const hasActive = threads.some(t => t.status === 'active' || t.status === undefined);
+            const draftCount = getDraftsForFile(filePath).length;
+            if ((!threads || threads.length === 0) && draftCount === 0) return '';
+            const hasActive = threads?.some(t => t.status === 'active' || t.status === undefined);
             const escapedPath = ADOContent.escapeHtml(filePath);
-            return `<span class="file-thread-count expanded${hasActive ? ' has-active' : ''}" data-path="${escapedPath}" onclick="event.stopPropagation(); toggleFileThreads(this)"><span class="thread-toggle-chevron">▶</span>${threads.length}</span>`;
+            const draftBadge = draftCount > 0 ? `<span class="draft-count-badge" title="${draftCount} draft${draftCount > 1 ? 's' : ''}">*</span>` : '';
+            return `<span class="file-thread-count expanded${hasActive ? ' has-active' : ''}" data-path="${escapedPath}" onclick="event.stopPropagation(); toggleFileThreads(this)"><span class="thread-toggle-chevron">▶</span>${threads?.length || 0}${draftBadge}</span>`;
         }
 
         // Propagate hasChanges/hasComments up the tree
@@ -4492,12 +4669,14 @@
                         ctx.fillStyle = row.minimapColor;
                         ctx.fillRect(1, Math.floor(row.top / totalH * h), w - 2, Math.max(Math.ceil(row.height / totalH * h), 1));
                     }
-                    // Paint the spliced comment-creation form with the same color as the line
-                    // it's attached to, so its space doesn't appear as unmodified while editing.
-                    const formInfo = scroller.getExtraFormInfo();
-                    if (formInfo?.minimapColor) {
-                        ctx.fillStyle = formInfo.minimapColor;
-                        ctx.fillRect(1, Math.floor(formInfo.top / totalH * h), w - 2, Math.max(Math.ceil(formInfo.height / totalH * h), 1));
+                    // Paint spliced comment-creation forms with the same color as the lines
+                    // they're attached to, so their space doesn't appear as unmodified while editing.
+                    const formsInfo = scroller.getExtraFormsInfo?.() ?? [];
+                    for (const formInfo of formsInfo) {
+                        if (formInfo.minimapColor) {
+                            ctx.fillStyle = formInfo.minimapColor;
+                            ctx.fillRect(1, Math.floor(formInfo.top / totalH * h), w - 2, Math.max(Math.ceil(formInfo.height / totalH * h), 1));
+                        }
                     }
                     // Search markers
                     if (fileSearchHitLineIndices.length > 0) {
@@ -5266,6 +5445,116 @@
             setupDiffMinimap(diffPanel, currentDiffScroller);
             if (stickyLinesEnabled) StickyLines.init(diffPanel, oldContent || null, newContent || null, filePath, isSbs, currentDiffScroller);
             if (fileSearchActive) openFileSearch();
+
+            // Restore any in-progress comment forms (drafts survive live-update re-renders and tab switches)
+            // 1. onRowRendered: re-open thread reply/edit forms when row scrolls into view
+            if (currentDiffScroller) {
+                currentDiffScroller.onRowRendered((row) => {
+                    if (row.type !== 'thread' && row.type !== 'sbs-thread') return;
+                    const tid = row.threadId;
+                    const rk = 'reply\x00' + tid;
+                    if (commentDrafts.has(rk)) {
+                        showReplyForm(tid, 'inline-');
+                        const ta = document.getElementById('inline-reply-content-' + tid);
+                        if (ta && commentDrafts.get(rk).content) {
+                            ta.value = commentDrafts.get(rk).content;
+                            ta.dispatchEvent(new Event('input'));
+                        }
+                    }
+                    for (const [k, d] of commentDrafts) {
+                        if (!k.startsWith('edit\x00' + tid + '\x00')) continue;
+                        const cid = parseInt(k.split('\x00')[2]);
+                        startEditComment(tid, cid, 'inline-');
+                        const ta = document.getElementById('inline-edit-content-' + tid + '-' + cid);
+                        if (ta && d.content) {
+                            ta.value = d.content;
+                            ta.dispatchEvent(new Event('input'));
+                        }
+                    }
+                });
+            }
+            // 2. One-shot rAF: restore line/selection/file comment forms
+            requestAnimationFrame(() => restoreInlineDrafts(filePath));
+        }
+
+        function restoreInlineDrafts(filePath) {
+            if (!currentDiffScroller) return;
+            // Snapshot keys to avoid mutation-during-iteration issues
+            const entries = [...commentDrafts.entries()];
+            for (const [key, draft] of entries) {
+                const parts = key.split('\x00');
+                // Reply forms: restore immediately (works for small files and visible rows in large files;
+                // onRowRendered handles out-of-viewport rows in large files)
+                if (parts[0] === 'reply') {
+                    const tid = parseInt(parts[1]);
+                    const container = document.getElementById('inline-reply-form-' + tid);
+                    if (container && !container.querySelector('.comment-editor')) {
+                        showReplyForm(tid, 'inline-');
+                        const ta = document.getElementById('inline-reply-content-' + tid);
+                        if (ta && draft.content) {
+                            ta.value = draft.content;
+                            ta.dispatchEvent(new Event('input'));
+                        }
+                    }
+                } else if (parts[0] === 'edit') {
+                    const tid = parseInt(parts[1]);
+                    const cid = parseInt(parts[2]);
+                    const wrapper = document.getElementById('inline-comment-content-' + tid + '-' + cid);
+                    if (wrapper && !wrapper.querySelector('.comment-editor')) {
+                        startEditComment(tid, cid, 'inline-');
+                        const ta = document.getElementById('inline-edit-content-' + tid + '-' + cid);
+                        if (ta && draft.content) {
+                            ta.value = draft.content;
+                            ta.dispatchEvent(new Event('input'));
+                        }
+                    }
+                } else if (parts[0] === 'file' && parts[1] === filePath) {
+                    injectFileCommentEditor(filePath);
+                    // draft content already wired via input listener set in injectFileCommentEditor
+
+                } else if (parts[0] === 'line' && parts[2] === filePath) {
+                    // parts: [0]=line [1]=formId [2]=filePath [3]=lineNum [4]=side
+                    const [, , , lineNum, side] = parts;
+                    const row = currentDiffScroller.getRowByLineNum(parseInt(lineNum), side === 'left' ? 'old' : 'new');
+                    if (!row) continue;
+                    currentDiffScroller.ensureRowRendered(row);
+                    const rowEl = currentDiffScroller.getRenderedElement(row);
+                    if (!rowEl) continue;
+                    // Synthesise a bubble element (the function only needs it to find the parent row)
+                    const bubbleEl = rowEl.querySelector('.diff-comment-bubble') || rowEl;
+                    const newFormEl = openLineCommentEditor(filePath, parseInt(lineNum), side, bubbleEl, (draft.lineLen || 1) - 1);
+                    const ta = newFormEl?.querySelector('.line-comment-textarea');
+                    if (ta && draft.content) {
+                        ta.value = draft.content;
+                        ta.dispatchEvent(new Event('input')); // persists content into new draft key
+                    }
+                    commentDrafts.delete(key); // old key (old formId) superseded by new one
+
+                } else if (parts[0] === 'sel' && parts[2] === filePath) {
+                    // parts: [0]=sel [1]=formId [2]=filePath [3]=startLine [4]=endLine [5]=startOffset [6]=endOffset [7]=side
+                    const [, oldFormId, , sl, el, so, eo, side] = parts;
+                    const endRow = currentDiffScroller.getRowByLineNum(parseInt(el), side === 'left' ? 'old' : 'new');
+                    if (!endRow) continue;
+                    currentDiffScroller.ensureRowRendered(endRow);
+                    const endRowEl = currentDiffScroller.getRenderedElement(endRow);
+                    if (!endRowEl) continue;
+                    const newFormEl = openSelectionCommentEditor({
+                        startLine: parseInt(sl), endLine: parseInt(el),
+                        startOffset: parseInt(so), endOffset: parseInt(eo), side,
+                        endRow: endRowEl, endEl: endRowEl, startRow: endRowEl, startEl: endRowEl,
+                        _restoringDraft: true, _formId: parseInt(oldFormId),
+                    });
+                    const ta = newFormEl?.querySelector('.line-comment-textarea');
+                    if (ta && draft.content) {
+                        ta.value = draft.content;
+                        ta.dispatchEvent(new Event('input'));
+                    }
+                    commentDrafts.delete(key);
+                }
+            }
+            // Update file tree only if this file actually has drafts (avoids re-rendering
+            // avatars unnecessarily — re-rendering wipes loaded avatar imgs from the DOM)
+            if (getDraftsForFile(filePath).length > 0) updateFileTreeDraftInfo(filePath);
         }
 
         // File tree panel resize functionality
@@ -5369,19 +5658,15 @@
         }
 
         function hideSelectionCommentForm() {
-            document.querySelectorAll('.selection-comment-form-row').forEach(el => el.remove());
-            restoreCommentFormContainerHeight();
-            removeSelectionHighlightMarks();
-            selectionCommentState = null;
-        }
-
-        function removeSelectionHighlightMarks() {
-            document.querySelectorAll('.selection-highlight-mark').forEach(mark => {
-                const parent = mark.parentNode;
-                while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-                parent.removeChild(mark);
-                parent.normalize();
+            // "Hide all" path — does NOT clear drafts (forms will be restored on next render)
+            document.querySelectorAll('.selection-comment-form-row').forEach(formEl => {
+                clearFormHighlight(formEl);
+                if (currentDiffScroller) currentDiffScroller.removeFormRow(formEl);
+                formEl.remove();
             });
+            diffMinimapInvalidate?.();
+            diffMinimapDraw?.();
+            stickyLinesInvalidate?.();
         }
 
         function parseSelectionSBS(sel) {
@@ -5539,19 +5824,12 @@
         }
 
         function openSelectionCommentEditor(parsed) {
-            // Remove button
-            const btn = document.querySelector('.selection-comment-btn');
-            if (btn) btn.remove();
+            // Remove the transient "add comment" button (not present when restoring a draft)
+            const selBtn = document.querySelector('.selection-comment-btn');
+            if (selBtn) selBtn.remove();
 
-            // Clear any existing selection form
-            hideSelectionCommentForm();
-            // Also hide any line comment form
-            hideLineCommentForm();
-
+            const formId = parsed._restoringDraft ? parsed._formId : _nextFormId++;
             selectionCommentState = parsed;
-
-            // Highlight selected character range with <mark>
-            applySelectionHighlight(parsed);
 
             // Build range label
             const sideLabel = parsed.side === 'left' ? 'old' : 'new';
@@ -5563,13 +5841,16 @@
             }
 
             const escapedFile = ADOContent.escapeHtml(selectedFilePath);
+            const _k = 'sel\x00' + formId + '\x00' + selectedFilePath + '\x00' + parsed.startLine + '\x00' + parsed.endLine + '\x00' + parsed.startOffset + '\x00' + parsed.endOffset + '\x00' + parsed.side;
+
             const editorHtml = `
                 <div class="comment-editor">
                     <div class="selection-range-label">${rangeLabel}</div>
                     <textarea class="line-comment-textarea" placeholder="Write a comment on ${rangeLabel.toLowerCase()}..."></textarea>
                     <div class="comment-editor-actions">
-                        <button class="btn-cancel" onclick="hideSelectionCommentForm()">Cancel</button>
+                        <button class="btn-cancel" onclick="cancelSelectionComment(this)">Cancel</button>
                         <button class="btn-save selection-comment-submit"
+                            data-form-id="${formId}"
                             data-file="${escapedFile}"
                             data-start-line="${parsed.startLine}"
                             data-end-line="${parsed.endLine}"
@@ -5581,30 +5862,40 @@
             `;
 
             // Insert form after the last selected row/line
+            let formEl;
             if (getEffectiveDisplayMode() === 'side-by-side') {
-                const formRow = document.createElement('div');
-                formRow.className = 'sbs-line-comment-form selection-comment-form-row';
+                formEl = document.createElement('div');
+                formEl.className = 'sbs-line-comment-form selection-comment-form-row';
 
                 if (parsed.side === 'left') {
-                    formRow.innerHTML = `<div class="sbs-line-comment-side">${editorHtml}</div><div class="sbs-line-comment-spacer"></div>`;
+                    formEl.innerHTML = `<div class="sbs-line-comment-side">${editorHtml}</div><div class="sbs-line-comment-spacer"></div>`;
                 } else {
-                    formRow.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
+                    formEl.innerHTML = `<div class="sbs-line-comment-spacer"></div><div class="sbs-line-comment-side">${editorHtml}</div>`;
                 }
 
-                insertCommentFormAfterRow(formRow, parsed.endRow);
+                insertCommentFormAfterRow(formEl, parsed.endRow);
             } else {
-                const formDiv = document.createElement('div');
-                formDiv.className = 'line-comment-form selection-comment-form-row';
-                formDiv.innerHTML = editorHtml;
-                insertCommentFormAfterRow(formDiv, parsed.endEl);
+                formEl = document.createElement('div');
+                formEl.className = 'line-comment-form selection-comment-form-row';
+                formEl.innerHTML = editorHtml;
+                insertCommentFormAfterRow(formEl, parsed.endEl);
             }
 
-            const textarea = document.querySelector('.selection-comment-form-row .line-comment-textarea');
+            // Apply highlight and track elements for per-form cleanup
+            if (!parsed._restoringDraft) {
+                formEl._highlightEls = applySelectionHighlight(parsed);
+            } else {
+                formEl._highlightEls = [];
+            }
+
+            const textarea = formEl.querySelector('.line-comment-textarea');
             if (textarea) {
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
                 attachImagePaste(textarea);
                 attachEditPreview(textarea);
+                saveDraft(_k, '', {});
+                textarea.addEventListener('input', () => { saveDraft(_k, textarea.value); updateFileTreeDraftInfo(selectedFilePath); });
                 textarea.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
@@ -5612,18 +5903,22 @@
                         if (submitBtn) createSelectionComment(submitBtn);
                     } else if (e.key === 'Escape') {
                         e.preventDefault();
-                        hideSelectionCommentForm();
+                        const cancelBtn = textarea.closest('.comment-editor').querySelector('.btn-cancel');
+                        if (cancelBtn) cancelBtn.click();
                     }
                 });
             }
 
-            // Clear the text selection
-            window.getSelection().removeAllRanges();
+            // Clear the text selection (only when user actively selected text)
+            if (!parsed._restoringDraft) window.getSelection().removeAllRanges();
+
+            updateFileTreeDraftInfo(selectedFilePath);
+            return formEl;
         }
 
         function applySelectionHighlight(parsed) {
             const diffPanel = document.getElementById('fileDiffPanel');
-            if (!diffPanel) return;
+            if (!diffPanel) return [];
 
             // Collect diff-content elements in the selected range
             const contentEls = [];
@@ -5692,6 +5987,8 @@
                 const after = ADOContent.escapeHtml(text.substring(markEnd));
                 el.innerHTML = `${before}<mark class="selection-highlight-mark" style="background: #ffe082;">${highlighted}</mark>${after}`;
             }
+
+            return contentEls;
         }
 
         async function createSelectionComment(btn) {
@@ -5726,7 +6023,14 @@
                 }
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
-                hideSelectionCommentForm();
+                clearDraft('sel\x00' + btn.dataset.formId + '\x00' + filePath + '\x00' + startLine + '\x00' + endLine + '\x00' + startOffset + '\x00' + endOffset + '\x00' + side);
+                const formEl = btn.closest('.selection-comment-form-row');
+                if (formEl) {
+                    clearFormHighlight(formEl);
+                    if (currentDiffScroller) currentDiffScroller.removeFormRow(formEl);
+                    formEl.remove();
+                }
+                diffMinimapInvalidate?.();
                 const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
                 restoreDiffScroll(saved);

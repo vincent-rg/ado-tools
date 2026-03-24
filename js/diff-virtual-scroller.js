@@ -388,12 +388,13 @@ const DiffVirtualScroller = (() => {
     /**
      * Compute layout: assign top/height to each row.
      *
-     * extraFormAfterIndex / extraFormShift: when a comment form is spliced in
-     * after a row, its height is added to the cumulative top so subsequent
-     * rows are pushed down correctly. Pass -1 / 0 when no form is present.
+     * extraForms: array of {el, afterIndex, shift, observer} sorted by afterIndex.
+     * Each form's height (shift) is added to the cumulative top after the row it
+     * anchors to, so subsequent rows are pushed down correctly.
      */
-    function computeLayout(rows, codeRowHeight, extraFormAfterIndex = -1, extraFormShift = 0) {
+    function computeLayout(rows, codeRowHeight, extraForms = []) {
         let top = 0;
+        let fi = 0;
         for (const row of rows) {
             row.top = top;
             if (row.type === 'code') {
@@ -407,9 +408,10 @@ const DiffVirtualScroller = (() => {
                 }
             }
             top += row.height;
-            // If a comment form is spliced in after this row, reserve its height
-            if (extraFormAfterIndex >= 0 && row.index === extraFormAfterIndex) {
-                top += extraFormShift;
+            // Apply all forms anchored to this row (extraForms is sorted by afterIndex)
+            while (fi < extraForms.length && extraForms[fi].afterIndex === row.index) {
+                top += extraForms[fi].shift;
+                fi++;
             }
         }
         return top; // total height
@@ -480,11 +482,9 @@ const DiffVirtualScroller = (() => {
         let _pendingScrollTarget = null; // { row, block } set during smooth navigation; cleared on arrival
         let _mode = mode || 'inline';
 
-        // Extra comment-form state (spliced between rows while editing)
-        let _extraFormEl = null;
-        let _extraFormAfterIndex = -1;
-        let _extraFormShift = 0;
-        let _extraFormObserver = null;  // ResizeObserver tracking form height changes
+        // Extra comment-forms state (spliced between rows while editing)
+        // Each entry: { el, afterIndex, shift, observer }; kept sorted by afterIndex
+        let _extraForms = [];
 
         /**
          * Create the HTML for a single inline code row.
@@ -846,6 +846,20 @@ const DiffVirtualScroller = (() => {
         }
 
         /**
+         * Reposition all spliced form elements after a layout change.
+         * Forms at the same afterIndex are stacked (accumulated prior shift).
+         */
+        function repositionForms() {
+            const accumulated = new Map(); // afterIndex → sum of shifts already placed
+            for (const f of _extraForms) {
+                const r = rows[f.afterIndex];
+                const prior = accumulated.get(f.afterIndex) || 0;
+                f.el.style.top = (r.top + r.height + prior) + 'px';
+                accumulated.set(f.afterIndex, prior + f.shift);
+            }
+        }
+
+        /**
          * Recalculate layout after height changes (thread toggle, font change).
          */
         function recalcLayoutInternal() {
@@ -856,8 +870,8 @@ const DiffVirtualScroller = (() => {
             const anchorIdx = findFirstVisibleRow(rows, scrollTop);
             const anchorOffset = scrollTop - rows[anchorIdx].top;
 
-            // Recompute layout (accounting for spliced comment form if present)
-            _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
+            // Recompute layout (accounting for all spliced comment forms)
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraForms);
             _container.style.height = _totalHeight + 'px';
 
             // Update positions of rendered elements
@@ -865,11 +879,8 @@ const DiffVirtualScroller = (() => {
                 el.style.top = rows[idx].top + 'px';
             }
 
-            // Keep comment form element positioned correctly
-            if (_extraFormEl && _extraFormAfterIndex >= 0) {
-                const r = rows[_extraFormAfterIndex];
-                _extraFormEl.style.top = (r.top + r.height) + 'px';
-            }
+            // Keep comment form elements positioned correctly
+            repositionForms();
 
             // If a navigation scroll is in progress, re-apply it to the updated row
             // position rather than anchoring — anchoring would cancel the smooth scroll
@@ -889,7 +900,8 @@ const DiffVirtualScroller = (() => {
             _destroyed = true;
             if (_rafId != null) cancelAnimationFrame(_rafId);
             if (_scrollArea) _scrollArea.removeEventListener('scroll', onScroll);
-            if (_extraFormObserver) { _extraFormObserver.disconnect(); _extraFormObserver = null; }
+            for (const f of _extraForms) f.observer?.disconnect();
+            _extraForms = [];
             _renderedElements.clear();
             _scrollArea = null;
             _container = null;
@@ -1089,20 +1101,18 @@ const DiffVirtualScroller = (() => {
 
         function recalcLayout() {
             if (_isSmallFile) return;
-            _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraForms);
             _container.style.height = _totalHeight + 'px';
             for (const [idx, el] of _renderedElements) {
                 el.style.top = rows[idx].top + 'px';
             }
-            if (_extraFormEl && _extraFormAfterIndex >= 0) {
-                const r = rows[_extraFormAfterIndex];
-                _extraFormEl.style.top = (r.top + r.height) + 'px';
-            }
+            repositionForms();
         }
 
         /**
          * Splice a comment-form element into the layout after a given row DOM element,
          * shifting all subsequent rows down so the form pushes content rather than overlaying it.
+         * Multiple forms may coexist; forms at the same afterIndex are stacked vertically.
          * No-op for small files (which use normal DOM flow and don't need this).
          */
         function insertFormRow(formEl, afterElement, onLayoutChange) {
@@ -1115,12 +1125,13 @@ const DiffVirtualScroller = (() => {
             }
             if (afterIndex === -1) return;
 
-            // Clean up any previous form first
-            if (_extraFormEl) removeFormRow();
-
-            // Position the form absolutely right below the target row and append to container
+            // Compute top: row bottom + sum of shifts from any already-inserted forms at same index
             const r = rows[afterIndex];
-            const formTop = r.top + r.height;
+            const priorShift = _extraForms
+                .filter(f => f.afterIndex === afterIndex)
+                .reduce((s, f) => s + f.shift, 0);
+            const formTop = r.top + r.height + priorShift;
+
             formEl.style.position = 'absolute';
             formEl.style.top = formTop + 'px';
             formEl.style.left = '0';
@@ -1132,12 +1143,15 @@ const DiffVirtualScroller = (() => {
             // Measure actual rendered height (getBoundingClientRect forces layout)
             const formH = formEl.getBoundingClientRect().height || 130;
 
-            // Store state and re-run layout so subsequent rows are shifted
-            _extraFormEl = formEl;
-            _extraFormAfterIndex = afterIndex;
-            _extraFormShift = formH;
+            // Insert sorted by afterIndex (stable: new forms at same index go after existing ones)
+            let insertAt = _extraForms.length;
+            for (let i = 0; i < _extraForms.length; i++) {
+                if (_extraForms[i].afterIndex > afterIndex) { insertAt = i; break; }
+            }
+            const entry = { el: formEl, afterIndex, shift: formH, observer: null };
+            _extraForms.splice(insertAt, 0, entry);
 
-            _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraForms);
             _container.style.height = _totalHeight + 'px';
 
             // Update positions of all currently-rendered rows after insertion point
@@ -1156,54 +1170,61 @@ const DiffVirtualScroller = (() => {
                 }
             }
 
-            // Watch for height changes as the user types / preview expands
-            _extraFormObserver = new ResizeObserver(() => {
-                if (!_extraFormEl) return;
-                const newH = _extraFormEl.getBoundingClientRect().height;
-                if (newH <= 0 || Math.abs(newH - _extraFormShift) <= 1) return;
-                _extraFormShift = newH;
-                _totalHeight = computeLayout(rows, _codeRowHeight, _extraFormAfterIndex, _extraFormShift);
+            // Per-form ResizeObserver: watch for height changes as user types / preview expands
+            const observer = new ResizeObserver(() => {
+                const newH = formEl.getBoundingClientRect().height;
+                if (newH <= 0 || Math.abs(newH - entry.shift) <= 1) return;
+                entry.shift = newH;
+                _totalHeight = computeLayout(rows, _codeRowHeight, _extraForms);
                 _container.style.height = _totalHeight + 'px';
+                repositionForms();
                 for (const [idx, el] of _renderedElements) {
-                    if (idx > _extraFormAfterIndex) el.style.top = rows[idx].top + 'px';
+                    if (idx > afterIndex) el.style.top = rows[idx].top + 'px';
                 }
                 onLayoutChange?.();
             });
-            _extraFormObserver.observe(formEl);
+            entry.observer = observer;
+            observer.observe(formEl);
         }
 
         /**
-         * Remove the spliced comment form and restore the original row layout.
+         * Remove a specific spliced comment form and restore the row layout.
+         * Caller passes the exact formEl that was previously inserted.
          */
-        function removeFormRow() {
-            if (!_extraFormEl || _isSmallFile) return;
+        function removeFormRow(formEl) {
+            if (_isSmallFile) return;
+            const idx = _extraForms.findIndex(f => f.el === formEl);
+            if (idx === -1) return;
 
-            if (_extraFormObserver) { _extraFormObserver.disconnect(); _extraFormObserver = null; }
-            _extraFormEl.remove();
-            const afterIndex = _extraFormAfterIndex;
+            const entry = _extraForms[idx];
+            entry.observer?.disconnect();
+            formEl.remove();
+            const afterIndex = entry.afterIndex;
 
-            _extraFormEl = null;
-            _extraFormAfterIndex = -1;
-            _extraFormShift = 0;
+            _extraForms.splice(idx, 1);
 
-            // Recompute layout without the form shift
-            _totalHeight = computeLayout(rows, _codeRowHeight);
+            // Recompute layout without this form's shift
+            _totalHeight = computeLayout(rows, _codeRowHeight, _extraForms);
             _container.style.height = _totalHeight + 'px';
 
-            // Restore positions of rows that were shifted
-            for (const [idx, el] of _renderedElements) {
-                if (idx > afterIndex) el.style.top = rows[idx].top + 'px';
+            // Reposition remaining forms and rows that were shifted
+            repositionForms();
+            for (const [i, el] of _renderedElements) {
+                if (i > afterIndex) el.style.top = rows[i].top + 'px';
             }
         }
 
         /**
-         * Return position and color of the spliced comment-form for minimap rendering,
-         * or null when no form is currently inserted.
+         * Return position and color of all spliced comment-forms for minimap rendering.
          */
-        function getExtraFormInfo() {
-            if (_extraFormAfterIndex < 0 || !_extraFormEl) return null;
-            const r = rows[_extraFormAfterIndex];
-            return { top: r.top + r.height, height: _extraFormShift, minimapColor: r.minimapColor ?? null };
+        function getExtraFormsInfo() {
+            const accumulated = new Map();
+            return _extraForms.map(f => {
+                const r = rows[f.afterIndex];
+                const prior = accumulated.get(f.afterIndex) || 0;
+                accumulated.set(f.afterIndex, prior + f.shift);
+                return { top: r.top + r.height + prior, height: f.shift, minimapColor: r.minimapColor ?? null };
+            });
         }
 
         function onRowRendered(callback) {
@@ -1258,7 +1279,8 @@ const DiffVirtualScroller = (() => {
             getCodeRowHeight,
             insertFormRow,
             removeFormRow,
-            getExtraFormInfo,
+            getExtraFormsInfo,
+            ensureRowRendered,
         };
     }
 
