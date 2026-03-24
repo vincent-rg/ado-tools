@@ -393,6 +393,10 @@
 .diff-lines-add-only .sbs-thread-side.sbs-thread-left { display: none; }
 .diff-lines-delete-only .sbs-thread-spacer:not(.sbs-thread-left),
 .diff-lines-delete-only .sbs-thread-side:not(.sbs-thread-left) { display: none; }
+/* SBS: comment forms on added/deleted files expand to full width */
+.diff-lines-add-only .sbs-line-comment-form > .sbs-line-comment-spacer,
+.diff-lines-delete-only .sbs-line-comment-form > .sbs-line-comment-spacer { display: none; }
+.diff-lines-delete-only .sbs-line-comment-form > :first-child { flex: 1 1 0; }
 /* Comment highlight is applied only via <mark> inside .diff-content */
 /* Thread rows between code lines must not participate in code text selection */
 .diff-lines .inline-thread,
