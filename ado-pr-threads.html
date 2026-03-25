@@ -4253,10 +4253,30 @@
 
                 // Non-changed file: show as read-only content with comment support
                 if (ct === 'none' || ct === '') {
-                    const [content, sourceInfo] = await Promise.all([
-                        ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' }),
-                        fetchCommitInfo(sourceCommit),
-                    ]);
+                    // Try sourceCommit first; if the file no longer exists there (e.g. it was added
+                    // and then moved/deleted within this PR so the cumulative diff omits it), fall
+                    // back to the latest iteration commit where the file still existed.
+                    let content, effectiveCommit = sourceCommit, fileWasDeleted = false;
+                    try {
+                        content = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
+                    } catch (_notFound) {
+                        // Walk iterations newest-first to find the last commit that had the file.
+                        for (let _i = allIterations.length - 1; _i >= 0; _i--) {
+                            const _ic = allIterations[_i]?.sourceRefCommit?.commitId;
+                            if (!_ic || _ic === sourceCommit) continue;
+                            try {
+                                content = await ADOAPI.getFileContent(currentConfig, filePath, { version: _ic, versionType: 'commit' });
+                                effectiveCommit = _ic;
+                                fileWasDeleted = true;
+                                break;
+                            } catch { /* try earlier */ }
+                        }
+                        if (content === undefined) {
+                            diffPanel.innerHTML = '<div class="file-diff-error">This file could not be found in any push of this PR.</div>';
+                            return;
+                        }
+                    }
+                    const sourceInfo = await fetchCommitInfo(effectiveCommit);
                     if (selectedFilePath !== filePath) return;
 
                     // Build a synthetic diff (all unchanged lines) so we can reuse renderDiffLines
@@ -4292,7 +4312,7 @@
                     diffPanel.innerHTML = `
                         <div class="file-diff-header">
                             <span class="file-diff-path">${ADOContent.escapeHtml(filePath)}</span>
-                            <span style="font-size: 12px; color: #a19f9d;">(unchanged file)</span>
+                            <span style="font-size: 12px; color: #a19f9d;">${fileWasDeleted ? '(added or deleted in a different push — showing nearest known version)' : '(unchanged file)'}</span>
                             <div class="thread-nav" id="threadNav" style="display:none;">
                                 <button class="thread-nav-btn" id="threadNavPrev" onclick="jumpToPrevThread()" title="Previous thread (Alt+Up)">&#9650;</button>
                                 <span class="thread-nav-label" id="threadNavLabel"></span>
