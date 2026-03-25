@@ -450,6 +450,8 @@ const DiffVirtualScroller = (() => {
             isAddedFile,
             isDeletedFile,
             isUnchangedFile,
+            highlightedOldLines,  // pre-computed per-line highlighted HTML for old file
+            highlightedNewLines,  // pre-computed per-line highlighted HTML for new file
         } = options;
 
         // Build the virtual row data model
@@ -495,17 +497,21 @@ const DiffVirtualScroller = (() => {
 
             let contentHtml;
             if (entry.type === 'unchanged') {
-                const r = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || []);
+                const preHl = highlightedNewLines?.[row.newLineNum - 1] ?? null;
+                const r = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || [], null, preHl);
                 if (!r.commented) {
-                    const r2 = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || []);
+                    const preHlOld = highlightedOldLines?.[row.oldLineNum - 1] ?? null;
+                    const r2 = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || [], null, preHlOld);
                     contentHtml = r2.html;
                 } else {
                     contentHtml = r.html;
                 }
             } else if (entry.type === 'removed') {
-                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || [], entry.charDiff || null));
+                const preHl = highlightedOldLines?.[row.oldLineNum - 1] ?? null;
+                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.oldLineNum, false, threadRangesRaw || [], entry.charDiff || null, preHl));
             } else if (entry.type === 'added') {
-                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || [], entry.charDiff || null));
+                const preHl = highlightedNewLines?.[row.newLineNum - 1] ?? null;
+                ({ html: contentHtml } = DiffUtils.getHighlightedContent(entry.content, row.newLineNum, true, threadRangesRaw || [], entry.charDiff || null, preHl));
             }
 
             const indicator = row.cssClass === 'diff-removed' ? '−' : (row.cssClass === 'diff-added' ? '+' : ' ');
@@ -530,12 +536,14 @@ const DiffVirtualScroller = (() => {
             if (left.cssClass === 'sbs-empty' || left.cssClass === 'sbs-gone') {
                 leftContentHtml = '';
             } else {
-                ({ html: leftContentHtml } = DiffUtils.getHighlightedContent(left.content, left.lineNum, false, threadRangesRaw || [], left.charDiff || null));
+                const preHlLeft = highlightedOldLines?.[left.lineNum - 1] ?? null;
+                ({ html: leftContentHtml } = DiffUtils.getHighlightedContent(left.content, left.lineNum, false, threadRangesRaw || [], left.charDiff || null, preHlLeft));
             }
             if (right.cssClass === 'sbs-empty' || right.cssClass === 'sbs-gone') {
                 rightContentHtml = '';
             } else {
-                ({ html: rightContentHtml } = DiffUtils.getHighlightedContent(right.content, right.lineNum, true, threadRangesRaw || [], right.charDiff || null));
+                const preHlRight = highlightedNewLines?.[right.lineNum - 1] ?? null;
+                ({ html: rightContentHtml } = DiffUtils.getHighlightedContent(right.content, right.lineNum, true, threadRangesRaw || [], right.charDiff || null, preHlRight));
             }
 
             const leftNum = left.lineNum != null ? left.lineNum : '';

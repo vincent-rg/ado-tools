@@ -82,7 +82,7 @@ function buildCharDiffHtml(charDiff, isNewLine) {
     return result;
 }
 
-function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges, charDiff = null) {
+function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges, charDiff = null, preHighlightedHtml = null) {
     for (const tr of threadRanges) {
         if (!tr.appliesToView) continue;
         const matchesRight = tr.useRight && isNewLine && lineNum >= tr.startLine && lineNum <= tr.endLine;
@@ -93,6 +93,9 @@ function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges, cha
     }
     if (charDiff) {
         return { html: buildCharDiffHtml(charDiff, isNewLine), commented: false };
+    }
+    if (preHighlightedHtml !== null) {
+        return { html: preHighlightedHtml, commented: false };
     }
     return { html: _escapeHtml(rawContent), commented: false };
 }
@@ -396,7 +399,11 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
         }
     }
 
-    const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldContent, newContent };
+    const language = (typeof SyntaxHighlight !== 'undefined') ? SyntaxHighlight.langFromPath(filePath) : null;
+    const highlightedOldLines = (language && oldContent) ? SyntaxHighlight.highlightLines(oldContent, language) : null;
+    const highlightedNewLines = (language && newContent) ? SyntaxHighlight.highlightLines(newContent, language) : null;
+
+    const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldContent, newContent, highlightedOldLines, highlightedNewLines };
     // Cache unless new content failed (may be transient). Old-side failures are deterministic —
     // the file genuinely didn't exist at that commit (e.g. rebase-introduced file) — safe to cache.
     if (!newFetchFailed) {

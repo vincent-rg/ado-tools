@@ -1201,7 +1201,14 @@ const ADOContent = {
 
         // 1. Parse code blocks first
         result = result.replace(/```(\w+)?\n?([^`]+)```/g, (match, language, code) => {
-            const html = `<pre><code>${code.replace(/^\n|\n$/g, '')}</code></pre>`;
+            const trimmed = code.replace(/^\n|\n$/g, '');
+            // Input is pre-HTML-escaped; unescape to get raw source before highlighting
+            const raw = trimmed.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+            const highlighted = (typeof SyntaxHighlight !== 'undefined' && language)
+                ? SyntaxHighlight.highlight(raw, language)
+                : ADOContent.escapeHtml(raw);
+            const langAttr = language ? ` class="language-${language} hljs"` : '';
+            const html = `<pre><code${langAttr}>${highlighted}</code></pre>`;
             return createPlaceholder(html);
         });
 

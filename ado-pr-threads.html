@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="css/pr-threads-checks.css">
     <link rel="stylesheet" href="css/pr-threads-files.css">
     <link rel="stylesheet" href="css/pr-threads-iteration.css">
+    <link rel="stylesheet" href="css/syntax-highlight.css">
 </head>
 <body>
     <div class="container wide">
@@ -191,6 +192,8 @@
         </div>
     </div>
 
+    <script src="js/highlight.min.js"></script>
+    <script src="js/syntax-highlight.js"></script>
     <script src="js/common.js"></script>
     <script src="js/diff.js"></script>
     <script src="js/diff-utils.js"></script>
@@ -1945,7 +1948,7 @@
                 const oldCInfoCached = oldCommitId ? (baseCommitCache.get(oldCommitId) || null) : null;
                 const newCInfoCached = newCommitId ? (baseCommitCache.get(newCommitId) || null) : null;
                 const savedScroll = saveDiffScroll();
-                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent, oldCInfoCached, newCInfoCached);
+                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent, oldCInfoCached, newCInfoCached, cached.highlightedOldLines || null, cached.highlightedNewLines || null);
                 restoreDiffScroll(savedScroll);
 
                 // Restore collapse state for existing threads. New threads (from the reply
@@ -4445,7 +4448,7 @@
                 // the target branch) but the base commit doesn't have it — treat it as 'add'.
                 const effectiveChangeType = (result.oldFetchFailed && !ct.includes('delete')) ? 'add' : changeType;
 
-                renderFileDiff(filePath, effectiveChangeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent, oldCInfo, newCInfo);
+                renderFileDiff(filePath, effectiveChangeType, result.diff, result.addedCount, result.removedCount, sourceServerItem, result.oldContent, result.newContent, oldCInfo, newCInfo, result.highlightedOldLines || null, result.highlightedNewLines || null);
                 updateHunkNav();
                 updateThreadNav(scrollToThreadId);
                 if (scrollToThreadId) scrollToThread(scrollToThreadId);
@@ -5226,7 +5229,7 @@
             return { init, destroy };
         })();
 
-        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem, oldContent, newContent, oldCommitInfo = null, newCommitInfo = null) {
+        function renderFileDiff(filePath, changeType, diff, addedCount, removedCount, sourceServerItem, oldContent, newContent, oldCommitInfo = null, newCommitInfo = null, highlightedOldLines = null, highlightedNewLines = null) {
             clearSelectionComment();
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
@@ -5424,6 +5427,8 @@
                 threadRangesRaw: threadRanges,
                 isAddedFile: ct.includes('add'),
                 isDeletedFile: ct.includes('delete'),
+                highlightedOldLines,
+                highlightedNewLines,
             });
 
             currentDiffScroller.mount(scrollArea, diffLinesContainer);

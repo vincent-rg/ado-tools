@@ -123,7 +123,7 @@ describe('ADOContent', () => {
         });
 
         it('parses code blocks', () => {
-            expect(ADOContent.parseMarkdown('```js\nconst x = 1;\n```')).toBe('<pre><code>const x = 1;</code></pre>');
+            expect(ADOContent.parseMarkdown('```js\nconst x = 1;\n```')).toBe('<pre><code class="language-js hljs">const x = 1;</code></pre>');
         });
 
         it('parses images', () => {
