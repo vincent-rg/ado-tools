@@ -81,11 +81,12 @@ function deselectAllThreads() {
 async function changeThreadStatus(threadId, newStatus) {
     if (!currentConfig || !currentPRId || !newStatus) return;
 
+    const _opId = ++window._adoOpSeq;
+    if (window._adoDebug) console.log(`[CRUD op#${_opId}] changeThreadStatus threadId=${threadId} newStatus=${newStatus} t=${Date.now()}`);
+
     try {
-        console.log(`Attempting to change thread ${threadId} status to: ${newStatus}`);
         const updatedThread = await ADOAPI.updateThreadStatus(currentConfig, currentPRId, threadId, newStatus);
-        console.log(`API returned status:`, updatedThread.status);
-        console.log(`Full updated thread:`, updatedThread);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] API returned status=${updatedThread.status} t=${Date.now()}`);
 
         // Update local thread data with response from API
         // Note: threadId from onclick is a string, but thread.id is a number
@@ -94,18 +95,21 @@ async function changeThreadStatus(threadId, newStatus) {
             const oldStatus = thread.status;
             thread.status = updatedThread.status;
             thread.properties = updatedThread.properties;
-            console.log(`Updated local thread from ${oldStatus} to ${thread.status}`);
+            if (window._adoDebug) console.log(`[CRUD op#${_opId}] optimistic update ${oldStatus} → ${thread.status}`);
         } else {
-            console.warn(`Could not find thread ${threadId} in allThreads to update locally`);
+            if (window._adoDebug) console.warn(`[CRUD op#${_opId}] thread ${threadId} not found in allThreads for optimistic update`);
         }
 
         // Refresh display to show updated badge
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] applyThreadFilters start t=${Date.now()}`);
         applyThreadFilters();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] done t=${Date.now()}`);
         refreshInlineThreadsIfNeeded();
 
         return true;
     } catch (error) {
         console.error(`Failed to update thread status:`, error);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, error.message);
         alert(`Failed to update thread status: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
         return false;
     }
@@ -117,29 +121,35 @@ async function removeThreadStatus(threadId) {
     const confirmed = confirm('Are you sure you want to remove the status from this thread?');
     if (!confirmed) return;
 
+    const _opId = ++window._adoOpSeq;
+    if (window._adoDebug) console.log(`[CRUD op#${_opId}] removeThreadStatus threadId=${threadId} t=${Date.now()}`);
+
     try {
-        console.log(`Attempting to remove status from thread ${threadId}`);
         const updatedThread = await ADOAPI.removeThreadStatus(currentConfig, currentPRId, threadId);
-        console.log(`API returned after removing status:`, updatedThread);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] API done, new status=${updatedThread.status} t=${Date.now()}`);
 
         // Update local thread data with response from API
         // Note: threadId from onclick is a string, but thread.id is a number
         const thread = allThreads.find(t => t.id == threadId);
         if (thread && updatedThread) {
+            const oldStatus = thread.status;
             thread.status = updatedThread.status;
             thread.properties = updatedThread.properties;
-            console.log(`Removed status from thread, new status:`, thread.status);
+            if (window._adoDebug) console.log(`[CRUD op#${_opId}] optimistic update ${oldStatus} → ${thread.status}`);
         } else {
-            console.warn(`Could not find thread ${threadId} in allThreads to update locally`);
+            if (window._adoDebug) console.warn(`[CRUD op#${_opId}] thread ${threadId} not found in allThreads for optimistic update`);
         }
 
         // Refresh display
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] applyThreadFilters start t=${Date.now()}`);
         applyThreadFilters();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] done t=${Date.now()}`);
         refreshInlineThreadsIfNeeded();
 
         return true;
     } catch (error) {
         console.error(`Failed to remove thread status:`, error);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, error.message);
         alert(`Failed to remove thread status: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
         return false;
     }

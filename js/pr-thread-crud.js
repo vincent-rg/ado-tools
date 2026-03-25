@@ -1,4 +1,6 @@
 // Comment CRUD, description/title editing, image paste/attachment for ado-pr-threads.html
+// Debug logging: set window._adoDebug = true in DevTools console to enable.
+if (typeof window._adoOpSeq === 'undefined') window._adoOpSeq = 0;
 
 function showReplyForm(threadId, prefix = '') {
     const container = document.getElementById(`${prefix}reply-form-${threadId}`);
@@ -98,17 +100,25 @@ async function submitReply(threadId, prefix = '') {
     const content = resolveMentionsForSubmit(document.getElementById(`${prefix}reply-content-${threadId}`));
     if (!content) { alert('Please enter a reply.'); return; }
 
+    const _opId = ++window._adoOpSeq;
+    if (window._adoDebug) console.log(`[CRUD op#${_opId}] submitReply start threadId=${threadId} prefix="${prefix}" t=${Date.now()}`);
+
     const btn = document.getElementById(`${prefix}reply-submit-${threadId}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
     try {
         clearDraft('reply\x00' + threadId);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] addComment start t=${Date.now()}`);
         await ADOAPI.addComment(currentConfig, currentPRId, threadId, content);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] addComment done t=${Date.now()}`);
         const saved = saveDiffScroll();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI start t=${Date.now()}`);
         await refreshThreadsFromAPI();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
         restoreDiffScroll(saved);
     } catch (error) {
         console.error('Failed to add reply:', error);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR resetting button t=${Date.now()}`, error.message);
         alert(`Failed to add reply: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
         if (btn) { btn.disabled = false; btn.textContent = 'Reply'; }
     }
@@ -229,15 +239,22 @@ async function saveEditComment(threadId, commentId, prefix = '') {
     const content = resolveMentionsForSubmit(document.getElementById(`${prefix}edit-content-${threadId}-${commentId}`));
     if (!content) { alert('Comment cannot be empty.'); return; }
 
+    const _opId = ++window._adoOpSeq;
+    if (window._adoDebug) console.log(`[CRUD op#${_opId}] saveEditComment start threadId=${threadId} commentId=${commentId} t=${Date.now()}`);
+
     const btn = document.getElementById(`${prefix}edit-save-${threadId}-${commentId}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
     try {
         clearDraft('edit\x00' + threadId + '\x00' + commentId);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] updateComment start t=${Date.now()}`);
         await ADOAPI.updateComment(currentConfig, currentPRId, threadId, commentId, content);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] updateComment done, refreshThreadsFromAPI start t=${Date.now()}`);
         await refreshThreadsFromAPI();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
     } catch (error) {
         console.error('Failed to update comment:', error);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR resetting button t=${Date.now()}`, error.message);
         alert(`Failed to update comment: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
         if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
     }
@@ -490,13 +507,20 @@ async function saveEditTitle() {
 async function deleteComment(threadId, commentId) {
     if (!confirm('Are you sure you want to delete this comment?')) return;
 
+    const _opId = ++window._adoOpSeq;
+    if (window._adoDebug) console.log(`[CRUD op#${_opId}] deleteComment start threadId=${threadId} commentId=${commentId} t=${Date.now()}`);
+
     try {
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] deleteComment API start t=${Date.now()}`);
         await ADOAPI.deleteComment(currentConfig, currentPRId, threadId, commentId);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] deleteComment API done, refreshThreadsFromAPI start t=${Date.now()}`);
         const saved = saveDiffScroll();
         await refreshThreadsFromAPI();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
         restoreDiffScroll(saved);
     } catch (error) {
         console.error('Failed to delete comment:', error);
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, error.message);
         alert(`Failed to delete comment: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
     }
 }
@@ -506,16 +530,21 @@ async function toggleCommentLike(threadId, commentId, currentlyLiked) {
         `.comment[data-thread-id="${threadId}"][data-comment-id="${commentId}"] .comment-like-btn`
     );
     if (btn) btn.disabled = true;
+    const _opId = ++window._adoOpSeq;
+    if (window._adoDebug) console.log(`[CRUD op#${_opId}] toggleCommentLike threadId=${threadId} commentId=${commentId} liked=${currentlyLiked} t=${Date.now()}`);
     try {
         if (currentlyLiked) {
             await ADOAPI.unlikeComment(currentConfig, currentPRId, threadId, commentId);
         } else {
             await ADOAPI.likeComment(currentConfig, currentPRId, threadId, commentId);
         }
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] like API done, refreshThreadsFromAPI start t=${Date.now()}`);
         const saved = saveDiffScroll();
         await refreshThreadsFromAPI();
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
         restoreDiffScroll(saved);
     } catch (e) {
+        if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, e.message);
         ADOUI.showError('Failed to update like: ' + e.message);
         if (btn) btn.disabled = false;
     }

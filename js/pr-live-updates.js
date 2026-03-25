@@ -80,22 +80,29 @@
         // Fetch and update threads
         async function fetchAndUpdateThreads(config) {
             try {
+                if (window._adoDebug) console.log(`[POLL] fetchAndUpdateThreads start t=${Date.now()}`);
                 const threadsData = await ADOAPI.getPRThreads(config, currentPRId);
                 const newThreads = (threadsData.value || []).map((t, idx) => ({ ...t, _originalIndex: idx }));
+                if (window._adoDebug) console.log(`[POLL] fetchAndUpdateThreads got ${newThreads.length} threads t=${Date.now()}`);
 
                 // Check if threads changed (compare without _originalIndex for stability)
                 const compareThreads = (threads) => JSON.stringify(threads.map(t => {
                     const { _originalIndex, ...rest } = t;
                     return rest;
                 }));
-                if (compareThreads(newThreads) !== compareThreads(allThreads)) {
+                const changed = compareThreads(newThreads) !== compareThreads(allThreads);
+                if (window._adoDebug) console.log(`[POLL] threads changed=${changed} (current=${allThreads.length}, new=${newThreads.length})`);
+                if (changed) {
+                    if (window._adoDebug) console.log(`[POLL] allThreads replacing (${allThreads.length} → ${newThreads.length}) t=${Date.now()}`);
                     allThreads = newThreads;
                     // Resolve any new @mention identities before re-rendering
                     await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
                     buildThreadsByFilePath();
                     updateThreadStats();
                     // Re-apply filters to refresh thread display
+                    if (window._adoDebug) console.log(`[POLL] applyThreadFilters start t=${Date.now()}`);
                     applyThreadFilters();
+                    if (window._adoDebug) console.log(`[POLL] fetchAndUpdateThreads done t=${Date.now()}`);
                     refreshInlineThreadsIfNeeded();
                 }
             } catch (error) {
@@ -271,6 +278,7 @@
         // Poll all PR data
         async function pollPRData(config) {
             if (document.hidden) return; // Don't poll if tab is hidden
+            if (window._adoDebug) console.log(`[POLL] pollPRData tick t=${Date.now()}`);
 
             await Promise.all([
                 fetchAndUpdatePRInfo(config),
