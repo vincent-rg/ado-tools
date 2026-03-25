@@ -142,8 +142,9 @@ function startEditComment(threadId, commentId, prefix = '') {
         const { update } = attachEditPreview(textarea);
         update();
         const _k = 'edit\x00' + threadId + '\x00' + commentId;
-        saveDraft(_k, commentDrafts.get(_k)?.content ?? ''); // mark form as open immediately
-        if (commentDrafts.has(_k)) textarea.value = commentDrafts.get(_k).content || '';
+        const existingDraft = commentDrafts.get(_k);
+        saveDraft(_k, existingDraft?.content ?? ''); // mark form as open immediately
+        if (existingDraft?.content) textarea.value = existingDraft.content;
         textarea.addEventListener('input', () => saveDraft(_k, textarea.value));
     }
 
