@@ -1201,7 +1201,7 @@ const ADOContent = {
 
         // 1. Parse code blocks first
         result = result.replace(/```(\w+)?\n?([^`]+)```/g, (match, language, code) => {
-            const html = `<pre><code>${code.trim()}</code></pre>`;
+            const html = `<pre><code>${code.replace(/^\n|\n$/g, '')}</code></pre>`;
             return createPlaceholder(html);
         });
 
