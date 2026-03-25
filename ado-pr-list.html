@@ -2567,6 +2567,7 @@
                     <tr data-pr-key="${prKey}" class="${grayedOutClass}">
                         <td style="${getColumnStyle('id')}">
                             <a href="${prThreadsUrl}"
+                               target="_blank"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <strong>#${pr.pullRequestId}</strong>
@@ -2574,6 +2575,7 @@
                         </td>
                         ${col('title', `<td style="${getColumnStyle('title')}">
                             <a href="${prThreadsUrl}"
+                               target="_blank"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
                                style="color: inherit; text-decoration: none; display: block;">
                                 <div class="pr-title">${ADOContent.escapeHtml(pr.title)}${filterIndicator}</div>
