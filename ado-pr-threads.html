@@ -6053,6 +6053,22 @@
             const diffPanel = document.getElementById('fileDiffPanel');
             if (!diffPanel) return;
 
+            diffPanel.addEventListener('dblclick', () => {
+                const sel = window.getSelection();
+                if (!sel || !sel.rangeCount) return;
+                const range = sel.getRangeAt(0);
+                const text = range.toString();
+                const excess = text.length - text.trimEnd().length;
+                if (excess > 0) {
+                    const end = range.endContainer;
+                    if (end.nodeType === Node.TEXT_NODE && range.endOffset >= excess) {
+                        range.setEnd(end, range.endOffset - excess);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }
+            });
+
             diffPanel.addEventListener('mouseup', (e) => {
                 const mouseX = e.clientX;
                 const mouseY = e.clientY;
