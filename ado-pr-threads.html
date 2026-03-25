@@ -4585,10 +4585,17 @@
             // DOM range (which spans both sides). The next mousedown resets it before
             // any new selection starts.
             container.addEventListener('mousedown', (e) => {
+                const wasLeft = container.classList.contains('selecting-left');
+                const wasRight = container.classList.contains('selecting-right');
                 container.classList.remove('selecting-left', 'selecting-right');
                 if (e.target.closest('.sbs-left')) {
+                    // Switching from right → clear stale right-side selection so browser
+                    // doesn't treat the right-side DOM range as the drag source.
+                    if (wasRight) window.getSelection().removeAllRanges();
                     container.classList.add('selecting-left');
                 } else if (e.target.closest('.sbs-right')) {
+                    // Switching from left → same reason.
+                    if (wasLeft) window.getSelection().removeAllRanges();
                     container.classList.add('selecting-right');
                 }
             });
