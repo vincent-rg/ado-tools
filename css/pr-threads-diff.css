@@ -398,15 +398,15 @@
 .diff-lines-delete-only .sbs-line-comment-form > .sbs-line-comment-spacer { display: none; }
 .diff-lines-delete-only .sbs-line-comment-form > :first-child { flex: 1 1 0; }
 /* Comment highlight is applied only via <mark> inside .diff-content */
-/* Thread rows between code lines must not participate in code text selection */
-.diff-lines .inline-thread,
-.sbs-thread-row {
+/* Bidirectional selection isolation (managed by setupDiffSelectionIsolation).
+   No child overrides — user-select:none must be strict to prevent re-expansion. */
+.diff-lines.selecting-code .inline-thread,
+.diff-lines-sbs.selecting-code .sbs-thread-row {
     user-select: none;
 }
-/* But allow selecting comment text within threads */
-.diff-lines .inline-thread .comment-content,
-.sbs-thread-side .comment-content {
-    user-select: text;
+.diff-lines.selecting-thread .diff-content,
+.diff-lines-sbs.selecting-thread .diff-content {
+    user-select: none;
 }
 /* SBS thread positioning */
 .sbs-thread-row {

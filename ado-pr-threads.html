@@ -4687,6 +4687,27 @@
             });
         }
 
+        function setupDiffSelectionIsolation(diffPanel) {
+            // Prevent thread panels and code rows from bleeding into each other's
+            // drag-selections. Same pattern as setupSbsSelectionLock: classes are NOT
+            // removed on mouseup — doing so lets the browser re-expand the highlight to
+            // the full DOM range. The next mousedown resets state before a new selection.
+            const container = diffPanel.querySelector('.diff-lines, .diff-lines-sbs');
+            if (!container) return;
+            container.addEventListener('mousedown', (e) => {
+                const wasCode = container.classList.contains('selecting-code');
+                const wasThread = container.classList.contains('selecting-thread');
+                container.classList.remove('selecting-code', 'selecting-thread');
+                if (!e.target.closest('.inline-thread')) {
+                    if (wasThread) window.getSelection().removeAllRanges();
+                    container.classList.add('selecting-code');
+                } else {
+                    if (wasCode) window.getSelection().removeAllRanges();
+                    container.classList.add('selecting-thread');
+                }
+            });
+        }
+
         function setupDiffMinimap(diffPanel, scroller) {
             diffMinimapDraw = null;
             diffMinimapInvalidate = null;
@@ -5513,6 +5534,7 @@
 
             // Set up horizontal scroll sync, selection lock, and resizer for SBS mode.
             // Resizer must run first so it applies --sbs-left-pct before scroll sync measures widths.
+            setupDiffSelectionIsolation(diffPanel);
             if (isSbs) {
                 if (!isSinglePane) setupSbsResizer(diffPanel);
                 setupSbsSelectionLock(diffPanel);
