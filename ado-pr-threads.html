@@ -788,19 +788,57 @@
         }
 
         // Per-form cleanup helpers
-        function clearFormHighlight(formEl) {
-            const el = formEl._highlightContentEl;
-            if (el) restoreHighlightEl(el, '.line-comment-highlight-mark');
-            (formEl._highlightEls || []).forEach(e => restoreHighlightEl(e, '.selection-highlight-mark'));
+
+        // Wrap the character range [start, end) within el in a <mark> element.
+        // Walks text nodes, splits them at boundaries, and wraps each segment.
+        // Returns an array of inserted <mark> elements (one per text-node segment).
+        function wrapCharRange(el, start, end, className, style) {
+            if (start >= end) return [];
+            const segments = [];
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            let charPos = 0;
+            let node = walker.nextNode();
+            while (node) {
+                const nodeStart = charPos;
+                const nodeEnd = charPos + node.textContent.length;
+                if (nodeEnd > start && nodeStart < end) {
+                    segments.push({
+                        node,
+                        segStart: Math.max(0, start - nodeStart),
+                        segEnd: Math.min(node.textContent.length, end - nodeStart)
+                    });
+                }
+                charPos = nodeEnd;
+                if (charPos >= end) break;
+                node = walker.nextNode();
+            }
+            const marks = [];
+            for (const { node, segStart, segEnd } of segments) {
+                // Split at segEnd first to preserve segStart index on the original node
+                if (segEnd < node.textContent.length) node.splitText(segEnd);
+                const target = segStart > 0 ? node.splitText(segStart) : node;
+                const mark = document.createElement('mark');
+                mark.className = className;
+                mark.style.cssText = style;
+                target.parentNode.insertBefore(mark, target);
+                mark.appendChild(target);
+                marks.push(mark);
+            }
+            return marks;
         }
 
-        function restoreHighlightEl(el, markSelector) {
-            const mark = el?.querySelector(markSelector);
-            if (!mark) return;
-            const parent = mark.parentNode;
-            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-            parent.removeChild(mark);
+        // Unwrap a single <mark> element: move its children before it, then remove it.
+        function unwrapMark(markEl) {
+            if (!markEl?.parentNode) return;
+            const parent = markEl.parentNode;
+            while (markEl.firstChild) parent.insertBefore(markEl.firstChild, markEl);
+            parent.removeChild(markEl);
             parent.normalize();
+        }
+
+        function clearFormHighlight(formEl) {
+            (formEl._highlightContentEls || []).forEach(unwrapMark);
+            (formEl._highlightEls || []).forEach(unwrapMark);
         }
 
         function cancelLineComment(btn) {
@@ -846,8 +884,10 @@
                 ? bubbleEl.closest('.sbs-left, .sbs-right')?.querySelector('.diff-content')
                 : bubbleEl.closest('.diff-line')?.querySelector('.diff-content');
             if (contentEl) {
-                const text = contentEl.textContent;
-                contentEl.innerHTML = `<mark class="line-comment-highlight-mark" style="background: #ffe082; color: inherit;">${ADOContent.escapeHtml(text)}</mark>`;
+                formEl._highlightContentEls = wrapCharRange(
+                    contentEl, 0, contentEl.textContent.length,
+                    'line-comment-highlight-mark', 'background: #ffe082; color: inherit;'
+                );
             }
 
             let formEl;
@@ -894,8 +934,6 @@
                 insertCommentFormAfterRow(formEl, diffLine);
             }
 
-            // Track highlight element for per-form cleanup
-            formEl._highlightContentEl = contentEl ?? null;
 
             const textarea = formEl.querySelector('.line-comment-textarea');
             if (textarea) {
@@ -6015,11 +6053,12 @@
                 }
             }
 
-            // Apply <mark> to each content element based on offsets
+            // Insert <mark> elements directly into the DOM (preserving existing HTML structure)
+            const marks = [];
             for (let i = 0; i < contentEls.length; i++) {
                 const el = contentEls[i];
                 const lineNum = lineNums[i];
-                const text = el.textContent;
+                const textLen = el.textContent.length;
 
                 let markStart, markEnd;
                 if (lineNum === parsed.startLine && lineNum === parsed.endLine) {
@@ -6027,25 +6066,23 @@
                     markEnd = parsed.endOffset - 1;
                 } else if (lineNum === parsed.startLine) {
                     markStart = parsed.startOffset - 1;
-                    markEnd = text.length;
+                    markEnd = textLen;
                 } else if (lineNum === parsed.endLine) {
                     markStart = 0;
                     markEnd = parsed.endOffset - 1;
                 } else {
                     markStart = 0;
-                    markEnd = text.length;
+                    markEnd = textLen;
                 }
 
                 markStart = Math.max(0, markStart);
-                markEnd = Math.min(text.length, markEnd);
+                markEnd = Math.min(textLen, markEnd);
 
-                const before = ADOContent.escapeHtml(text.substring(0, markStart));
-                const highlighted = ADOContent.escapeHtml(text.substring(markStart, markEnd));
-                const after = ADOContent.escapeHtml(text.substring(markEnd));
-                el.innerHTML = `${before}<mark class="selection-highlight-mark" style="background: #ffe082;">${highlighted}</mark>${after}`;
+                const inserted = wrapCharRange(el, markStart, markEnd, 'selection-highlight-mark', 'background: #ffe082;');
+                marks.push(...inserted);
             }
 
-            return contentEls;
+            return marks;
         }
 
         async function createSelectionComment(btn) {
