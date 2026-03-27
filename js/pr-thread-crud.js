@@ -550,6 +550,18 @@ async function toggleCommentLike(threadId, commentId, currentlyLiked) {
     }
 }
 
+function copyCommentUrl(threadId, filePath) {
+    const url = ADOURL.buildThreadUrl(currentConfig, currentPRData.pullRequestId, threadId, filePath || null);
+    navigator.clipboard.writeText(url).then(() => {
+        const btns = document.querySelectorAll(`.comment-copy-url-btn[data-thread-id="${threadId}"]`);
+        btns.forEach(btn => {
+            btn.title = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.title = 'Copy link'; btn.classList.remove('copied'); }, 1500);
+        });
+    });
+}
+
 // Convenience aliases for inline view (kept for backward compat with existing onclick handlers)
 function showInlineReplyForm(threadId) { showReplyForm(threadId, 'inline-'); }
 function hideInlineReplyForm(threadId) { hideReplyForm(threadId, 'inline-'); }

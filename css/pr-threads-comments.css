@@ -99,6 +99,10 @@
     color: #a4262c;
 }
 
+.comment-action-btn.copied {
+    color: #107c10;
+}
+
 .comment-like-btn {
     display: inline-flex;
     align-items: center;
