@@ -396,3 +396,34 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Thread with unread comments */
+.thread.thread-has-unread {
+    border-left: 3px solid #0078d4;
+}
+
+/* Unread filter chip — same appearance as .status-chip */
+.unread-filter-chip {
+    padding: 6px 12px;
+    border: 1px solid #d1d1d1;
+    border-radius: 0;
+    background: white;
+    color: #323130;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    text-align: left;
+    width: 100%;
+}
+
+.unread-filter-chip:hover {
+    border-color: #0078d4;
+    background: #f3f9fd;
+}
+
+.unread-filter-chip.selected {
+    background: #0078d4;
+    color: white;
+    border-color: #0078d4;
+}

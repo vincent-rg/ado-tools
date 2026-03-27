@@ -62,6 +62,14 @@
                     </div>
 
                     <div class="filter-section">
+                        <h4>Read Status</h4>
+                        <div class="status-chips-vertical">
+                            <button class="unread-filter-chip" id="unreadFilterChip"
+                                onclick="toggleUnreadFilter(this)">Unread only</button>
+                        </div>
+                    </div>
+
+                    <div class="filter-section">
                         <h4>Thread Author</h4>
                         <select id="threadAuthorFilter" onchange="applyThreadFilters()">
                             <option value="">All authors</option>
@@ -209,6 +217,7 @@
     <script src="js/pr-file-search.js"></script>
     <script src="js/pr-line-stats.js"></script>
     <script src="js/pr-live-updates.js"></script>
+    <script src="js/pr-review-timestamps.js"></script>
     <script>
         DiffUtils.init(ADOContent.escapeHtml.bind(ADOContent));
 
@@ -227,6 +236,7 @@
         let baseCommitCache = new Map();  // commitId -> commit object
         let currentMergeBase = null;
         let currentUserId = null;
+        let reviewTimestamps = new Map();
         let selectedIterationStart = null; // null = "all"
         let selectedIterationEnd = null;
         let threadsByFilePath = new Map();     // Map<filePath, Thread[]>
@@ -1327,6 +1337,15 @@
                 currentUserId = currentUser?.id || null;
 
                 allThreads = (threadsData.value || []).map((t, idx) => ({ ...t, _originalIndex: idx }));
+
+                reviewTimestamps = new Map();
+                try {
+                    reviewTimestamps = await PRReviewTimestamps.load(
+                        config.serverUrl, config.organization, String(currentPRId));
+                } catch (e) {
+                    console.warn('Failed to load review timestamps:', e);
+                }
+
                 allIterations = iterationsData.value || [];
                 currentPRData = prData;
                 currentConfig = config;
@@ -1442,8 +1461,9 @@
             const selectedCommentAuthor = document.getElementById('commentAuthorFilter').value;
             const searchText = document.getElementById('searchFilter').value.trim();
 
-            const threadFilters = { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText };
-            const filterDeps = { normalize: ADOSearch.normalize };
+            const unreadOnly = document.getElementById('unreadFilterChip')?.classList.contains('selected') ?? false;
+            const threadFilters = { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText, unreadOnly };
+            const filterDeps = { normalize: ADOSearch.normalize, reviewTimestamps, currentUserId };
 
             const filtered = allThreads.filter(thread =>
                 PRThreadsUtils.threadMatchesFilters(thread, threadFilters, filterDeps)
@@ -1514,6 +1534,7 @@
             if (document.getElementById('threadAuthorFilter').value) count++;
             if (document.getElementById('commentAuthorFilter').value) count++;
             if (document.getElementById('searchFilter').value.trim()) count++;
+            if (document.getElementById('unreadFilterChip')?.classList.contains('selected')) count++;
 
             const badge = document.getElementById('filterActiveBadge');
             badge.textContent = count;
@@ -1528,6 +1549,35 @@
             btn.textContent = isCollapsed ? '▶' : '◀';
             btn.title = isCollapsed ? 'Expand filters' : 'Collapse filters';
             localStorage.setItem('threadFiltersSidebarCollapsed', isCollapsed ? '1' : '0');
+        }
+
+        function toggleUnreadFilter(btn) {
+            btn.classList.toggle('selected');
+            applyThreadFilters();
+        }
+
+        async function markCommentReviewed(threadId, pubMs) {
+            try {
+                await PRReviewTimestamps.set(
+                    currentConfig.serverUrl, currentConfig.organization,
+                    String(currentPRId), threadId, pubMs);
+                reviewTimestamps = PRReviewTimestamps.getAll();
+                applyThreadFilters(true);
+            } catch (e) {
+                console.error('Failed to mark reviewed:', e);
+            }
+        }
+
+        async function markCommentUnread(threadId, pubMs) {
+            try {
+                await PRReviewTimestamps.set(
+                    currentConfig.serverUrl, currentConfig.organization,
+                    String(currentPRId), threadId, pubMs - 1);
+                reviewTimestamps = PRReviewTimestamps.getAll();
+                applyThreadFilters(true);
+            } catch (e) {
+                console.error('Failed to mark unread:', e);
+            }
         }
 
         function toggleStatusChip(button, event) {
@@ -2850,8 +2900,20 @@
                             const likedUsers = comment.usersLiked || [];
                             const likeCount = likedUsers.length;
                             const userLiked = likedUsers.some(u => u.id === currentUserId);
+                            // Review timestamp button (other-user comments only)
+                            let reviewButtonHtml = '';
+                            if (showCommentActions && currentUserId && comment.author?.id !== currentUserId) {
+                                const pubMs = new Date(comment.publishedDate).getTime();
+                                if (PRReviewTimestamps.isCommentReviewed(comment, threadId, reviewTimestamps)) {
+                                    reviewButtonHtml = `<button class="comment-action-btn review-btn reviewed" title="Mark unread" onclick="markCommentUnread(${threadId}, ${pubMs})">✓</button>`;
+                                } else {
+                                    reviewButtonHtml = `<button class="comment-action-btn review-btn" title="Mark reviewed" onclick="markCommentReviewed(${threadId}, ${pubMs})">Mark reviewed</button>`;
+                                }
+                            }
+
                             const editDeleteButtons = showCommentActions ? `
                                 <span class="comment-actions">
+                                    ${reviewButtonHtml}
                                     <button class="comment-like-btn${userLiked ? ' liked' : ''}" onclick="toggleCommentLike(${threadId}, ${comment.id}, ${userLiked})" title="${userLiked ? 'Unlike' : 'Like'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>${likeCount > 0 ? `<span>${likeCount}</span>` : ''}</button>
                                     <button class="comment-action-btn comment-copy-url-btn" data-thread-id="${threadId}" onclick="copyCommentUrl(${threadId}, ${JSON.stringify(thread.threadContext?.filePath || null)})" title="Copy link"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></button>
                                     <button class="comment-action-btn" onclick="startEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
@@ -2859,8 +2921,15 @@
                                 </span>
                             ` : '';
 
+                            const hasUnread = isFirstComment &&
+                                PRReviewTimestamps.threadHasUnread(thread, reviewTimestamps, currentUserId);
+                            const unreadDot = hasUnread
+                                ? `<span class="thread-unread-dot" title="Has unread comments">●</span>`
+                                : '';
+
                             const threadControls = isFirstComment ? `
                                 <span class="thread-controls">
+                                    ${unreadDot}
                                     <a href="${threadHeaderData.threadUrl}" target="_blank" class="thread-link" title="Open thread in Azure DevOps (${threadHeaderData.hasFileContext ? 'files tab' : 'overview tab'})">🔗</a>
                                     <a href="${threadHeaderData.apiEndpoint}" target="_blank" class="thread-link" title="Open REST API response (requires authentication)">📡</a>
                                     ${threadHeaderData.hasStatus ? `<span class="badge ${threadHeaderData.statusClass}">${threadHeaderData.statusText}</span>` : ''}
@@ -4584,8 +4653,14 @@
 
             const commentCount = thread.comments ? thread.comments.filter(c => c.commentType !== 'system' && c.commentType !== 3 && !c.isDeleted).length : 0;
 
+            const inlineHasUnread = PRReviewTimestamps.threadHasUnread(thread, reviewTimestamps, currentUserId);
+            const inlineUnreadDot = inlineHasUnread
+                ? `<span class="thread-unread-dot" title="Has unread comments">●</span>`
+                : '';
+
             let html = `<div class="inline-thread${collapsedClass}${outdatedClass}" data-thread-id="${threadId}">`;
             html += `<div class="inline-thread-header">`;
+            if (inlineHasUnread) html += inlineUnreadDot;
             if (hasStatus) html += `<span class="badge ${statusClass}" style="padding: 1px 6px; font-size: 10px;">${statusText}</span>`;
             if (!appliesToView) html += `<span style="color: #a19f9d; font-size: 10px; font-style: italic;">from update ${threadIter}</span>`;
             if (commentCount > 1) html += `<span style="color: #8a8886; font-size: 11px;">${commentCount} comments</span>`;
@@ -4621,8 +4696,19 @@
                     const inlineLikedUsers = comment.usersLiked || [];
                     const inlineLikeCount = inlineLikedUsers.length;
                     const inlineUserLiked = inlineLikedUsers.some(u => u.id === currentUserId);
+                    let inlineReviewBtn = '';
+                    if (showActions && currentUserId && comment.author?.id !== currentUserId) {
+                        const pubMs = new Date(comment.publishedDate).getTime();
+                        if (PRReviewTimestamps.isCommentReviewed(comment, threadId, reviewTimestamps)) {
+                            inlineReviewBtn = `<button class="comment-action-btn review-btn reviewed" title="Mark unread" onclick="markCommentUnread(${threadId}, ${pubMs})">✓</button>`;
+                        } else {
+                            inlineReviewBtn = `<button class="comment-action-btn review-btn" title="Mark reviewed" onclick="markCommentReviewed(${threadId}, ${pubMs})">Mark reviewed</button>`;
+                        }
+                    }
+
                     const inlineActionBtns = showActions ? `
                         <span class="comment-actions">
+                            ${inlineReviewBtn}
                             <button class="comment-like-btn${inlineUserLiked ? ' liked' : ''}" onclick="toggleCommentLike(${threadId}, ${comment.id}, ${inlineUserLiked})" title="${inlineUserLiked ? 'Unlike' : 'Like'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="${inlineUserLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>${inlineLikeCount > 0 ? `<span>${inlineLikeCount}</span>` : ''}</button>
                             <button class="comment-action-btn comment-copy-url-btn" data-thread-id="${threadId}" onclick="copyCommentUrl(${threadId}, ${JSON.stringify(ctx?.filePath || null)})" title="Copy link"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></button>
                             <button class="comment-action-btn" onclick="startInlineEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>

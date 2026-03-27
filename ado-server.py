@@ -15,6 +15,9 @@ import socketserver
 import sys
 import os
 import base64
+import json
+import sqlite3
+import threading
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -32,23 +35,50 @@ if len(sys.argv) > 1:
         print("Usage: python ado-server.py [port]")
         sys.exit(1)
 
+# --- Local database (ado-server.db) ---
+_db_lock = threading.Lock()
+_DB_PATH = str(Path(__file__).parent / 'ado-server.db')
+
+def _get_db():
+    """Open a connection to the local DB, creating tables if needed."""
+    conn = sqlite3.connect(_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute('''CREATE TABLE IF NOT EXISTS review_timestamps (
+        server_url  TEXT NOT NULL,
+        org         TEXT NOT NULL,
+        pr_id       TEXT NOT NULL,
+        thread_id   TEXT NOT NULL,
+        timestamp   INTEGER NOT NULL,
+        PRIMARY KEY (server_url, org, pr_id, thread_id)
+    )''')
+    conn.commit()
+    return conn
+
 # Custom handler to set proper MIME types and proxy requests
 class ADOHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        # Handle avatar proxy requests
         if self.path.startswith('/avatar?'):
             self.handle_avatar_proxy()
         elif self.path.startswith('/identity-resolve?'):
             self.handle_identity_resolve_proxy()
         elif self.path.startswith('/attachment?'):
             self.handle_attachment_proxy()
+        elif self.path.startswith('/review-timestamps?') or self.path == '/review-timestamps':
+            self.handle_review_timestamps_get()
         else:
             super().do_GET()
 
     def do_POST(self):
-        # Handle identity search proxy requests
         if self.path.startswith('/identity-search'):
             self.handle_identity_search_proxy()
+        elif self.path == '/review-timestamps':
+            self.handle_review_timestamps_post()
+        else:
+            self.send_error(404, 'Not Found')
+
+    def do_DELETE(self):
+        if self.path.startswith('/review-timestamps'):
+            self.handle_review_timestamps_delete()
         else:
             self.send_error(404, 'Not Found')
 
@@ -222,6 +252,90 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
         except Exception as e:
             self.send_error(500, f'Proxy error: {str(e)}')
+
+    def _send_json(self, data: bytes):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(data))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_review_timestamps_get(self):
+        """Return all review timestamps for a PR."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        server_url = params.get('serverUrl', [None])[0]
+        org = params.get('org', [None])[0]
+        pr_id = params.get('prId', [None])[0]
+        if not server_url or not org or not pr_id:
+            self.send_error(400, 'Missing required parameters: serverUrl, org, prId')
+            return
+        with _db_lock:
+            conn = _get_db()
+            try:
+                rows = conn.execute(
+                    'SELECT thread_id, timestamp FROM review_timestamps '
+                    'WHERE server_url=? AND org=? AND pr_id=?',
+                    (server_url, org, pr_id)
+                ).fetchall()
+            finally:
+                conn.close()
+        result = json.dumps([{'threadId': int(r['thread_id']), 'timestamp': r['timestamp']}
+                              for r in rows]).encode()
+        self._send_json(result)
+
+    def handle_review_timestamps_post(self):
+        """Set (upsert) a review timestamp for one thread."""
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            body = json.loads(self.rfile.read(length))
+        except Exception:
+            self.send_error(400, 'Invalid JSON body')
+            return
+        server_url = body.get('serverUrl')
+        org = body.get('org')
+        pr_id = str(body.get('prId', ''))
+        thread_id = str(body.get('threadId', ''))
+        timestamp = body.get('timestamp')
+        if not server_url or not org or not pr_id or not thread_id or timestamp is None:
+            self.send_error(400, 'Missing required fields: serverUrl, org, prId, threadId, timestamp')
+            return
+        with _db_lock:
+            conn = _get_db()
+            try:
+                conn.execute(
+                    'INSERT OR REPLACE INTO review_timestamps '
+                    '(server_url, org, pr_id, thread_id, timestamp) VALUES (?,?,?,?,?)',
+                    (server_url, org, pr_id, thread_id, int(timestamp))
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        self._send_json(json.dumps({'ok': True}).encode())
+
+    def handle_review_timestamps_delete(self):
+        """Remove a review timestamp for one thread."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        server_url = params.get('serverUrl', [None])[0]
+        org = params.get('org', [None])[0]
+        pr_id = params.get('prId', [None])[0]
+        thread_id = params.get('threadId', [None])[0]
+        if not server_url or not org or not pr_id or not thread_id:
+            self.send_error(400, 'Missing required parameters: serverUrl, org, prId, threadId')
+            return
+        with _db_lock:
+            conn = _get_db()
+            try:
+                conn.execute(
+                    'DELETE FROM review_timestamps '
+                    'WHERE server_url=? AND org=? AND pr_id=? AND thread_id=?',
+                    (server_url, org, pr_id, thread_id)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        self._send_json(json.dumps({'ok': True}).encode())
 
     def end_headers(self):
         # Add headers to prevent caching during development

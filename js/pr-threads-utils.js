@@ -219,6 +219,40 @@ const PRThreadsUtils = {
     },
 
     /**
+     * Return qualifying "other user" comments from a thread:
+     * non-deleted, non-system/codeChange, not authored by currentUserId.
+     * @param {object} thread
+     * @param {string|null} currentUserId
+     * @returns {object[]}
+     */
+    getOtherUserComments(thread, currentUserId) {
+        if (!thread.comments) return [];
+        return thread.comments.filter(c => {
+            if (c.isDeleted) return false;
+            const ct = c.commentType;
+            if (ct === 'system' || ct === 3 || ct === 'codeChange' || ct === 2) return false;
+            if (!c.author?.id) return false;
+            if (currentUserId && c.author.id === currentUserId) return false;
+            return true;
+        });
+    },
+
+    /**
+     * True if the thread has at least one unread comment from another user.
+     * @param {object} thread
+     * @param {Map<number,number>} reviewTimestamps - Map of threadId → ms timestamp
+     * @param {string|null} currentUserId
+     * @returns {boolean}
+     */
+    threadHasUnread(thread, reviewTimestamps, currentUserId) {
+        const others = PRThreadsUtils.getOtherUserComments(thread, currentUserId);
+        if (others.length === 0) return false;
+        const ts = (reviewTimestamps instanceof Map) ? reviewTimestamps.get(Number(thread.id)) : undefined;
+        if (ts === undefined) return true;
+        return others.some(c => new Date(c.publishedDate).getTime() > ts);
+    },
+
+    /**
      * Test whether a thread matches the given filter settings.
      * @param {object} thread - Thread object from ADO API
      * @param {object} filters - Filter state
@@ -227,13 +261,16 @@ const PRThreadsUtils = {
      * @param {string} filters.selectedAuthor - Required first-comment author displayName; empty = any
      * @param {string} filters.selectedCommentAuthor - Required any-comment author displayName; empty = any
      * @param {string} filters.searchText - Text that must appear in at least one comment; empty = any
+     * @param {boolean} [filters.unreadOnly] - Only include threads with unread comments
      * @param {object} deps - Dependencies
      * @param {function} deps.normalize - Accent-insensitive normalizer (e.g. ADOSearch.normalize)
+     * @param {Map<number,number>} [deps.reviewTimestamps] - Map of threadId → ms timestamp
+     * @param {string|null} [deps.currentUserId] - Current user's ID
      * @returns {boolean}
      */
     threadMatchesFilters(thread, filters, deps) {
-        const { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText } = filters;
-        const { normalize } = deps;
+        const { showDeleted, selectedStatuses, selectedAuthor, selectedCommentAuthor, searchText, unreadOnly } = filters;
+        const { normalize, reviewTimestamps, currentUserId } = deps;
 
         if (!showDeleted && PRThreadsUtils.isThreadDeleted(thread)) {
             return false;
@@ -263,6 +300,11 @@ const PRThreadsUtils = {
             const searchNorm = normalize(searchText);
             const has = thread.comments?.some(c => c.content && normalize(c.content).includes(searchNorm));
             if (!has) return false;
+        }
+
+        if (unreadOnly) {
+            const ts = (reviewTimestamps instanceof Map) ? reviewTimestamps : new Map();
+            if (!PRThreadsUtils.threadHasUnread(thread, ts, currentUserId ?? null)) return false;
         }
 
         return true;

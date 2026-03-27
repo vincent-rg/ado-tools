@@ -865,5 +865,78 @@ describe('PRThreadsUtils', () => {
                 expect(PRThreadsUtils.threadMatchesFilters(makeThread({ status: 'active', author: 'Alice', content: 'goodbye' }), filters, deps)).toBe(false);
             });
         });
+
+        describe('unreadOnly filter', () => {
+            const ME = 'me';
+            const T1 = 1710000000000;
+            const T2 = T1 + 60_000;
+            const ISO1 = new Date(T1).toISOString();
+            const ISO2 = new Date(T2).toISOString();
+
+            const makeDeps = (reviewTimestamps = new Map()) => ({
+                normalize: s => s.toLowerCase(),
+                reviewTimestamps,
+                currentUserId: ME
+            });
+
+            const makeUnreadThread = (opts = {}) => ({
+                id: opts.id ?? 1,
+                isDeleted: false,
+                status: 'active',
+                comments: opts.comments || [
+                    { author: { id: 'other', displayName: 'Other' }, content: 'hello', commentType: 'text', isDeleted: false, publishedDate: ISO1 }
+                ]
+            });
+
+            const baseFilters = {
+                showDeleted: true, selectedStatuses: [], selectedAuthor: '',
+                selectedCommentAuthor: '', searchText: '', unreadOnly: false
+            };
+
+            it('passes through when unreadOnly is false (existing behaviour unchanged)', () => {
+                const t = makeUnreadThread();
+                expect(PRThreadsUtils.threadMatchesFilters(t, baseFilters, makeDeps())).toBe(true);
+            });
+
+            it('includes thread with unread comment when unreadOnly is true', () => {
+                const t = makeUnreadThread();
+                const filters = { ...baseFilters, unreadOnly: true };
+                expect(PRThreadsUtils.threadMatchesFilters(t, filters, makeDeps(new Map()))).toBe(true);
+            });
+
+            it('excludes thread with no other-user comments when unreadOnly is true', () => {
+                const t = makeUnreadThread({ comments: [
+                    { author: { id: ME, displayName: 'Me' }, content: 'mine', commentType: 'text', isDeleted: false, publishedDate: ISO1 }
+                ]});
+                const filters = { ...baseFilters, unreadOnly: true };
+                expect(PRThreadsUtils.threadMatchesFilters(t, filters, makeDeps(new Map()))).toBe(false);
+            });
+
+            it('excludes thread where all other-user comments are reviewed', () => {
+                const t = makeUnreadThread({ comments: [
+                    { author: { id: 'other' }, content: 'x', commentType: 'text', isDeleted: false, publishedDate: ISO1 }
+                ]});
+                const filters = { ...baseFilters, unreadOnly: true };
+                expect(PRThreadsUtils.threadMatchesFilters(t, filters, makeDeps(new Map([[1, T1]])))).toBe(false);
+            });
+
+            it('includes thread where one comment is after the review timestamp', () => {
+                const t = makeUnreadThread({ comments: [
+                    { author: { id: 'other' }, content: 'x', commentType: 'text', isDeleted: false, publishedDate: ISO1 },
+                    { author: { id: 'other' }, content: 'y', commentType: 'text', isDeleted: false, publishedDate: ISO2 }
+                ]});
+                const filters = { ...baseFilters, unreadOnly: true };
+                expect(PRThreadsUtils.threadMatchesFilters(t, filters, makeDeps(new Map([[1, T1]])))).toBe(true);
+            });
+
+            it('short-circuits before unread check when showDeleted filter already rejects', () => {
+                const t = { id: 1, isDeleted: true, status: 'active', comments: [
+                    { author: { id: 'other' }, content: 'x', commentType: 'text', isDeleted: false, publishedDate: ISO1 }
+                ]};
+                const filters = { ...baseFilters, showDeleted: false, unreadOnly: true };
+                expect(PRThreadsUtils.threadMatchesFilters(t, filters, makeDeps(new Map()))).toBe(false);
+            });
+        });
     });
 });
+
