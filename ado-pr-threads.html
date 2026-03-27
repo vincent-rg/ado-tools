@@ -883,12 +883,9 @@
             const contentEl = (effectiveMode === 'side-by-side')
                 ? bubbleEl.closest('.sbs-left, .sbs-right')?.querySelector('.diff-content')
                 : bubbleEl.closest('.diff-line')?.querySelector('.diff-content');
-            if (contentEl) {
-                formEl._highlightContentEls = wrapCharRange(
-                    contentEl, 0, contentEl.textContent.length,
-                    'line-comment-highlight-mark', 'background: #ffe082; color: inherit;'
-                );
-            }
+            const highlightContentEls = contentEl
+                ? wrapCharRange(contentEl, 0, contentEl.textContent.length, 'line-comment-highlight-mark', 'background: #ffe082; color: inherit;')
+                : [];
 
             let formEl;
             if (effectiveMode === 'side-by-side') {
@@ -934,6 +931,7 @@
                 insertCommentFormAfterRow(formEl, diffLine);
             }
 
+            formEl._highlightContentEls = highlightContentEls;
 
             const textarea = formEl.querySelector('.line-comment-textarea');
             if (textarea) {
