@@ -36,35 +36,65 @@ function cropDiffToRegion(diff, startLine, endLine, useRight, contextLines = 5) 
     return diff.slice(firstIdx, lastIdx + 1);
 }
 
-function applyThreadHighlight(rawContent, lineNum, tr) {
-    if (!tr.appliesToView) return _escapeHtml(rawContent);
-    const isInRange = lineNum >= tr.startLine && lineNum <= tr.endLine;
-    if (!isInRange) return _escapeHtml(rawContent);
+function getHighlightRangesForLine(rawContent, lineNum, tr) {
+    if (!tr.appliesToView) return null;
+    if (lineNum < tr.startLine || lineNum > tr.endLine) return null;
 
     const adjStart = Math.max(0, tr.startOffset - 1);
     const adjEnd = tr.endOffset > 0 ? Math.max(0, tr.endOffset - 1) : 0;
 
-    // If no offsets (whole-line comment), highlight entire line
+    // Whole-line comment
     if (tr.startOffset === 0 && tr.endOffset === 0) {
-        return `<mark style="${HIGHLIGHT_MARK_STYLE}">${_escapeHtml(rawContent)}</mark>`;
+        return { start: 0, end: rawContent.length };
     }
 
     if (lineNum === tr.startLine && lineNum === tr.endLine && adjEnd > 0) {
-        const before = _escapeHtml(rawContent.substring(0, adjStart));
-        const highlighted = _escapeHtml(rawContent.substring(adjStart, adjEnd));
-        const after = _escapeHtml(rawContent.substring(adjEnd));
-        return `${before}<mark style="${HIGHLIGHT_MARK_STYLE}">${highlighted}</mark>${after}`;
+        return { start: adjStart, end: adjEnd };
     } else if (lineNum === tr.startLine) {
-        const before = _escapeHtml(rawContent.substring(0, adjStart));
-        const highlighted = _escapeHtml(rawContent.substring(adjStart));
-        return `${before}<mark style="${HIGHLIGHT_MARK_STYLE}">${highlighted}</mark>`;
+        return { start: adjStart, end: rawContent.length };
     } else if (lineNum === tr.endLine && adjEnd > 0) {
-        const highlighted = _escapeHtml(rawContent.substring(0, adjEnd));
-        const after = _escapeHtml(rawContent.substring(adjEnd));
-        return `<mark style="${HIGHLIGHT_MARK_STYLE}">${highlighted}</mark>${after}`;
+        return { start: 0, end: adjEnd };
     } else {
-        return `<mark style="${HIGHLIGHT_MARK_STYLE}">${_escapeHtml(rawContent)}</mark>`;
+        // Middle line of multi-line range
+        return { start: 0, end: rawContent.length };
     }
+}
+
+function applyMultipleHighlights(rawContent, ranges) {
+    if (ranges.length === 0) return _escapeHtml(rawContent);
+
+    // Sort by start position, then by end descending for ties
+    ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+
+    // Merge overlapping ranges
+    const merged = [ranges[0]];
+    for (let i = 1; i < ranges.length; i++) {
+        const last = merged[merged.length - 1];
+        if (ranges[i].start <= last.end) {
+            last.end = Math.max(last.end, ranges[i].end);
+        } else {
+            merged.push({ ...ranges[i] });
+        }
+    }
+
+    // Build HTML with highlights
+    let result = '';
+    let pos = 0;
+    for (const r of merged) {
+        const start = Math.max(pos, r.start);
+        const end = Math.min(r.end, rawContent.length);
+        if (start > pos) result += _escapeHtml(rawContent.substring(pos, start));
+        if (end > start) result += `<mark style="${HIGHLIGHT_MARK_STYLE}">${_escapeHtml(rawContent.substring(start, end))}</mark>`;
+        pos = end;
+    }
+    if (pos < rawContent.length) result += _escapeHtml(rawContent.substring(pos));
+    return result;
+}
+
+function applyThreadHighlight(rawContent, lineNum, tr) {
+    const range = getHighlightRangesForLine(rawContent, lineNum, tr);
+    if (!range) return _escapeHtml(rawContent);
+    return applyMultipleHighlights(rawContent, [range]);
 }
 
 function buildCharDiffHtml(charDiff, isNewLine) {
@@ -83,13 +113,18 @@ function buildCharDiffHtml(charDiff, isNewLine) {
 }
 
 function getHighlightedContent(rawContent, lineNum, isNewLine, threadRanges, charDiff = null, preHighlightedHtml = null) {
+    const matchingRanges = [];
     for (const tr of threadRanges) {
         if (!tr.appliesToView) continue;
         const matchesRight = tr.useRight && isNewLine && lineNum >= tr.startLine && lineNum <= tr.endLine;
         const matchesLeft = !tr.useRight && !isNewLine && lineNum >= tr.startLine && lineNum <= tr.endLine;
         if (matchesRight || matchesLeft) {
-            return { html: applyThreadHighlight(rawContent, lineNum, tr), commented: true };
+            const range = getHighlightRangesForLine(rawContent, lineNum, tr);
+            if (range) matchingRanges.push(range);
         }
+    }
+    if (matchingRanges.length > 0) {
+        return { html: applyMultipleHighlights(rawContent, matchingRanges), commented: true };
     }
     if (charDiff) {
         return { html: buildCharDiffHtml(charDiff, isNewLine), commented: false };

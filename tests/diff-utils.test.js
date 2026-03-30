@@ -170,6 +170,35 @@ describe('getHighlightedContent', () => {
         expect(result.commented).toBe(false);
         expect(result.html).toBe('&lt;div&gt;');
     });
+
+    it('highlights multiple threads on the same line', () => {
+        const threadRanges = [
+            // "hello" at positions 1-6
+            { startLine: 1, endLine: 1, startOffset: 1, endOffset: 6, useRight: true, appliesToView: true },
+            // "world" at positions 7-12
+            { startLine: 1, endLine: 1, startOffset: 7, endOffset: 12, useRight: true, appliesToView: true },
+        ];
+        const result = DiffUtils.getHighlightedContent('hello world', 1, true, threadRanges);
+        expect(result.commented).toBe(true);
+        // Both words should be highlighted
+        const markCount = (result.html.match(/<mark/g) || []).length;
+        expect(markCount).toBe(2);
+        expect(result.html).toContain('hello');
+        expect(result.html).toContain('world');
+    });
+
+    it('merges overlapping highlights on the same line', () => {
+        const threadRanges = [
+            { startLine: 1, endLine: 1, startOffset: 1, endOffset: 8, useRight: true, appliesToView: true },
+            { startLine: 1, endLine: 1, startOffset: 5, endOffset: 12, useRight: true, appliesToView: true },
+        ];
+        const result = DiffUtils.getHighlightedContent('hello world', 1, true, threadRanges);
+        expect(result.commented).toBe(true);
+        // Overlapping ranges merge into one highlight
+        const markCount = (result.html.match(/<mark/g) || []).length;
+        expect(markCount).toBe(1);
+        expect(result.html).toContain('hello world');
+    });
 });
 
 describe('renderDiffLines', () => {
