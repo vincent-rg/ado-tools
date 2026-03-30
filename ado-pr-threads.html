@@ -1159,7 +1159,9 @@
                 author: params.get('author') || null,
                 commentAuthor: params.get('commentAuthor') || null,
                 search: params.get('search') || null,
+                unread: params.get('unread') !== null ? params.get('unread') === 'true' : null,
                 view: params.get('view') || null,
+                fileMode: params.get('fileMode') || null,
                 file: params.get('file') || null
             };
         }
@@ -1207,9 +1209,18 @@
                 params.set('search', search);
             }
 
+            // Unread only filter
+            const unreadOnly = document.getElementById('unreadFilterChip')?.classList.contains('selected');
+            if (unreadOnly) {
+                params.set('unread', 'true');
+            }
+
             // View (files/overview)
             if (currentView === 'files') {
                 params.set('view', 'files');
+                if (fileViewMode !== 'changed') {
+                    params.set('fileMode', fileViewMode);
+                }
                 if (selectedFilePath) {
                     params.set('file', selectedFilePath);
                 }
@@ -1272,6 +1283,11 @@
                 // Restore search filter
                 if (urlParams.search) {
                     document.getElementById('searchFilter').value = urlParams.search;
+                }
+
+                // Restore unread only filter
+                if (urlParams.unread) {
+                    document.getElementById('unreadFilterChip')?.classList.add('selected');
                 }
             } finally {
                 isRestoringFromURL = false;
@@ -3202,6 +3218,7 @@
             document.querySelectorAll('.file-view-mode-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === mode);
             });
+            updateURL();
             if (mode === 'all') {
                 buildAllFilesTree();
             } else {
@@ -5802,6 +5819,14 @@
             if (params.get('view') === 'files' || params.get('file')) {
                 // Will be applied after PR loads — just set the variable
                 currentView = 'files';
+                // Restore file view mode (changed/commented/all)
+                const fm = params.get('fileMode');
+                if (fm === 'commented' || fm === 'all') {
+                    fileViewMode = fm;
+                    document.querySelectorAll('.file-view-mode-btn').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.mode === fm);
+                    });
+                }
                 // Restore iteration mode: iter=2-3 means update mode with range 2→3
                 const iterParam = params.get('iter');
                 if (iterParam) {
