@@ -364,12 +364,13 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
     }
 
     let oldFetchFailed = false, newFetchFailed = false;
+    let oldFetchError = null, newFetchError = null;
     const [oldContent, newContent] = await Promise.all([
         oldCommitId
-            ? getFileContent(config, oldFilePath || filePath, { version: oldCommitId, versionType: 'commit' }).catch(() => { oldFetchFailed = true; return ''; })
+            ? getFileContent(config, oldFilePath || filePath, { version: oldCommitId, versionType: 'commit' }).catch(e => { oldFetchFailed = true; oldFetchError = e; return ''; })
             : Promise.resolve(''),
         newCommitId
-            ? getFileContent(config, filePath, { version: newCommitId, versionType: 'commit' }).catch(() => { newFetchFailed = true; return ''; })
+            ? getFileContent(config, filePath, { version: newCommitId, versionType: 'commit' }).catch(e => { newFetchFailed = true; newFetchError = e; return ''; })
             : Promise.resolve('')
     ]);
 
@@ -403,7 +404,7 @@ async function getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFileP
     const highlightedOldLines = (language && oldContent) ? SyntaxHighlight.highlightLines(oldContent, language) : null;
     const highlightedNewLines = (language && newContent) ? SyntaxHighlight.highlightLines(newContent, language) : null;
 
-    const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldContent, newContent, highlightedOldLines, highlightedNewLines };
+    const result = { diff: diffResult, addedCount, removedCount, oldFetchFailed, newFetchFailed, oldFetchError, newFetchError, oldContent, newContent, highlightedOldLines, highlightedNewLines };
     // Cache unless new content failed (may be transient). Old-side failures are deterministic —
     // the file genuinely didn't exist at that commit (e.g. rebase-introduced file) — safe to cache.
     if (!newFetchFailed) {

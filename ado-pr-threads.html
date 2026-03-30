@@ -2383,7 +2383,9 @@
                 previewDiv.setAttribute('data-loaded', 'true');
             } catch (error) {
                 console.error('Failed to load file preview:', error);
-                previewDiv.innerHTML = `<div style="padding: 12px; color: #a4262c;">Failed to load file preview: ${ADOContent.escapeHtml(error.message)}</div>`;
+                const iteration = allIterations.find(it => it.id === iterationId) || allIterations[allIterations.length - 1];
+                const commitId = iteration?.sourceRefCommit?.commitId || currentPRData.lastMergeSourceCommit?.commitId;
+                previewDiv.innerHTML = `<div style="padding: 12px; color: #a4262c;">Failed to load file preview: ${ADOContent.escapeHtml(error.message)}<br><small>File: ${ADOContent.escapeHtml(filePath)}, commit: ${ADOContent.escapeHtml(commitId?.substring(0, 8) || 'none')}, iteration: ${iterationId || 'unknown'}</small></div>`;
             }
         }
 
@@ -2475,7 +2477,8 @@
 
                 const result = await DiffUtils.getOrComputeFileDiff(filePath, oldCommitId, newCommitId, oldFilePath, { config: currentConfig, cache: fileDiffCache, getFileContent: ADOAPI.getFileContent.bind(ADOAPI), diff: HistogramDiff, diffOptions: { ignoreWhitespace: diffIgnoreWhitespace } });
                 if (result.newFetchFailed) {
-                    throw new Error(`Could not load new file content (${filePath})`);
+                    const errDetail = result.newFetchError?.message || 'unknown error';
+                    throw new Error(`Could not load new file content.\nFile: ${filePath}\nNew commit: ${newCommitId?.substring(0, 8) || 'none'}, Old commit: ${oldCommitId?.substring(0, 8) || 'none'}\nError: ${errDetail}`);
                 }
                 // oldFetchFailed: rebase brought this file from the target branch — treat as add.
                 // The diff already contains all-added lines (diff of '' vs new content).
@@ -4398,7 +4401,10 @@
                 const { baseCommit, sourceCommit } = getIterationCommits();
 
                 if (!sourceCommit) {
-                    diffPanel.innerHTML = '<div class="file-diff-error">Cannot determine commits for diff comparison.</div>';
+                    const iterInfo = selectedIterationStart !== null
+                        ? `iteration range ${selectedIterationStart}–${selectedIterationEnd}`
+                        : 'latest merge source';
+                    diffPanel.innerHTML = `<div class="file-diff-error">Cannot determine source commit for diff comparison.<br><small>Looked for: ${ADOContent.escapeHtml(iterInfo)}. PR lastMergeSourceCommit: ${ADOContent.escapeHtml(currentPRData.lastMergeSourceCommit?.commitId || 'none')}</small></div>`;
                     return;
                 }
 
@@ -4423,7 +4429,8 @@
                             } catch { /* try earlier */ }
                         }
                         if (content === undefined) {
-                            diffPanel.innerHTML = '<div class="file-diff-error">This file could not be found in any push of this PR.</div>';
+                            const triedCommits = [sourceCommit, ...allIterations.slice().reverse().map(it => it?.sourceRefCommit?.commitId).filter(c => c && c !== sourceCommit)];
+                            diffPanel.innerHTML = `<div class="file-diff-error">This file could not be found in any push of this PR.<br><small>File: ${ADOContent.escapeHtml(filePath)}<br>Tried ${triedCommits.length} commit(s): ${ADOContent.escapeHtml(triedCommits.map(c => c.substring(0, 8)).join(', '))}</small></div>`;
                             return;
                         }
                     }
@@ -4562,7 +4569,10 @@
                 }
 
                 if (!baseCommit) {
-                    diffPanel.innerHTML = '<div class="file-diff-error">Cannot determine base commit for diff comparison.</div>';
+                    const iterInfo = selectedIterationStart !== null
+                        ? `iteration range ${selectedIterationStart}–${selectedIterationEnd}`
+                        : 'all iterations';
+                    diffPanel.innerHTML = `<div class="file-diff-error">Cannot determine base commit for diff comparison.<br><small>Mode: ${ADOContent.escapeHtml(iterInfo)}, mergeBase: ${ADOContent.escapeHtml(currentMergeBase || 'none')}, lastMergeTargetCommit: ${ADOContent.escapeHtml(currentPRData.lastMergeTargetCommit?.commitId || 'none')}</small></div>`;
                     return;
                 }
 
@@ -4589,7 +4599,11 @@
                 if (selectedFilePath !== filePath) return;
 
                 if (result.newFetchFailed) {
-                    throw new Error(`Could not load new file content (${filePath})`);
+                    const errDetail = result.newFetchError?.message || 'unknown error';
+                    const iterInfo = selectedIterationStart !== null
+                        ? `iteration range ${selectedIterationStart}–${selectedIterationEnd}`
+                        : 'all iterations';
+                    throw new Error(`Could not load new file content.\nFile: ${filePath}${oldFilePath && oldFilePath !== filePath ? `\nOld path: ${oldFilePath}` : ''}\nNew commit: ${newCommitId?.substring(0, 8) || 'none'}, Base commit: ${oldCommitId?.substring(0, 8) || 'none'}\nChange type: ${changeType}, Mode: ${iterInfo}\nError: ${errDetail}`);
                 }
                 // Old content 404 can happen when a rebase brings in a file that didn't exist
                 // in the base iteration's commit. ADO reports it as 'edit' (the file existed on
@@ -4603,7 +4617,12 @@
             } catch (error) {
                 console.error('Failed to load file diff:', error);
                 if (selectedFilePath === filePath) {
-                    diffPanel.innerHTML = `<div class="file-diff-error">Failed to load diff: ${ADOContent.escapeHtml(error.message)}</div>`;
+                    const { baseCommit: _bc, sourceCommit: _sc } = getIterationCommits();
+                    const iterInfo = selectedIterationStart !== null
+                        ? `Iterations ${selectedIterationStart}–${selectedIterationEnd}`
+                        : 'All iterations';
+                    const detail = `${iterInfo} | base: ${_bc?.substring(0, 8) || 'none'} → source: ${_sc?.substring(0, 8) || 'none'} | change: ${changeType}`;
+                    diffPanel.innerHTML = `<div class="file-diff-error">Failed to load diff: ${ADOContent.escapeHtml(error.message)}<br><small>${ADOContent.escapeHtml(detail)}</small></div>`;
                 }
             }
         }
