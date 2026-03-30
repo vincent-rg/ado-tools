@@ -73,6 +73,32 @@ const ADOConfig = {
 };
 
 /**
+ * Debug Logging Configuration
+ * Stored in localStorage key 'adoDebugLog' as JSON: { reply, review, status }
+ */
+const ADODebug = {
+    _KEY: 'adoDebugLog',
+
+    get() {
+        try {
+            return JSON.parse(localStorage.getItem(this._KEY)) || {};
+        } catch { return {}; }
+    },
+
+    save(settings) {
+        localStorage.setItem(this._KEY, JSON.stringify(settings));
+    },
+
+    apply() {
+        const s = this.get();
+        window._adoDebugReply = !!s.reply;
+        window._adoDebugReview = !!s.review;
+        window._adoDebugStatus = !!s.status;
+        window._adoDebug = window._adoDebugReply || window._adoDebugReview || window._adoDebugStatus;
+    }
+};
+
+/**
  * API Utilities
  */
 const ADOAPI = {

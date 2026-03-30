@@ -663,7 +663,7 @@
             }
 
             const _opId = ++window._adoOpSeq;
-            if (window._adoDebug) console.log(`[CRUD op#${_opId}] createFileComment file=${filePath} t=${Date.now()}`);
+            if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createFileComment file=${filePath} t=${Date.now()}`);
 
             const btn = document.getElementById('fileCommentSubmitBtn');
             btn.disabled = true;
@@ -675,16 +675,16 @@
                 );
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
                 clearDraft('file\x00' + filePath);
                 hideFileCommentForm();
                 const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
                 restoreDiffScroll(saved);
             } catch (err) {
                 console.error('Failed to create file comment:', err);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, err.message);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] ERROR t=${Date.now()}`, err.message);
                 alert('Failed to create comment: ' + err.message);
                 btn.disabled = false;
                 btn.textContent = 'Create';
@@ -994,7 +994,7 @@
             }
 
             const _opId = ++window._adoOpSeq;
-            if (window._adoDebug) console.log(`[CRUD op#${_opId}] createLineComment file=${filePath} line=${lineNum} side=${side} t=${Date.now()}`);
+            if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createLineComment file=${filePath} line=${lineNum} side=${side} t=${Date.now()}`);
 
             btn.disabled = true;
             btn.textContent = 'Creating...';
@@ -1013,7 +1013,7 @@
                 }
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
                 clearDraft('line\x00' + btn.dataset.formId + '\x00' + filePath + '\x00' + lineNum + '\x00' + side);
                 const formEl = btn.closest('.line-comment-form, .sbs-line-comment-form');
                 if (formEl) {
@@ -1024,11 +1024,11 @@
                 diffMinimapInvalidate?.();
                 const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
                 restoreDiffScroll(saved);
             } catch (err) {
                 console.error('Failed to create line comment:', err);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, err.message);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] ERROR t=${Date.now()}`, err.message);
                 alert('Failed to create comment: ' + err.message);
                 btn.disabled = false;
                 btn.textContent = 'Create';
@@ -1037,6 +1037,7 @@
 
         // Parse URL parameters on load
         window.addEventListener('DOMContentLoaded', () => {
+            ADODebug.apply();
             const urlParams = ADOURL.getParams();
             currentPRId = urlParams.get('prId') || urlParams.get('id');
             urlProject = urlParams.get('project');
@@ -1573,26 +1574,40 @@
         }
 
         async function markCommentReviewed(threadId, pubMs) {
+            const _opId = ++window._adoOpSeq;
+            if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] markCommentReviewed threadId=${threadId} pubMs=${pubMs} t=${Date.now()}`);
             try {
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] PRReviewTimestamps.set start t=${Date.now()}`);
                 await PRReviewTimestamps.set(
                     currentConfig.serverUrl, currentConfig.organization,
                     String(currentPRId), threadId, pubMs);
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] PRReviewTimestamps.set done t=${Date.now()}`);
                 reviewTimestamps = PRReviewTimestamps.getAll();
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] applyThreadFilters start t=${Date.now()}`);
                 applyThreadFilters(true);
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] applyThreadFilters done t=${Date.now()}`);
             } catch (e) {
                 console.error('Failed to mark reviewed:', e);
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] ERROR t=${Date.now()}`, e.message);
             }
         }
 
         async function markCommentUnread(threadId, pubMs) {
+            const _opId = ++window._adoOpSeq;
+            if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] markCommentUnread threadId=${threadId} pubMs=${pubMs} t=${Date.now()}`);
             try {
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] PRReviewTimestamps.set start (pubMs-1=${pubMs - 1}) t=${Date.now()}`);
                 await PRReviewTimestamps.set(
                     currentConfig.serverUrl, currentConfig.organization,
                     String(currentPRId), threadId, pubMs - 1);
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] PRReviewTimestamps.set done t=${Date.now()}`);
                 reviewTimestamps = PRReviewTimestamps.getAll();
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] applyThreadFilters start t=${Date.now()}`);
                 applyThreadFilters(true);
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] applyThreadFilters done t=${Date.now()}`);
             } catch (e) {
                 console.error('Failed to mark unread:', e);
+                if (window._adoDebugReview) console.log(`[REVIEW op#${_opId}] ERROR t=${Date.now()}`, e.message);
             }
         }
 
@@ -1729,23 +1744,23 @@
             }
 
             const _opId = ++window._adoOpSeq;
-            if (window._adoDebug) console.log(`[CRUD op#${_opId}] createNewThread start t=${Date.now()}`);
+            if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createNewThread start t=${Date.now()}`);
 
             const btn = document.getElementById('createThreadBtn');
             btn.disabled = true;
             btn.textContent = 'Creating...';
 
             try {
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] createThread API start t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createThread API start t=${Date.now()}`);
                 await ADOAPI.createThread(currentConfig, currentPRId, content);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
                 hideNewThreadForm();
                 await refreshThreadsFromAPI();
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
 
             } catch (error) {
                 console.error('Failed to create thread:', error);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR resetting button t=${Date.now()}`, error.message);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] ERROR resetting button t=${Date.now()}`, error.message);
                 alert(`Failed to create thread: ${error.message}\n\nNote: This requires a PAT with "Code (Write)" permissions.`);
                 btn.disabled = false;
                 btn.textContent = 'Create Thread';
@@ -6253,7 +6268,7 @@
             }
 
             const _opId = ++window._adoOpSeq;
-            if (window._adoDebug) console.log(`[CRUD op#${_opId}] createSelectionComment file=${filePath} lines=${startLine}-${endLine} side=${side} t=${Date.now()}`);
+            if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createSelectionComment file=${filePath} lines=${startLine}-${endLine} side=${side} t=${Date.now()}`);
 
             btn.disabled = true;
             btn.textContent = 'Creating...';
@@ -6272,7 +6287,7 @@
                 }
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
                 clearDraft('sel\x00' + btn.dataset.formId + '\x00' + filePath + '\x00' + startLine + '\x00' + endLine + '\x00' + startOffset + '\x00' + endOffset + '\x00' + side);
                 const formEl = btn.closest('.selection-comment-form-row');
                 if (formEl) {
@@ -6283,11 +6298,11 @@
                 diffMinimapInvalidate?.();
                 const saved = saveDiffScroll();
                 await refreshThreadsFromAPI();
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] refreshThreadsFromAPI done t=${Date.now()}`);
                 restoreDiffScroll(saved);
             } catch (err) {
                 console.error('Failed to create selection comment:', err);
-                if (window._adoDebug) console.log(`[CRUD op#${_opId}] ERROR t=${Date.now()}`, err.message);
+                if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] ERROR t=${Date.now()}`, err.message);
                 alert('Failed to create comment: ' + err.message);
                 btn.disabled = false;
                 btn.textContent = 'Create';

@@ -86,6 +86,28 @@
         </div>
 
         <div class="tools-section">
+            <h2>🔍 Debug Logging</h2>
+            <p style="color: #605e5c; margin-bottom: 15px;">
+                Enable verbose console logging for specific operations in the PR Threads viewer.
+                Open the browser DevTools console (F12) to see the logs.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="debugReply">
+                    <span><strong>Comment reply</strong> — from clicking Reply to UI update</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="debugReview">
+                    <span><strong>Mark reviewed / unread</strong> — from clicking the button to UI update</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="debugStatus">
+                    <span><strong>Thread status change</strong> — from changing status to UI update</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="tools-section">
             <h2>🛠️ Available Tools</h2>
             <a href="ado-pr-threads.html" class="tool-link">
                 <strong>PR Threads Viewer</strong> - View and analyze all discussion threads in a Pull Request
@@ -119,6 +141,7 @@
         // Load current settings on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadSettings();
+            initDebugCheckboxes();
             checkCurrentStatus();
 
             // PAT help link
@@ -141,6 +164,25 @@
                 document.getElementById('repository').value = config.repository || '';
                 document.getElementById('pat').value = config.pat || '';
             }
+
+            const debug = ADODebug.get();
+            document.getElementById('debugReply').checked = !!debug.reply;
+            document.getElementById('debugReview').checked = !!debug.review;
+            document.getElementById('debugStatus').checked = !!debug.status;
+        }
+
+        function initDebugCheckboxes() {
+            for (const id of ['debugReply', 'debugReview', 'debugStatus']) {
+                document.getElementById(id).addEventListener('change', saveDebugSettings);
+            }
+        }
+
+        function saveDebugSettings() {
+            ADODebug.save({
+                reply: document.getElementById('debugReply').checked,
+                review: document.getElementById('debugReview').checked,
+                status: document.getElementById('debugStatus').checked
+            });
         }
 
         function checkCurrentStatus() {
