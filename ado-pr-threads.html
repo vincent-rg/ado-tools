@@ -3093,8 +3093,11 @@
             fetchAndUpdateWorkItems(config, prData.pullRequestId);
             startPRPolling(config);
 
-            // Fetch line stats asynchronously
-            fetchLineStatsAsync(config, prData);
+            // Fetch line stats asynchronously (skip if already displayed — stats only change on new iterations)
+            const lineStatsContainer = document.getElementById('lineStatsContainer');
+            if (!lineStatsContainer || !lineStatsContainer.innerHTML.trim()) {
+                fetchLineStatsAsync(config, prData);
+            }
 
             // Asynchronously load code suggestions
             setTimeout(async () => {
