@@ -231,6 +231,7 @@
         let currentView = 'overview';
         let selectedFilePath = null;
         let fileDiffCache = new Map();
+        let unchangedFileCache = null;    // { filePath, content, commitInfo, fileWasDeleted } for comment-only files
         let fileTreeBuilt = false;
         let updatesViewBuilt = false;
         let baseCommitCache = new Map();  // commitId -> commit object
@@ -1381,7 +1382,7 @@
                         const changesData = await ADOAPI.getPRIterationChanges(config, currentPRId, _fetchEnd, _fetchStart);
                         const entries = changesData.changeEntries || [];
                         allChangeEntries = entries;
-                        fileDiffCache.clear();
+                        fileDiffCache.clear(); unchangedFileCache = null;
                         fileTreeBuilt = false;
                         updatesViewBuilt = false;
                         fileChangeStats = calculateFileChangeStats(entries);
@@ -2054,75 +2055,134 @@
             buildThreadsByFilePath();
             updateFileTreeThreadInfo();
 
-            const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
-            const ct = (changeEntry?.changeType || 'edit').toLowerCase();
-            const { baseCommit, sourceCommit } = getIterationCommits();
-
-            let oldCommitId, newCommitId;
-            if (ct.includes('add')) {
-                oldCommitId = null;
-                newCommitId = sourceCommit;
-            } else if (ct.includes('delete')) {
-                oldCommitId = baseCommit;
-                newCommitId = null;
-            } else {
-                oldCommitId = baseCommit;
-                newCommitId = sourceCommit;
-            }
-
-            const cacheKey = `${selectedFilePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}:iw${diffIgnoreWhitespace ? 1 : 0}`;
-            const cached = fileDiffCache.get(cacheKey);
-            if (cached) {
-                // Save thread collapse state from the scroller data model before re-render.
-                // renderFileDiff resets all rows to isThreadCollapsedByDefault(), wiping any
-                // manual expand/collapse the user applied (e.g. expanded a resolved thread,
-                // or collapsed an active one).
-                const savedCollapseState = new Map(); // threadId -> collapsed
-                if (currentDiffScroller) {
-                    for (const row of currentDiffScroller.getAllRows()) {
-                        if (row.type === 'thread' || row.type === 'sbs-thread') {
-                            savedCollapseState.set(row.threadId, row.collapsed);
-                        }
+            // Save thread collapse state before re-render so manual expand/collapse survives.
+            const savedCollapseState = new Map(); // threadId -> collapsed
+            if (currentDiffScroller) {
+                for (const row of currentDiffScroller.getAllRows()) {
+                    if (row.type === 'thread' || row.type === 'sbs-thread') {
+                        savedCollapseState.set(row.threadId, row.collapsed);
                     }
                 }
+            }
 
-                const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
+            const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
+
+            // Comment-only file (not in allChangeEntries): re-render using cached content
+            if (!changeEntry && unchangedFileCache?.filePath === selectedFilePath) {
+                const { content, commitInfo, fileWasDeleted } = unchangedFileCache;
+                const syntheticDiff = content.split('\n').map(line => ({ type: 'unchanged', content: line }));
+
+                const visibleFileThreads = getVisibleThreadsForFile(selectedFilePath).filter(thread => {
+                    if (!thread.threadContext) return false;
+                    return thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
+                }).sort((a, b) => {
+                    const aLine = a.threadContext.rightFileStart?.line || a.threadContext.leftFileStart?.line || 0;
+                    const bLine = b.threadContext.rightFileStart?.line || b.threadContext.leftFileStart?.line || 0;
+                    return aLine - bLine;
+                });
+
+                const viewIterStart = selectedIterationStart ?? 1;
+                const viewIterEnd = selectedIterationEnd ?? (allIterations.length || 1);
+                const threadRanges = visibleFileThreads.map(thread => DiffUtils.buildThreadRange(thread, viewIterStart, viewIterEnd));
+
+                function getLinePrefix(newLineNum, oldLineNum) {
+                    const matching = threadRanges.filter(tr => {
+                        const lineNum = tr.useRight ? newLineNum : oldLineNum;
+                        return lineNum != null && lineNum === tr.startLine;
+                    });
+                    return buildGutterHtmlForLine(matching);
+                }
+
+                const savedScroll = saveDiffScroll();
+
+                if (currentDiffScroller) { currentDiffScroller.destroy(); currentDiffScroller = null; }
+
+                const diffPanel = document.getElementById('fileDiffPanel');
+                const scrollArea = diffPanel?.querySelector('.diff-scroll-area');
+                const diffLines = diffPanel?.querySelector('.diff-lines');
+                if (!scrollArea || !diffLines) return;
+
+                // Clear old rows left by the destroyed scroller (destroy() nulls refs but doesn't remove DOM)
+                diffLines.innerHTML = '';
+
+                currentDiffScroller = DiffVirtualScroller.create({
+                    diff: syntheticDiff,
+                    threadRanges,
+                    mode: 'inline',
+                    getLinePrefix,
+                    renderInlineThread,
+                    threadRangesRaw: threadRanges,
+                    isUnchangedFile: true,
+                });
+                currentDiffScroller.mount(scrollArea, diffLines);
+                restoreDiffScroll(savedScroll);
+
+                AvatarLoader.loadPending();
+                let _avatarLoadPending = false;
+                currentDiffScroller.onRowRendered(row => {
+                    if (row.type === 'code' || _avatarLoadPending) return;
+                    _avatarLoadPending = true;
+                    requestAnimationFrame(() => { _avatarLoadPending = false; AvatarLoader.loadPending(); });
+                });
+                injectCommentBubbles(selectedFilePath);
+                setupDiffMinimap(diffPanel, currentDiffScroller);
+                if (stickyLinesEnabled) StickyLines.init(diffPanel, null, content, selectedFilePath, false, currentDiffScroller);
+            } else if (changeEntry) {
+                // Changed file: re-render from fileDiffCache
+                const ct = (changeEntry.changeType || 'edit').toLowerCase();
+                const { baseCommit, sourceCommit } = getIterationCommits();
+
+                let oldCommitId, newCommitId;
+                if (ct.includes('add')) {
+                    oldCommitId = null;
+                    newCommitId = sourceCommit;
+                } else if (ct.includes('delete')) {
+                    oldCommitId = baseCommit;
+                    newCommitId = null;
+                } else {
+                    oldCommitId = baseCommit;
+                    newCommitId = sourceCommit;
+                }
+
+                const cacheKey = `${selectedFilePath}:${oldCommitId || 'null'}-${newCommitId || 'null'}:iw${diffIgnoreWhitespace ? 1 : 0}`;
+                const cached = fileDiffCache.get(cacheKey);
+                if (!cached) return;
+
+                const sourceServerItem = changeEntry.sourceServerItem || changeEntry.originalPath;
                 const oldCInfoCached = oldCommitId ? (baseCommitCache.get(oldCommitId) || null) : null;
                 const newCInfoCached = newCommitId ? (baseCommitCache.get(newCommitId) || null) : null;
                 const savedScroll = saveDiffScroll();
-                renderFileDiff(selectedFilePath, changeEntry?.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent, oldCInfoCached, newCInfoCached, cached.highlightedOldLines || null, cached.highlightedNewLines || null);
+                renderFileDiff(selectedFilePath, changeEntry.changeType || 'edit', cached.diff, cached.addedCount, cached.removedCount, sourceServerItem, cached.oldContent, cached.newContent, oldCInfoCached, newCInfoCached, cached.highlightedOldLines || null, cached.highlightedNewLines || null);
                 restoreDiffScroll(savedScroll);
-
-                // Restore collapse state for existing threads. New threads (from the reply
-                // just submitted) are not in savedCollapseState and keep their default state.
-                // For visible rows update DOM directly; for off-screen rows updating row.collapsed
-                // is enough — syncRowElement applies it when they scroll into view.
-                if (savedCollapseState.size > 0 && currentDiffScroller) {
-                    let needsLayout = false;
-                    for (const row of currentDiffScroller.getAllRows()) {
-                        if (row.type !== 'thread' && row.type !== 'sbs-thread') continue;
-                        if (!savedCollapseState.has(row.threadId)) continue;
-                        const saved = savedCollapseState.get(row.threadId);
-                        if (saved === row.collapsed) continue;
-                        row.collapsed = saved;
-                        row.measuredHeight = null;
-                        needsLayout = true;
-                        // Sync visible DOM element
-                        const threadEl = document.querySelector(`.inline-thread[data-thread-id="${row.threadId}"]`);
-                        if (threadEl) threadEl.classList.toggle('collapsed', saved);
-                        const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${row.threadId}"]`);
-                        if (avatarEl) {
-                            avatarEl.style.display = saved ? '' : 'none';
-                            const stack = avatarEl.closest('.diff-gutter-stack');
-                            if (stack) updateGutterStack(stack);
-                        }
-                    }
-                    if (needsLayout) currentDiffScroller.recalcLayout();
-                }
-
-                updateHunkNav();
-                updateThreadNav();
+            } else {
+                return;
             }
+
+            // Restore collapse state for existing threads. New threads keep their default state.
+            if (savedCollapseState.size > 0 && currentDiffScroller) {
+                let needsLayout = false;
+                for (const row of currentDiffScroller.getAllRows()) {
+                    if (row.type !== 'thread' && row.type !== 'sbs-thread') continue;
+                    if (!savedCollapseState.has(row.threadId)) continue;
+                    const saved = savedCollapseState.get(row.threadId);
+                    if (saved === row.collapsed) continue;
+                    row.collapsed = saved;
+                    row.measuredHeight = null;
+                    needsLayout = true;
+                    const threadEl = document.querySelector(`.inline-thread[data-thread-id="${row.threadId}"]`);
+                    if (threadEl) threadEl.classList.toggle('collapsed', saved);
+                    const avatarEl = document.querySelector(`.diff-gutter-avatar[data-thread-id="${row.threadId}"]`);
+                    if (avatarEl) {
+                        avatarEl.style.display = saved ? '' : 'none';
+                        const stack = avatarEl.closest('.diff-gutter-stack');
+                        if (stack) updateGutterStack(stack);
+                    }
+                }
+                if (needsLayout) currentDiffScroller.recalcLayout();
+            }
+
+            updateHunkNav();
+            updateThreadNav();
         }
 
 
@@ -3306,7 +3366,7 @@
         function toggleDiffIgnoreWhitespace() {
             diffIgnoreWhitespace = !diffIgnoreWhitespace;
             localStorage.setItem('diffIgnoreWhitespace', diffIgnoreWhitespace);
-            fileDiffCache.clear();
+            fileDiffCache.clear(); unchangedFileCache = null;
             clearSelectionComment();
             if (selectedFilePath) {
                 const changeEntry = allChangeEntries.find(e => e.item?.path === selectedFilePath);
@@ -4260,7 +4320,7 @@
         }
 
         async function refreshFilesForIterationRange() {
-            fileDiffCache.clear();
+            fileDiffCache.clear(); unchangedFileCache = null;
             selectedFilePath = null;
             fileTreeBuilt = false;
 
@@ -4649,6 +4709,9 @@
                         </div>
                     `;
 
+                    // Cache content so refreshInlineThreadsIfNeeded can re-render threads
+                    unchangedFileCache = { filePath, content, commitInfo: sourceInfo, fileWasDeleted };
+
                     const scrollAreaUnchanged = diffPanel.querySelector('.diff-scroll-area');
                     const diffLinesUnchanged = diffPanel.querySelector('.diff-lines');
 
@@ -4682,6 +4745,9 @@
                     if (fileSearchActive) openFileSearch();
                     return;
                 }
+
+                // Not a comment-only file — clear the unchanged cache
+                unchangedFileCache = null;
 
                 if (!baseCommit) {
                     const iterInfo = selectedIterationStart !== null
