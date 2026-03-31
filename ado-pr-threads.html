@@ -3498,6 +3498,8 @@
             const threads = getVisibleThreadsForFile(filePath);
             const drafts = getDraftsForFile(filePath);
             if ((!threads || threads.length === 0) && drafts.length === 0) return '';
+            const fileChangeType = allChangeEntries.find(e => e.item?.path === filePath)?.changeType
+                || (changedFilePaths.has(filePath) ? 'edit' : 'none');
             // Sort by line number (order of appearance in file), then by offset within the line
             const sorted = [...threads].sort((a, b) => {
                 const lineA = a.threadContext?.rightFileStart?.line || a.threadContext?.leftFileStart?.line || 0;
@@ -3536,7 +3538,7 @@
                     avatarHtml = `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder" title="${authorName}"></span></span>`;
                 }
                 const treeThreadUnread = PRReviewTimestamps.threadHasUnread(thread, reviewTimestamps, currentUserId);
-                html += `<div class="file-tree-thread${treeThreadUnread ? ' tree-thread-unread' : ''}" data-thread-id="${thread.id}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changedFilePaths.has(filePath) ? 'edit' : 'none')}', ${thread.id})">`;
+                html += `<div class="file-tree-thread${treeThreadUnread ? ' tree-thread-unread' : ''}" data-thread-id="${thread.id}" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(fileChangeType)}', ${thread.id})">`;
                 html += `<span class="thread-status-dot ${ADOContent.escapeHtml(statusCls)}"></span>`;
                 if (treeThreadUnread) html += `<span class="tree-thread-unread-icon" title="Has unread comments">✉</span>`;
                 html += avatarHtml;
@@ -3553,7 +3555,6 @@
                     ? `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder" title="me"></span><img data-user-id="${currentUserId}" alt="me" title="me" class="avatar-pending"></span>`
                     : `<span class="tree-thread-avatar-wrap"><span class="avatar-placeholder"></span></span>`;
             for (const d of drafts) {
-                const changeType = changedFilePaths.has(filePath) ? 'edit' : 'none';
                 let lineLabel;
                 if (d.type === 'file') {
                     lineLabel = '(file): ';
@@ -3564,7 +3565,7 @@
                         ? `*L${d.startLine}: `
                         : `*L${d.startLine}–${d.endLine}: `;
                 }
-                html += `<div class="file-tree-thread draft-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(changeType)}')">`;
+                html += `<div class="file-tree-thread draft-thread" onclick="selectFileForDiff('${ADOContent.escapeJs(filePath)}', '${ADOContent.escapeJs(fileChangeType)}')">`;
                 html += `<span class="thread-status-dot draft"></span>`;
                 html += draftAvatarHtml;
                 const draftPreview = d.content
