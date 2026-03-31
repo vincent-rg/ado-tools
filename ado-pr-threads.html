@@ -2349,10 +2349,25 @@
                     throw new Error('Could not determine commit version');
                 }
 
-                const fileContent = await ADOAPI.getFileContent(currentConfig, filePath, {
-                    version: commitId,
-                    versionType: 'commit'
-                });
+                let fileContent;
+                try {
+                    fileContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: commitId, versionType: 'commit' });
+                } catch (_notFound) {
+                    // File may have been renamed — try the new path
+                    const renamedTo = cumulativeOldToNew.get(filePath);
+                    if (renamedTo) {
+                        try {
+                            fileContent = await ADOAPI.getFileContent(currentConfig, renamedTo, { version: commitId, versionType: 'commit' });
+                        } catch { /* fall through */ }
+                    }
+                    // File may only exist on the target branch — try merge base
+                    if (fileContent === undefined && currentMergeBase) {
+                        try {
+                            fileContent = await ADOAPI.getFileContent(currentConfig, filePath, { version: currentMergeBase, versionType: 'commit' });
+                        } catch { /* fall through */ }
+                    }
+                    if (fileContent === undefined) throw _notFound;
+                }
 
                 const lines = fileContent.split('\n');
                 const contextLines = 5;
@@ -2458,13 +2473,23 @@
                     oldFilePath = filePath;
                     try {
                         const changesData = await ADOAPI.getPRIterationChanges(currentConfig, currentPRId, newIterationId, 0);
-                        const changeEntry = (changesData.changeEntries || []).find(e => e.item?.path === filePath);
+                        let changeEntry = (changesData.changeEntries || []).find(e => e.item?.path === filePath);
+                        if (!changeEntry) {
+                            // File may have been renamed — search by pre-rename path
+                            changeEntry = (changesData.changeEntries || []).find(e =>
+                                e.sourceServerItem === filePath || e.originalPath === filePath
+                            );
+                            if (changeEntry?.item?.path) filePath = changeEntry.item.path;
+                        }
                         const ct = (changeEntry?.changeType || '').toLowerCase();
                         if (ct.includes('rename') && (changeEntry.sourceServerItem || changeEntry.originalPath)) {
                             oldFilePath = changeEntry.sourceServerItem || changeEntry.originalPath;
                         }
                     } catch (e) {
                         console.warn('Could not fetch cumulative changes for path resolution:', e);
+                        // Fall back to cumulative rename maps
+                        const renamedTo = cumulativeOldToNew.get(filePath);
+                        if (renamedTo) filePath = renamedTo;
                     }
                 } else {
                     const oldIteration = allIterations.find(it => it.id === oldIterationId);
@@ -2479,7 +2504,14 @@
                     oldFilePath = filePath;
                     try {
                         const changesData = await ADOAPI.getPRIterationChanges(currentConfig, currentPRId, newIterationId, oldIterationId);
-                        const changeEntry = (changesData.changeEntries || []).find(e => e.item?.path === filePath);
+                        let changeEntry = (changesData.changeEntries || []).find(e => e.item?.path === filePath);
+                        if (!changeEntry) {
+                            // File may have been renamed — search by pre-rename path
+                            changeEntry = (changesData.changeEntries || []).find(e =>
+                                e.sourceServerItem === filePath || e.originalPath === filePath
+                            );
+                            if (changeEntry?.item?.path) filePath = changeEntry.item.path;
+                        }
                         const ct = (changeEntry?.changeType || '').toLowerCase();
                         if (ct.includes('rename') && (changeEntry.sourceServerItem || changeEntry.originalPath)) {
                             oldFilePath = changeEntry.sourceServerItem || changeEntry.originalPath;
@@ -4073,8 +4105,16 @@
             buildIterationSelector();
             await refreshFilesForIterationRange();
             if (filePath) {
-                const entry = allChangeEntries.find(e => e.item?.path === filePath);
-                await selectFileForDiff(filePath, entry?.changeType || 'edit', threadId);
+                let entry = allChangeEntries.find(e => e.item?.path === filePath);
+                let effectivePath = filePath;
+                if (!entry) {
+                    // File may have been renamed — search by pre-rename path
+                    entry = allChangeEntries.find(e =>
+                        e.sourceServerItem === filePath || e.originalPath === filePath
+                    );
+                    if (entry?.item?.path) effectivePath = entry.item.path;
+                }
+                await selectFileForDiff(effectivePath, entry?.changeType || 'none', threadId);
             }
         }
 
@@ -4411,8 +4451,13 @@
             try {
                 const ct = changeType.toLowerCase();
 
-                // Find the change entry for source info
-                const changeEntry = allChangeEntries.find(e => e.item?.path === filePath);
+                // Find the change entry for source info (also check pre-rename path)
+                let changeEntry = allChangeEntries.find(e => e.item?.path === filePath);
+                if (!changeEntry) {
+                    changeEntry = allChangeEntries.find(e =>
+                        e.sourceServerItem === filePath || e.originalPath === filePath
+                    );
+                }
                 const sourceServerItem = changeEntry?.sourceServerItem || changeEntry?.originalPath;
 
                 // Determine commits based on iteration range
@@ -4428,17 +4473,58 @@
 
                 // Non-changed file: show as read-only content with comment support
                 if (ct === 'none' || ct === '') {
-                    // Try sourceCommit first; if the file no longer exists there (e.g. it was added
-                    // and then moved/deleted within this PR so the cumulative diff omits it), fall
-                    // back to the latest iteration commit where the file still existed.
+                    // Build a prioritised list of commits to try, avoiding blind 404 cascades.
+                    // 1. Thread iteration commits (file existed when the thread was created)
+                    // 2. sourceCommit (current view — works for truly unchanged files)
+                    // 3. Renamed path at sourceCommit
+                    // 4. Remaining iteration commits newest-first
+                    // 5. Merge base (target branch)
                     let content, effectiveCommit = sourceCommit, fileWasDeleted = false;
-                    try {
-                        content = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
-                    } catch (_notFound) {
-                        // Walk iterations newest-first to find the last commit that had the file.
+                    const renamedTo = cumulativeOldToNew.get(filePath);
+
+                    // Collect thread iteration commits (most targeted — file was visible at these)
+                    const threadIterCommits = [];
+                    const fileThreads = threadsByFilePath.get(filePath);
+                    if (fileThreads?.length) {
+                        const seen = new Set();
+                        for (const t of fileThreads) {
+                            const iterIdx = t.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
+                            if (iterIdx != null) {
+                                const iter = allIterations.find(it => it.id === iterIdx);
+                                const ic = iter?.sourceRefCommit?.commitId;
+                                if (ic && !seen.has(ic)) { seen.add(ic); threadIterCommits.push(ic); }
+                            }
+                        }
+                    }
+
+                    // Try thread iteration commits first (zero 404s in the common case)
+                    for (const ic of threadIterCommits) {
+                        try {
+                            content = await ADOAPI.getFileContent(currentConfig, filePath, { version: ic, versionType: 'commit' });
+                            effectiveCommit = ic;
+                            fileWasDeleted = true;
+                            break;
+                        } catch { /* try next */ }
+                    }
+                    // sourceCommit (works for truly unchanged files still present at HEAD)
+                    if (content === undefined) {
+                        try {
+                            content = await ADOAPI.getFileContent(currentConfig, filePath, { version: sourceCommit, versionType: 'commit' });
+                        } catch { /* fall through */ }
+                    }
+                    // Renamed path at sourceCommit
+                    if (content === undefined && renamedTo) {
+                        try {
+                            content = await ADOAPI.getFileContent(currentConfig, renamedTo, { version: sourceCommit, versionType: 'commit' });
+                        } catch { /* fall through */ }
+                    }
+                    // Walk remaining iterations newest-first, skipping already-tried commits.
+                    if (content === undefined) {
+                        const tried = new Set([sourceCommit, ...threadIterCommits]);
                         for (let _i = allIterations.length - 1; _i >= 0; _i--) {
                             const _ic = allIterations[_i]?.sourceRefCommit?.commitId;
-                            if (!_ic || _ic === sourceCommit) continue;
+                            if (!_ic || tried.has(_ic)) continue;
+                            tried.add(_ic);
                             try {
                                 content = await ADOAPI.getFileContent(currentConfig, filePath, { version: _ic, versionType: 'commit' });
                                 effectiveCommit = _ic;
@@ -4446,11 +4532,18 @@
                                 break;
                             } catch { /* try earlier */ }
                         }
-                        if (content === undefined) {
-                            const triedCommits = [sourceCommit, ...allIterations.slice().reverse().map(it => it?.sourceRefCommit?.commitId).filter(c => c && c !== sourceCommit)];
-                            diffPanel.innerHTML = `<div class="file-diff-error">This file could not be found in any push of this PR.<br><small>File: ${ADOContent.escapeHtml(filePath)}<br>Tried ${triedCommits.length} commit(s): ${ADOContent.escapeHtml(triedCommits.map(c => c.substring(0, 8)).join(', '))}</small></div>`;
-                            return;
-                        }
+                    }
+                    // File may only exist on the target branch (e.g. deleted/renamed in PR).
+                    if (content === undefined && baseCommit) {
+                        try {
+                            content = await ADOAPI.getFileContent(currentConfig, filePath, { version: baseCommit, versionType: 'commit' });
+                            effectiveCommit = baseCommit;
+                            fileWasDeleted = true;
+                        } catch { /* truly not found */ }
+                    }
+                    if (content === undefined) {
+                        diffPanel.innerHTML = `<div class="file-diff-error">This file could not be found in any push of this PR.<br><small>File: ${ADOContent.escapeHtml(filePath)}${renamedTo ? ` (also tried ${ADOContent.escapeHtml(renamedTo)})` : ''}</small></div>`;
+                        return;
                     }
                     const sourceInfo = await fetchCommitInfo(effectiveCommit);
                     if (selectedFilePath !== filePath) return;
@@ -4459,7 +4552,7 @@
                     const syntheticDiff = content.split('\n').map(line => ({ type: 'unchanged', content: line }));
 
                     // Gather threads for this file (applying active overview filters)
-                    const fileThreads = getVisibleThreadsForFile(filePath).filter(thread => {
+                    const visibleFileThreads = getVisibleThreadsForFile(filePath).filter(thread => {
                         if (!thread.threadContext) return false;
                         return thread.comments?.some(c => c.commentType !== 'system' && c.commentType !== 3);
                     }).sort((a, b) => {
@@ -4470,7 +4563,7 @@
 
                     const viewIterStart = selectedIterationStart ?? 1;
                     const viewIterEnd = selectedIterationEnd ?? (allIterations.length || 1);
-                    const threadRanges = fileThreads.map(thread => DiffUtils.buildThreadRange(thread, viewIterStart, viewIterEnd));
+                    const threadRanges = visibleFileThreads.map(thread => DiffUtils.buildThreadRange(thread, viewIterStart, viewIterEnd));
 
                     function getLinePrefix(newLineNum, oldLineNum) {
                         const matching = threadRanges.filter(tr => {
