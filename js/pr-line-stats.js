@@ -276,6 +276,10 @@
             await fetchLineStatsAsync(currentConfig, currentPRData);
         }
 
+        if (typeof module !== 'undefined' && module.exports) {
+            module.exports = { computeLineDiff, getCachedLineStats, setCachedLineStats, getLineStatsCacheKey };
+        }
+
         function updateLineStatsDisplay(added, removed) {
             const container = document.getElementById('lineStatsContainer');
             if (!container) return;
