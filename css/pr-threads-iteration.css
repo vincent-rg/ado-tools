@@ -422,6 +422,16 @@
     color: #835c00;
 }
 
+.file-thread-count.has-unread {
+    background: #e1f0ff;
+    color: #0078d4;
+}
+
+.file-thread-count.has-active.has-unread {
+    background: #fff4ce;
+    color: #835c00;
+}
+
 /* Thread sub-list under files */
 .file-tree-threads {
     padding-left: calc(28px + var(--depth, 0) * 16px);

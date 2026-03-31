@@ -537,10 +537,18 @@ button.comment-link {
     color: #a4262c;
 }
 
-/* Thread unread indicator dot */
+/* Thread unread indicator envelope */
 .thread-unread-dot {
     color: #0078d4;
-    font-size: 10px;
+    font-size: 11px;
     vertical-align: middle;
     margin-right: 2px;
+}
+
+/* File tree unread envelope icon */
+.tree-thread-unread-icon {
+    color: #0078d4;
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-right: 1px;
 }
