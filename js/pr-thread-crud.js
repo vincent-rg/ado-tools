@@ -557,9 +557,18 @@ function copyCommentUrl(threadId, filePath) {
         btns.forEach(btn => {
             btn.title = 'Copied!';
             btn.classList.add('copied');
-            setTimeout(() => { btn.title = 'Copy link'; btn.classList.remove('copied'); }, 1500);
+            const bubble = document.createElement('span');
+            bubble.className = 'copied-bubble';
+            bubble.textContent = 'Copied!';
+            btn.style.position = 'relative';
+            btn.appendChild(bubble);
+            setTimeout(() => {
+                btn.title = 'Copy link';
+                btn.classList.remove('copied');
+                bubble.remove();
+            }, 1500);
         });
-    });
+    }).catch(() => {});
 }
 
 // Convenience aliases for inline view (kept for backward compat with existing onclick handlers)

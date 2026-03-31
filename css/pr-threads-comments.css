@@ -103,6 +103,26 @@
     color: #107c10;
 }
 
+.copied-bubble {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #107c10;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: copied-bubble-fade 1.5s ease-in-out;
+}
+
+@keyframes copied-bubble-fade {
+    0%, 70% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 .comment-like-btn {
     display: inline-flex;
     align-items: center;
