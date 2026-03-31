@@ -102,9 +102,7 @@ function restoreDiffScroll(saved) {
 let currentFileThreadIds = [];
 let currentThreadNavIndex = -1;
 
-function getSortedFileThreadIds() {
-    if (!selectedFilePath) return [];
-    const threads = threadsByFilePath.get(selectedFilePath);
+function sortThreadsByPosition(threads) {
     if (!threads || threads.length === 0) return [];
     return [...threads]
         .filter(t => !t.isDeleted && t.threadContext)
@@ -117,6 +115,11 @@ function getSortedFileThreadIds() {
             return offsetA - offsetB;
         })
         .map(t => t.id);
+}
+
+function getSortedFileThreadIds() {
+    if (!selectedFilePath) return [];
+    return sortThreadsByPosition(threadsByFilePath.get(selectedFilePath));
 }
 
 function updateThreadNav(jumpedToId) {
@@ -212,4 +215,8 @@ function jumpToPrevHunk() {
     currentHunkIndex = prevIndex;
     scrollToHunk(prevIndex);
     updateHunkNav(prevIndex);
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { sortThreadsByPosition };
 }
