@@ -178,6 +178,10 @@ function renderOtherAuthorsSection(threads, reviewers, threadCounts, prAuthorId)
     `;
 }
 
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { renderAvatarWithBadges, renderReviewersSection, renderOtherAuthorsSection, renderVoteDropdown };
+}
+
 // ==================== Reviewer Management ====================
 
 let reviewerSearchTimeout = null;

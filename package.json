@@ -1,6 +1,7 @@
 {
   "private": true,
   "devDependencies": {
+    "happy-dom": "^17.6.1",
     "vitest": "^3.0.0"
   },
   "scripts": {
