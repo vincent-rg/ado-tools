@@ -68,5 +68,9 @@ const SyntaxHighlight = (() => {
         return EXT_MAP[ext] || null;
     }
 
-    return { highlight, highlightLines, langFromPath };
+    return { highlight, highlightLines, langFromPath, splitHighlightedLines };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SyntaxHighlight;
+}
