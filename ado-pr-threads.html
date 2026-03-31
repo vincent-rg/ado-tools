@@ -212,6 +212,7 @@
     <script src="js/pr-bulk-operations.js"></script>
     <script src="js/pr-status-actions.js"></script>
     <script src="js/pr-reviewer-manager.js"></script>
+    <script src="js/pr-thread-crud-utils.js"></script>
     <script src="js/pr-thread-crud.js"></script>
     <script src="js/pr-thread-nav.js"></script>
     <script src="js/pr-file-search.js"></script>
@@ -432,8 +433,7 @@
         /** Resolve @DisplayName → @<id> in a textarea's content before submitting */
         function resolveMentionsForSubmit(textarea) {
             if (!textarea) return textarea?.value?.trim() || '';
-            const text = textarea.value.trim();
-            return MentionUtils.resolveDisplayMentions(text, textarea._mentionMap);
+            return PRThreadCrudUtils.resolveMentionsForSubmit(textarea.value.trim(), textarea._mentionMap, MentionUtils);
         }
 
         /**
@@ -1005,13 +1005,7 @@
                     filePath, selectedIterationStart, selectedIterationEnd, allIterations.length, allChangeEntries
                 );
 
-                if (side === 'right') {
-                    threadContext.rightFileStart = { line: lineNum, offset: 1 };
-                    threadContext.rightFileEnd = { line: lineNum, offset: endOffset };
-                } else {
-                    threadContext.leftFileStart = { line: lineNum, offset: 1 };
-                    threadContext.leftFileEnd = { line: lineNum, offset: endOffset };
-                }
+                PRThreadCrudUtils.addLinePosition(threadContext, lineNum, side, endOffset);
 
                 await ADOAPI.createThread(currentConfig, currentPRId, content, 1, threadContext, pullRequestThreadContext);
                 if (window._adoDebugReply) console.log(`[REPLY op#${_opId}] createThread API done, refreshThreadsFromAPI start t=${Date.now()}`);
@@ -1691,10 +1685,9 @@
         //       'edit\x00{threadId}\x00{commentId}'
         const commentDrafts = new Map();
         function saveDraft(key, content, meta) {
-            const existing = commentDrafts.get(key) || {};
-            commentDrafts.set(key, { ...existing, ...meta, content });
+            PRThreadCrudUtils.saveDraft(commentDrafts, key, content, meta);
         }
-        function clearDraft(key) { commentDrafts.delete(key); }
+        function clearDraft(key) { PRThreadCrudUtils.clearDraft(commentDrafts, key); }
         let _nextFormId = 1; // unique ID per created form (for same-line multi-form support)
 
         // ==================== Comment CRUD Functions ====================
@@ -3438,26 +3431,11 @@
         }
 
         function getFilePathForThread(threadId) {
-            for (const [fp, threads] of threadsByFilePath) {
-                if (threads.some(t => t.id === threadId)) return fp;
-            }
-            return null;
+            return PRThreadCrudUtils.getFilePathForThread(threadsByFilePath, threadId);
         }
 
         function getDraftsForFile(filePath) {
-            const drafts = [];
-            for (const [key, val] of commentDrafts) {
-                const parts = key.split('\x00');
-                const content = val.content || '';
-                if (parts[0] === 'line' && parts[2] === filePath) {
-                    drafts.push({ type: 'line', lineNum: parseInt(parts[3]), side: parts[4], key, content });
-                } else if (parts[0] === 'sel' && parts[2] === filePath) {
-                    drafts.push({ type: 'sel', startLine: parseInt(parts[3]), endLine: parseInt(parts[4]), key, content });
-                } else if (parts[0] === 'file' && parts[1] === filePath) {
-                    drafts.push({ type: 'file', key, content });
-                }
-            }
-            return drafts;
+            return PRThreadCrudUtils.getDraftsForFile(commentDrafts, filePath);
         }
 
         function updateFileTreeDraftInfo(filePath) {

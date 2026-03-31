@@ -366,7 +366,7 @@ const attachmentBlobCache = new Map();
 
 function isADOAttachmentUrl(src) {
     const serverUrl = currentConfig?.serverUrl || ADOConfig.get()?.serverUrl;
-    return serverUrl && src.startsWith(serverUrl) && src.includes('/attachments/');
+    return PRThreadCrudUtils.isADOAttachmentUrl(src, serverUrl);
 }
 
 async function loadAttachmentImage(img) {
@@ -452,7 +452,7 @@ async function saveEditDescription() {
 }
 
 function titleDisplayHtml(prId, title) {
-    return `PR #${prId}: <span id="pr-title-text">${ADOContent.escapeHtml(title)}</span><button class="pr-title-edit-btn" id="pr-title-edit-btn" onclick="startEditTitle()" title="Edit title">&#9998;</button>`;
+    return PRThreadCrudUtils.titleDisplayHtml(prId, title, ADOContent.escapeHtml);
 }
 
 function startEditTitle() {
