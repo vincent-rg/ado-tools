@@ -319,6 +319,10 @@ async function executePRCompletion() {
     }
 }
 
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { renderPRStatusActions, renderAutoCompleteButton, getCompletionBlockers };
+}
+
 function updatePRStatusDisplay() {
     const statusBadgesEl = document.getElementById('prStatusBadges');
     const actionsEl = document.getElementById('prStatusActions');
