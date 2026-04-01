@@ -938,5 +938,216 @@ describe('PRThreadsUtils', () => {
             });
         });
     });
+
+    // --- getLastIterationBeforeTime ---
+
+    describe('getLastIterationBeforeTime', () => {
+        const mkIter = (id, date) => ({ id, createdDate: date });
+
+        it('returns null for empty array', () => {
+            expect(PRThreadsUtils.getLastIterationBeforeTime([], new Date('2025-01-15'))).toBeNull();
+        });
+
+        it('returns null when all iterations are after the time', () => {
+            const iters = [
+                mkIter(1, '2025-02-01T00:00:00Z'),
+                mkIter(2, '2025-03-01T00:00:00Z'),
+            ];
+            expect(PRThreadsUtils.getLastIterationBeforeTime(iters, new Date('2025-01-01'))).toBeNull();
+        });
+
+        it('returns the last iteration strictly before the time', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-02-01T00:00:00Z'),
+                mkIter(3, '2025-03-01T00:00:00Z'),
+            ];
+            const result = PRThreadsUtils.getLastIterationBeforeTime(iters, new Date('2025-02-15'));
+            expect(result.id).toBe(2);
+        });
+
+        it('returns closest iteration when multiple qualify', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+                mkIter(3, '2025-01-20T00:00:00Z'),
+            ];
+            const result = PRThreadsUtils.getLastIterationBeforeTime(iters, new Date('2025-01-25'));
+            expect(result.id).toBe(3);
+        });
+
+        it('returns null for exact same timestamp (strict <)', () => {
+            const iters = [mkIter(1, '2025-01-01T12:00:00Z')];
+            expect(PRThreadsUtils.getLastIterationBeforeTime(iters, new Date('2025-01-01T12:00:00Z'))).toBeNull();
+        });
+    });
+
+    // --- getIterationLinksForComment ---
+
+    describe('getIterationLinksForComment', () => {
+        const mkIter = (id, date) => ({ id, createdDate: date });
+        const mkComment = (id, date) => ({ id, publishedDate: date });
+
+        it('returns all null links for null iterations', () => {
+            const comment = mkComment(1, '2025-01-15T00:00:00Z');
+            const thread = { id: 10 };
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, null);
+            expect(result.beforeLink).toBeNull();
+            expect(result.afterLink).toBeNull();
+            expect(result.completeLink).toBeNull();
+        });
+
+        it('returns all null links for empty iterations', () => {
+            const comment = mkComment(1, '2025-01-15T00:00:00Z');
+            const thread = { id: 10 };
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, []);
+            expect(result.beforeLink).toBeNull();
+            expect(result.afterLink).toBeNull();
+            expect(result.completeLink).toBeNull();
+        });
+
+        it('first comment uses secondComparingIteration from thread context', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+                mkIter(3, '2025-01-20T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-05T00:00:00Z');
+            const thread = {
+                id: 10,
+                pullRequestThreadContext: {
+                    iterationContext: { secondComparingIteration: 2 }
+                }
+            };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, true);
+            // Target=2, latest=3 → before=1..2, after=3
+            expect(result.beforeLink).toBe(true);
+            expect(result.beforeRange).toBe('1..2');
+            expect(result.afterLink).toBe(true);
+            expect(result.afterRange).toBe('3');
+        });
+
+        it('first comment falls back to timestamp when secondComparingIteration missing', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+                mkIter(3, '2025-01-20T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-15T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, true);
+            // Timestamp falls between iter 2 and 3 → target=2, latest=3
+            expect(result.beforeRange).toBe('1..2');
+            expect(result.afterRange).toBe('3');
+        });
+
+        it('non-first comment always uses timestamp-based lookup', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+                mkIter(3, '2025-01-20T00:00:00Z'),
+            ];
+            const comment = mkComment(2, '2025-01-15T00:00:00Z');
+            const thread = {
+                id: 10,
+                pullRequestThreadContext: {
+                    iterationContext: { secondComparingIteration: 1 }
+                }
+            };
+
+            // isFirstComment=false → ignores secondComparingIteration, uses timestamp
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            // Comment at Jan 15 → lastBefore = iter 2 (Jan 10) → target=2
+            expect(result.beforeRange).toBe('1..2');
+            expect(result.afterRange).toBe('3');
+        });
+
+        it('comment older than all iterations uses first iteration', () => {
+            const iters = [
+                mkIter(1, '2025-02-01T00:00:00Z'),
+                mkIter(2, '2025-03-01T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-01T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            // No iteration before comment → falls back to first (id=1), latest=2
+            expect(result.beforeRange).toBe('1');
+            expect(result.afterRange).toBe('2');
+        });
+
+        it('target === latest → only completeLink, no before/after', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-15T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            // Comment after all → lastBefore=iter2 → target=2=latest → no before/after
+            expect(result.beforeLink).toBeNull();
+            expect(result.afterLink).toBeNull();
+            expect(result.completeLink).toBe(true);
+            expect(result.completeRange).toBe('1..2');
+        });
+
+        it('formatRange produces "3" when start===end', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-05T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            // target=1, latest=2 → before=1, after=2 (both single values)
+            expect(result.beforeRange).toBe('1');
+            expect(result.afterRange).toBe('2');
+        });
+
+        it('single iteration → only completeLink', () => {
+            const iters = [mkIter(1, '2025-01-01T00:00:00Z')];
+            const comment = mkComment(1, '2025-01-15T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            expect(result.beforeLink).toBeNull();
+            expect(result.afterLink).toBeNull();
+            expect(result.completeLink).toBe(true);
+            expect(result.completeRange).toBe('1');
+        });
+
+        it('complete range start/end are always null (All mode)', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-05T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            expect(result.completeIterStart).toBeNull();
+            expect(result.completeIterEnd).toBeNull();
+        });
+
+        it('before/after iter values are numeric', () => {
+            const iters = [
+                mkIter(1, '2025-01-01T00:00:00Z'),
+                mkIter(2, '2025-01-10T00:00:00Z'),
+                mkIter(3, '2025-01-20T00:00:00Z'),
+            ];
+            const comment = mkComment(1, '2025-01-15T00:00:00Z');
+            const thread = { id: 10 };
+
+            const result = PRThreadsUtils.getIterationLinksForComment(comment, thread, iters, false);
+            expect(result.beforeIterStart).toBe(1);
+            expect(result.beforeIterEnd).toBe(2);
+            expect(result.afterIterStart).toBe(3);
+            expect(result.afterIterEnd).toBe(3);
+        });
+    });
 });
 

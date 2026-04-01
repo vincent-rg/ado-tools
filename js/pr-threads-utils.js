@@ -340,6 +340,84 @@ const PRThreadsUtils = {
         }
 
         return { threadContext, pullRequestThreadContext };
+    },
+
+    /**
+     * Find the last iteration whose createdDate is strictly before the given time.
+     * Scans backwards so the first match is the closest-before iteration.
+     */
+    getLastIterationBeforeTime(sortedIterations, time) {
+        for (let i = sortedIterations.length - 1; i >= 0; i--) {
+            if (new Date(sortedIterations[i].createdDate) < time) {
+                return sortedIterations[i];
+            }
+        }
+        return null;
+    },
+
+    /**
+     * Build iteration range links for a comment (before/after/complete).
+     * Returns link flags, human-readable ranges ("1..3"), and numeric start/end values.
+     */
+    getIterationLinksForComment(comment, thread, iterations, isFirstComment = false) {
+        if (!iterations || iterations.length === 0) {
+            return { beforeLink: null, afterLink: null, completeLink: null };
+        }
+
+        const sortedIterations = [...iterations].sort((a, b) =>
+            new Date(a.createdDate) - new Date(b.createdDate)
+        );
+
+        const commentTime = new Date(comment.publishedDate);
+        const latestIteration = sortedIterations[sortedIterations.length - 1];
+
+        // For the first comment, use the thread's secondComparingIteration (what ADO recorded)
+        // For subsequent comments, calculate based on timestamp
+        let targetIterationId;
+        if (isFirstComment) {
+            targetIterationId = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
+        }
+        // Fallback to timestamp-based if not first comment or not available
+        if (targetIterationId === null || targetIterationId === undefined) {
+            const lastBefore = this.getLastIterationBeforeTime(sortedIterations, commentTime);
+            targetIterationId = lastBefore ? lastBefore.id : sortedIterations[0].id;
+        }
+
+        // Check if there are iterations after this comment
+        const hasIterationsAfter = targetIterationId < latestIteration.id;
+
+        let beforeLink = null;
+        let afterLink = null;
+        let completeLink = null;
+        let beforeRange = null;
+        let afterRange = null;
+        let completeRange = null;
+        let beforeIterStart = null, beforeIterEnd = null;
+        let afterIterStart = null, afterIterEnd = null;
+
+        const formatRange = (start, end) => start === end ? `${start}` : `${start}..${end}`;
+
+        // Only show before/after links if there are iterations after (otherwise it's same as complete)
+        if (hasIterationsAfter) {
+            beforeLink = true;
+            beforeRange = formatRange(1, targetIterationId);
+            beforeIterStart = 1;
+            beforeIterEnd = targetIterationId;
+
+            afterLink = true;
+            afterRange = formatRange(targetIterationId + 1, latestIteration.id);
+            afterIterStart = targetIterationId + 1;
+            afterIterEnd = latestIteration.id;
+        }
+
+        completeLink = true;
+        completeRange = formatRange(1, latestIteration.id);
+        // complete = all iterations (null/null = "All" mode in Files view)
+        const completeIterStart = null;
+        const completeIterEnd = null;
+
+        return { beforeLink, afterLink, completeLink, beforeRange, afterRange, completeRange,
+            beforeIterStart, beforeIterEnd, afterIterStart, afterIterEnd, completeIterStart, completeIterEnd };
     }
 };
 
