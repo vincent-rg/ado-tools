@@ -139,4 +139,46 @@ test.describe('PR List page', () => {
         await expect(page.locator('#titleFilter')).toBeVisible();
         await expect(page.locator('#createdByFilter')).toBeVisible();
     });
+
+    test('clicking column header sorts PRs', async ({ seedConfig, mockADO, page }) => {
+        await seedConfig(page);
+        await mockADO(page);
+        await page.goto('/ado-pr-list.html');
+        await expect(page.locator('#loadButton')).toBeEnabled();
+
+        await loadPRsViaModal(page);
+
+        // Default sort is ID desc — first row should be 102
+        const firstRowBefore = page.locator('.pr-table tbody tr').first();
+        await expect(firstRowBefore).toContainText('102');
+
+        // Click ID header to toggle to ascending
+        await page.click('th[data-column="id"]');
+
+        // Now first row should be 101
+        const firstRowAfter = page.locator('.pr-table tbody tr').first();
+        await expect(firstRowAfter).toContainText('101');
+    });
+
+    test('clear all filters resets filters and shows all active PRs', async ({ seedConfig, mockADO, page }) => {
+        await seedConfig(page);
+        await mockADO(page);
+        await page.goto('/ado-pr-list.html');
+        await expect(page.locator('#loadButton')).toBeEnabled();
+
+        await loadPRsViaModal(page);
+
+        // Apply a title filter to narrow results
+        await page.fill('#titleFilter', 'feature');
+        await expect(page.locator('.pr-table tbody tr')).toHaveCount(1);
+
+        // Click Clear All Filters
+        await page.click('.clear-filters');
+
+        // Title filter should be cleared
+        await expect(page.locator('#titleFilter')).toHaveValue('');
+
+        // All PRs should be visible (clearFilters unchecks all status boxes = show all)
+        await expect(page.locator('.pr-table tbody tr')).toHaveCount(3);
+    });
 });

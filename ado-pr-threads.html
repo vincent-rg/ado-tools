@@ -3110,9 +3110,10 @@
             fetchAndUpdateWorkItems(config, prData.pullRequestId);
             startPRPolling(config);
 
-            // Fetch line stats asynchronously (skip if already displayed — stats only change on new iterations)
+            // Fetch line stats asynchronously (skip if already computed — stats only change on new iterations)
             const lineStatsContainer = document.getElementById('lineStatsContainer');
-            if (!lineStatsContainer || !lineStatsContainer.innerHTML.trim()) {
+            const lineStatsAlreadyComputed = lineStatsContainer?.querySelector('[title="Added"]');
+            if (!lineStatsAlreadyComputed) {
                 fetchLineStatsAsync(config, prData);
             }
 

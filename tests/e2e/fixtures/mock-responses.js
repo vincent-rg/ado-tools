@@ -169,3 +169,43 @@ export const prCommits = { value: [], count: 0 };
 export const workItemRefs = { value: [], count: 0 };
 
 export const mergeBases = { value: [{ commitId: 'mergebase111' }], count: 1 };
+
+export const identitySearchResults = {
+    results: [{
+        identities: [
+            { localId: 'user-3', displayName: 'Charlie', mail: 'charlie@example.com' },
+            { localId: 'user-4', displayName: 'Diana', mail: 'diana@example.com' },
+        ],
+    }],
+};
+
+export const iterationChangesWithFiles = {
+    changeEntries: [
+        {
+            changeTrackingId: 1,
+            changeType: 'edit',
+            item: { objectId: 'newobj1', path: '/src/feature.js' },
+            originalPath: '/src/feature.js',
+        },
+    ],
+};
+
+export const fileContentOld = `function hello() {
+    console.log("Hello world");
+}
+
+function add(a, b) {
+    return a + b;
+}`;
+
+export const fileContentNew = `function hello() {
+    console.log("Hello world!");
+}
+
+function add(a, b) {
+    return a + b;
+}
+
+function subtract(a, b) {
+    return a - b;
+}`;
