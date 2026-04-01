@@ -856,3 +856,139 @@ test.describe('PR Threads – new thread creation', () => {
         await expect(page.locator('#newThreadBtn')).toBeVisible();
     });
 });
+
+test.describe('PR Threads – @mention autocomplete', () => {
+    /** Helper: load page and mock identity search, then open reply form on thread 1 */
+    async function setupMentionTest(seedConfig, mockADO, page) {
+        await loadThreadsPage(seedConfig, mockADO, page);
+
+        // Mock identity search endpoint
+        await page.route(/\/identity-search/, async (route) => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(identitySearchResults),
+            });
+        });
+
+        // Open reply form to get an attached textarea
+        await page.click('#reply-btn-1');
+        await expect(page.locator('#reply-content-1')).toBeVisible();
+    }
+
+    test('typing @ shows "keep typing" hint', async ({ seedConfig, mockADO, page }) => {
+        await setupMentionTest(seedConfig, mockADO, page);
+
+        const textarea = page.locator('#reply-content-1');
+        await textarea.pressSequentially('@');
+
+        const dropdown = page.locator('.mention-dropdown.active');
+        await expect(dropdown).toBeVisible({ timeout: 3000 });
+        await expect(dropdown).toContainText('Keep typing');
+    });
+
+    test('typing @Ch triggers search and shows results', async ({ seedConfig, mockADO, page }) => {
+        await setupMentionTest(seedConfig, mockADO, page);
+
+        const textarea = page.locator('#reply-content-1');
+        await textarea.pressSequentially('@Ch', { delay: 50 });
+
+        // Wait for debounced search (300ms) + results
+        const result = page.locator('.mention-result').first();
+        await expect(result).toBeVisible({ timeout: 5000 });
+        await expect(result).toContainText('Charlie');
+    });
+
+    test('clicking a mention result inserts @DisplayName into textarea', async ({ seedConfig, mockADO, page }) => {
+        await setupMentionTest(seedConfig, mockADO, page);
+
+        const textarea = page.locator('#reply-content-1');
+        await textarea.pressSequentially('@Ch', { delay: 50 });
+
+        // Wait for results
+        await expect(page.locator('.mention-result').first()).toBeVisible({ timeout: 5000 });
+
+        // Click the first result
+        await page.locator('.mention-result').first().click({ force: true });
+
+        // Textarea should contain the inserted mention (format: @<DisplayName>)
+        await expect(textarea).toHaveValue(/@<Charlie>/, { timeout: 3000 });
+        // Dropdown should close
+        await expect(page.locator('.mention-dropdown.active')).toBeHidden();
+    });
+
+    test('pressing Enter on selected result inserts mention', async ({ seedConfig, mockADO, page }) => {
+        await setupMentionTest(seedConfig, mockADO, page);
+
+        const textarea = page.locator('#reply-content-1');
+        await textarea.pressSequentially('@Ch', { delay: 50 });
+
+        // Wait for results (first is auto-selected)
+        await expect(page.locator('.mention-result').first()).toBeVisible({ timeout: 5000 });
+
+        // Press Enter to select
+        await textarea.press('Enter');
+
+        await expect(textarea).toHaveValue(/@<Charlie>/, { timeout: 3000 });
+        await expect(page.locator('.mention-dropdown.active')).toBeHidden();
+    });
+
+    test('pressing Escape closes the dropdown', async ({ seedConfig, mockADO, page }) => {
+        await setupMentionTest(seedConfig, mockADO, page);
+
+        const textarea = page.locator('#reply-content-1');
+        await textarea.pressSequentially('@Ch', { delay: 50 });
+
+        await expect(page.locator('.mention-dropdown.active')).toBeVisible({ timeout: 5000 });
+
+        await textarea.press('Escape');
+        await expect(page.locator('.mention-dropdown.active')).toBeHidden();
+    });
+
+    test('arrow keys navigate between results', async ({ seedConfig, mockADO, page }) => {
+        await setupMentionTest(seedConfig, mockADO, page);
+
+        const textarea = page.locator('#reply-content-1');
+        await textarea.pressSequentially('@Ch', { delay: 50 });
+
+        // Wait for results (Charlie and Diana)
+        await expect(page.locator('.mention-result').first()).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.mention-result')).toHaveCount(2);
+
+        // First result is auto-selected
+        await expect(page.locator('.mention-result').first()).toHaveClass(/selected/);
+
+        // Arrow down to select second result
+        await textarea.press('ArrowDown');
+        await expect(page.locator('.mention-result').nth(1)).toHaveClass(/selected/);
+        await expect(page.locator('.mention-result').first()).not.toHaveClass(/selected/);
+
+        // Arrow up back to first
+        await textarea.press('ArrowUp');
+        await expect(page.locator('.mention-result').first()).toHaveClass(/selected/);
+    });
+
+    test('mention autocomplete works in new thread form', async ({ seedConfig, mockADO, page }) => {
+        await loadThreadsPage(seedConfig, mockADO, page);
+
+        await page.route(/\/identity-search/, async (route) => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(identitySearchResults),
+            });
+        });
+
+        // Open new thread form
+        await page.click('#newThreadBtn');
+        const textarea = page.locator('#newThreadContent');
+        await expect(textarea).toBeVisible();
+
+        await textarea.pressSequentially('@Ch', { delay: 50 });
+
+        // Should show mention dropdown with results
+        const result = page.locator('.mention-result').first();
+        await expect(result).toBeVisible({ timeout: 5000 });
+        await expect(result).toContainText('Charlie');
+    });
+});
