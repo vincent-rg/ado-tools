@@ -211,3 +211,7 @@ async function applyBulkStatusChange() {
         alert(`Updated ${successCount} thread(s) successfully.\n${failCount} thread(s) failed to update.`);
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { changeThreadStatus, removeThreadStatus, applyBulkStatusChange };
+}

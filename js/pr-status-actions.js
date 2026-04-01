@@ -320,7 +320,7 @@ async function executePRCompletion() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { renderPRStatusActions, renderAutoCompleteButton, getCompletionBlockers };
+    module.exports = { renderPRStatusActions, renderAutoCompleteButton, getCompletionBlockers, showCompletionBlockedModal };
 }
 
 function updatePRStatusDisplay() {

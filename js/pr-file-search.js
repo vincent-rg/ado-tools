@@ -102,13 +102,15 @@ function runFileSearch() {
     diffMinimapDraw?.();
 }
 
-function runFileSearchWithScroller(regex) {
-    const codeRows = currentDiffScroller.getCodeRows();
+// Pure search core: builds search results from code rows without mutating module state
+function buildSearchResults(codeRows, getTextFn, regex) {
+    const dataResults = [];
+    const hitLineIndices = [];
     let totalMatches = 0;
 
     for (let codeIdx = 0; codeIdx < codeRows.length; codeIdx++) {
         const row = codeRows[codeIdx];
-        const text = currentDiffScroller.getRowTextContent(row);
+        const text = getTextFn(row);
         if (!text) continue;
 
         regex.lastIndex = 0;
@@ -116,22 +118,31 @@ function runFileSearchWithScroller(regex) {
         const offsets = [];
         while ((match = regex.exec(text)) !== null) {
             offsets.push({ start: match.index, end: match.index + match[0].length });
-            fileSearchHitLineIndices.push({ visibleIdx: codeIdx, markIdx: totalMatches });
+            hitLineIndices.push({ visibleIdx: codeIdx, markIdx: totalMatches });
             totalMatches++;
             if (match[0].length === 0) { regex.lastIndex++; break; }
         }
 
         if (offsets.length > 0) {
-            fileSearchDataResults.push({ codeRowIdx: codeIdx, rowIndex: row.index, offsets });
+            dataResults.push({ codeRowIdx: codeIdx, rowIndex: row.index, offsets });
         }
     }
 
-    // Build search highlight map for scroller (applied at render time)
+    // Build search highlight map (keyed by rowIndex)
     const highlightMap = new Map();
-    for (const dr of fileSearchDataResults) {
+    for (const dr of dataResults) {
         highlightMap.set(dr.rowIndex, dr.offsets);
     }
-    currentDiffScroller.setSearchHighlights(highlightMap, regex);
+
+    return { dataResults, hitLineIndices, highlightMap };
+}
+
+function runFileSearchWithScroller(regex) {
+    const codeRows = currentDiffScroller.getCodeRows();
+    const results = buildSearchResults(codeRows, r => currentDiffScroller.getRowTextContent(r), regex);
+    fileSearchDataResults = results.dataResults;
+    fileSearchHitLineIndices.push(...results.hitLineIndices);
+    currentDiffScroller.setSearchHighlights(results.highlightMap, regex);
 }
 
 function runFileSearchLegacy(regex) {
@@ -228,10 +239,15 @@ function updateFileSearchCount() {
     if (nextBtn) nextBtn.disabled = !hasResults;
 }
 
+function computeNextIndex(current, delta, total) {
+    if (total === 0) return -1;
+    return (current + delta + total) % total;
+}
+
 function navigateFileSearch(delta) {
     const total = getFileSearchTotalCount();
     if (total === 0) return;
-    fileSearchIndex = (fileSearchIndex + delta + total) % total;
+    fileSearchIndex = computeNextIndex(fileSearchIndex, delta, total);
     updateFileSearchHighlightCurrent();
     updateFileSearchCount();
     scrollToCurrentSearchResult();
@@ -351,4 +367,8 @@ function goToLine(lineNum, side) {
     void targetEl.offsetWidth;
     targetEl.classList.add('goto-line-flash');
     targetEl.addEventListener('animationend', () => targetEl.classList.remove('goto-line-flash'), { once: true });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { buildSearchResults, computeNextIndex, getFileSearchTotalCount };
 }

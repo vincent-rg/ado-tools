@@ -277,7 +277,7 @@
         }
 
         if (typeof module !== 'undefined' && module.exports) {
-            module.exports = { computeLineDiff, getCachedLineStats, setCachedLineStats, getLineStatsCacheKey };
+            module.exports = { computeLineDiff, getCachedLineStats, setCachedLineStats, getLineStatsCacheKey, fetchLineStatsViaLocalDiff, fetchFileContent };
         }
 
         function updateLineStatsDisplay(added, removed) {

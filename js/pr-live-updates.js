@@ -110,13 +110,10 @@
             }
         }
 
-        // Update thread stats display
-        function updateThreadStats() {
-            const container = document.getElementById('threadStatsContainer');
-            if (!container) return;
-
-            const statusCounts = allThreads.reduce((acc, thread) => {
-                if (PRThreadsUtils.isThreadDeleted(thread)) {
+        // Compute thread status counts (pure function)
+        function computeThreadStatusCounts(threads, isDeletedFn) {
+            return threads.reduce((acc, thread) => {
+                if (isDeletedFn(thread)) {
                     acc.deleted = (acc.deleted || 0) + 1;
                 } else if (thread.status === undefined) {
                     acc.noStatus = (acc.noStatus || 0) + 1;
@@ -126,6 +123,14 @@
                 }
                 return acc;
             }, {});
+        }
+
+        // Update thread stats display
+        function updateThreadStats() {
+            const container = document.getElementById('threadStatsContainer');
+            if (!container) return;
+
+            const statusCounts = computeThreadStatusCounts(allThreads, PRThreadsUtils.isThreadDeleted);
 
             container.innerHTML = `
                 <span title="Active"><span class="thread-status-dot active"></span> <strong>${statusCounts.active || 0}</strong></span>
@@ -347,11 +352,11 @@
         const getStatusIcon = ChecksFormatter.getIcon.bind(ChecksFormatter);
         const getStatusClass = ChecksFormatter.getClass.bind(ChecksFormatter);
 
-        function renderWorkItemsSection() {
-            if (!prWorkItems) {
+        function renderWorkItemsSection(workItems = prWorkItems, config = currentConfig) {
+            if (!workItems) {
                 return '';
             }
-            if (prWorkItems.length === 0) {
+            if (workItems.length === 0) {
                 return `
                     <div class="work-items-section">
                         <h4>Work Items</h4>
@@ -371,12 +376,12 @@
                 'Impediment': '🚧',
             };
 
-            const itemsHtml = prWorkItems.map(wi => {
+            const itemsHtml = workItems.map(wi => {
                 const typeName = wi.fields?.['System.WorkItemType'] || '';
                 const title = wi.fields?.['System.Title'] || `Work Item ${wi.id}`;
                 const state = wi.fields?.['System.State'] || '';
                 const icon = workItemTypeIcons[typeName] || '📌';
-                const wiUrl = `${currentConfig.serverUrl}/${currentConfig.organization}/${currentConfig.project}/_workitems/edit/${wi.id}`;
+                const wiUrl = `${config.serverUrl}/${config.organization}/${config.project}/_workitems/edit/${wi.id}`;
 
                 return `<div class="work-item-entry">
                     <a href="${wiUrl}" target="_blank" rel="noopener" title="${ADOContent.escapeHtml(typeName)}${state ? ' - ' + ADOContent.escapeHtml(state) : ''}">
@@ -395,8 +400,8 @@
             `;
         }
 
-        function renderChecksSection() {
-            if (!prChecksData) {
+        function renderChecksSection(checksData = prChecksData, config = currentConfig) {
+            if (!checksData) {
                 return `
                     <div class="checks-section">
                         <h4>Checks</h4>
@@ -406,7 +411,7 @@
             }
 
             const sections = [];
-            const { statuses, policies, conflicts, mergeStatus } = prChecksData;
+            const { statuses, policies, conflicts, mergeStatus } = checksData;
 
             // Merge conflicts section
             if (mergeStatus === 'conflicts') {
@@ -497,7 +502,7 @@
                     const buildId = p.context?.buildId;
                     let labelHtml;
                     if (buildId) {
-                        const buildUrl = `${currentConfig.serverUrl}/${currentConfig.organization}/${currentConfig.project}/_build/results?buildId=${buildId}`;
+                        const buildUrl = `${config.serverUrl}/${config.organization}/${config.project}/_build/results?buildId=${buildId}`;
                         labelHtml = `<a href="${ADOContent.escapeHtml(buildUrl)}" target="_blank" rel="noopener">${ADOContent.escapeHtml(label)}</a>`;
                     } else {
                         labelHtml = ADOContent.escapeHtml(label);
@@ -543,4 +548,8 @@
                     ${sections.join('')}
                 </div>
             `;
+        }
+
+        if (typeof module !== 'undefined' && module.exports) {
+            module.exports = { renderChecksSection, renderWorkItemsSection, computeThreadStatusCounts };
         }
