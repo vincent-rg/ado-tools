@@ -1,11 +1,15 @@
 {
   "private": true,
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "happy-dom": "^17.6.1",
     "vitest": "^3.0.0"
   },
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:all": "vitest run && playwright test"
   }
 }

@@ -355,6 +355,7 @@ os.chdir(Path(__file__).parent)
 
 # Create server
 try:
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), ADOHandler) as httpd:
         print("=" * 70)
         print(f"🔧 Azure DevOps Tools Server")

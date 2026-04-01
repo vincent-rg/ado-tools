@@ -1,3 +1,6 @@
 .claude/
 node_modules/
 ado-server.db
+test-results/
+playwright-report/
+blob-report/
