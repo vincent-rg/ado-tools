@@ -690,3 +690,7 @@ function generateStatusIndicatorsHtml(prKey) {
     const escapedTooltip = ADOContent.escapeHtml(tooltip).replace(/\n/g, '&#10;');
     return `<span class="status-indicators-wrapper" title="${escapedTooltip}">${indicators.join(' ')}</span>`;
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { generateStatusIndicatorsHtml, buildCommentFetchQueue, updatePRCommentDisplay, updatePRUpdatesDisplay };
+}

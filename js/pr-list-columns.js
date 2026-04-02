@@ -269,3 +269,7 @@ document.addEventListener('click', (event) => {
         menu.classList.remove('show');
     }
 });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { DEFAULT_COLUMN_WIDTHS, COLUMN_LABELS, HIDEABLE_COLUMNS, saveColumnWidths, loadColumnWidths, saveColumnVisibility, loadColumnVisibility, toggleColumnVisibility, updateTableWidth };
+}

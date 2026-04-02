@@ -449,3 +449,7 @@ document.addEventListener('visibilitychange', () => {
         }
     }
 });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { detectChanges, isUserActivelyInteracting, POLL_INTERVAL, USER_INTERACTION_PAUSE, VISIBILITY_POLL_COOLDOWN };
+}

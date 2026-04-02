@@ -160,6 +160,54 @@ test.describe('PR List page', () => {
         await expect(firstRowAfter).toContainText('101');
     });
 
+    test('columns dropdown toggles column visibility', async ({ seedConfig, mockADO, page }) => {
+        await seedConfig(page);
+        await mockADO(page);
+        await page.goto('/ado-pr-list.html');
+        await expect(page.locator('#loadButton')).toBeEnabled();
+
+        await loadPRsViaModal(page);
+
+        // Verify Repository column is visible
+        await expect(page.locator('th[data-column="repository"]')).toBeVisible();
+
+        // Open columns dropdown
+        await page.click('.columns-dropdown-btn');
+        await expect(page.locator('#columnsDropdownMenu')).toHaveClass(/show/);
+
+        // Uncheck Repository column
+        await page.uncheck('#col-vis-repository');
+
+        // Repository column should be hidden
+        await expect(page.locator('th[data-column="repository"]')).toHaveCount(0);
+
+        // Re-check Repository column
+        await page.click('.columns-dropdown-btn');
+        await page.check('#col-vis-repository');
+        await expect(page.locator('th[data-column="repository"]')).toBeVisible();
+    });
+
+    test('live updates toggle persists state', async ({ seedConfig, mockADO, page }) => {
+        await seedConfig(page);
+        await mockADO(page);
+        await page.goto('/ado-pr-list.html');
+
+        // Live updates toggle should be present
+        const toggle = page.locator('#liveUpdatesToggle');
+        await expect(toggle).toBeVisible();
+
+        // Toggle is active by default
+        await expect(toggle).toHaveClass(/active/);
+
+        // Click to disable
+        await toggle.click();
+        await expect(toggle).not.toHaveClass(/active/);
+
+        // Verify localStorage was updated
+        const stored = await page.evaluate(() => localStorage.getItem('prListLiveUpdates'));
+        expect(stored).toBe('false');
+    });
+
     test('clear all filters resets filters and shows all active PRs', async ({ seedConfig, mockADO, page }) => {
         await seedConfig(page);
         await mockADO(page);
