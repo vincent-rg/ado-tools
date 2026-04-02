@@ -4258,21 +4258,27 @@
                 allChangeEntries = changesData.changeEntries || [];
                 buildThreadsByFilePath(); // Rebuild changed/commented sets
 
-                buildFileTree(allChangeEntries);
+                if (fileViewMode === 'all') {
+                    await buildAllFilesTree();
+                } else {
+                    buildFileTree(allChangeEntries);
+                }
                 fileTreeBuilt = true;
 
-                // Update header with range info
-                const header = document.getElementById('fileTreeHeader');
-                if (header) {
-                    let label = `Changed Files (${allChangeEntries.filter(e => e.item?.path && e.item.gitObjectType !== 'tree' && !e.item.path.endsWith('/')).length})`;
-                    if (selectedIterationStart !== null) {
-                        if (selectedIterationStart === selectedIterationEnd) {
-                            label += ` — Update ${selectedIterationStart}`;
-                        } else {
-                            label += ` — Updates ${selectedIterationStart}-${selectedIterationEnd}`;
+                // Update header with range info (buildAllFilesTree sets its own header)
+                if (fileViewMode !== 'all') {
+                    const header = document.getElementById('fileTreeHeader');
+                    if (header) {
+                        let label = `Changed Files (${allChangeEntries.filter(e => e.item?.path && e.item.gitObjectType !== 'tree' && !e.item.path.endsWith('/')).length})`;
+                        if (selectedIterationStart !== null) {
+                            if (selectedIterationStart === selectedIterationEnd) {
+                                label += ` — Update ${selectedIterationStart}`;
+                            } else {
+                                label += ` — Updates ${selectedIterationStart}-${selectedIterationEnd}`;
+                            }
                         }
+                        header.textContent = label;
                     }
-                    header.textContent = label;
                 }
 
                 // Update Files tab count

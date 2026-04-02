@@ -190,6 +190,16 @@ export const iterationChangesWithFiles = {
     ],
 };
 
+export const repoItems = {
+    value: [
+        { path: '/src', isFolder: true, gitObjectType: 'tree' },
+        { path: '/src/feature.js', isFolder: false, gitObjectType: 'blob' },
+        { path: '/src/utils.js', isFolder: false, gitObjectType: 'blob' },
+        { path: '/README.md', isFolder: false, gitObjectType: 'blob' },
+    ],
+    count: 4,
+};
+
 export const fileContentOld = `function hello() {
     console.log("Hello world");
 }

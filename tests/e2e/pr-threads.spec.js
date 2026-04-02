@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures/setup.js';
-import { testConfig, singlePR, threads, iterations, iterationChangesWithFiles, fileContentOld, fileContentNew, identitySearchResults } from './fixtures/mock-responses.js';
+import { testConfig, singlePR, threads, iterations, iterationChangesWithFiles, fileContentOld, fileContentNew, identitySearchResults, repoItems } from './fixtures/mock-responses.js';
 
 /**
  * PR Threads page tests.
@@ -785,6 +785,55 @@ test.describe('PR Threads – iteration selector', () => {
 
         // Iteration rows should no longer have range-edge selection
         await expect(page.locator('.iteration-row.range-edge')).toHaveCount(0);
+    });
+});
+
+test.describe('PR Threads – file view mode persistence', () => {
+    test('"All files" mode persists when switching compare mode', async ({ seedConfig, mockADO, page }) => {
+        await loadThreadsPage(seedConfig, mockADO, page);
+
+        // Override iteration changes with file data
+        await page.route(/iterations\/\d+\/changes/, (route) => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(iterationChangesWithFiles),
+            });
+        });
+
+        // Mock repo items for "All files" mode
+        await page.route(/\/items\?.*recursionLevel/, (route) => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(repoItems),
+            });
+        });
+
+        // Switch to Files tab
+        await page.click('.view-tab[data-view="files"]');
+        await expect(page.locator('#filesView')).toBeVisible();
+
+        // Switch to "All files" mode
+        await page.locator('.file-view-mode-btn[data-mode="all"]').click();
+        await expect(page.locator('#fileTreeHeader')).toContainText('All Files', { timeout: 5000 });
+
+        // Verify all files are shown (including utils.js which is not in changeEntries)
+        await expect(page.locator('#filesView')).toContainText('utils.js', { timeout: 5000 });
+
+        // Now switch to "By update" mode (triggers refreshFilesForIterationRange)
+        await page.locator('.iteration-mode-btn', { hasText: 'By update' }).click();
+        await expect(page.locator('.iteration-row').first()).toBeVisible({ timeout: 5000 });
+
+        // Click an iteration to trigger compare mode switch
+        await page.locator('.iteration-row').first().click();
+
+        // "All files" button should still be active
+        await expect(page.locator('.file-view-mode-btn[data-mode="all"]')).toHaveClass(/active/);
+
+        // All files should still be visible (not just changed files)
+        await expect(page.locator('#fileTreeHeader')).toContainText('All Files', { timeout: 5000 });
+        await expect(page.locator('#filesView')).toContainText('utils.js', { timeout: 5000 });
     });
 });
 
