@@ -198,13 +198,9 @@ look at TODO file
 
 ### Medium Impact
 
-- [x] Extract inline CSS from ado-pr-threads.html into 7 CSS files under css/
-- [x] Extract inline JS from ado-pr-threads.html into focused modules under js/
-- [x] Extract inline JS from ado-pr-list.html into 3 modules under js/ (columns, fetch, live-updates)
 - [ ] Break up `displayPRs()` (~268 lines) in `ado-pr-list.html` into smaller functions
 - [ ] Break up `displayResults()` (~598 lines) in `ado-pr-threads.html` into smaller functions
 - [ ] Organize global state into state objects instead of 50+/25+ loose globals
-- [x] Fix inconsistent API methods: `setDraft()` uses raw `fetch()` instead of `fetchWithAuth()`; deduplicate `getPRThreads`/`getThreads` and `getPRIterations`/`getIterations` pairs
 - [ ] Consolidate magic numbers (timeouts, thresholds) into config constants objects
 
 ### Low Impact
