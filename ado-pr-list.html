@@ -1254,6 +1254,7 @@
     <script src="js/common.js"></script>
     <script src="js/pr-list-utils.js"></script>
     <script src="js/pr-list-columns.js"></script>
+    <script src="js/pr-list-display.js"></script>
     <script src="js/pr-list-fetch.js"></script>
     <script src="js/pr-list-live-updates.js"></script>
     <script>
@@ -2403,87 +2404,45 @@
             // Pagination calculations
             const totalPRs = sortedPRs.length;
             const totalPages = Math.ceil(totalPRs / itemsPerPage);
+            currentPage = PRListDisplay.clampPage(currentPage, totalPages);
 
-            // Ensure current page is within bounds
-            if (currentPage > totalPages && totalPages > 0) {
-                currentPage = totalPages;
-            }
-            if (currentPage < 1) {
-                currentPage = 1;
-            }
-
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const endIndex = Math.min(startIndex + itemsPerPage, totalPRs);
+            const { startIndex, endIndex } = PRListDisplay.getPageSlice(currentPage, itemsPerPage, totalPRs);
             const pagePRs = sortedPRs.slice(startIndex, endIndex);
 
-            const getSortIndicator = (column) => {
-                if (currentSort === column) {
-                    return `<span class="sort-indicator">${currentOrder === 'asc' ? '↑' : '↓'}</span>`;
-                }
-                return '';
-            };
-
             // Build columns visibility dropdown
-            const columnsDropdownHtml = HIDEABLE_COLUMNS.map(col => `
+            const columnsDropdownHtml = HIDEABLE_COLUMNS.map(c => `
                 <label class="column-toggle-item">
-                    <input type="checkbox" id="col-vis-${col}" ${columnVisibility[col] ? 'checked' : ''} onchange="toggleColumnVisibility('${col}')">
-                    ${COLUMN_LABELS[col]}
+                    <input type="checkbox" id="col-vis-${c}" ${columnVisibility[c] ? 'checked' : ''} onchange="toggleColumnVisibility('${c}')">
+                    ${COLUMN_LABELS[c]}
                 </label>
             `).join('');
 
             // Build info bar
-            const infoBarHtml = `
-                <span>Showing ${startIndex + 1}-${endIndex} of ${totalPRs} Pull Requests${totalPRs !== allPRs.length ? ` (filtered from ${allPRs.length} total)` : ''}</span>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="columns-dropdown">
-                        <button class="columns-dropdown-btn" onclick="toggleColumnsDropdown(event)">Columns ▾</button>
-                        <div id="columnsDropdownMenu" class="columns-dropdown-menu">
-                            ${columnsDropdownHtml}
-                        </div>
-                    </div>
-                    <label style="font-size: 14px;"><span>Show:</span><select onchange="changePerPage(this.value)" style="padding: 4px 8px; border: 1px solid #d1d1d1; border-radius: 0; background: white;"><option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option><option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option><option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option></select><span>per page</span></label>
-                </div>
-            `;
-
-            // Build table
-            const getColumnStyle = (columnId) => {
-                const width = columnWidths[columnId];
-                return width ? `width: ${width}px; min-width: ${width}px; max-width: ${width}px;` : '';
-            };
-
-            // Calculate total table width from fixed columns (only visible ones)
-            const calculateTableWidth = () => {
-                let total = 0;
-                let hasFlexColumn = false;
-                for (const [columnId, width] of Object.entries(columnWidths)) {
-                    if (!columnVisibility[columnId]) continue; // Skip hidden columns
-                    if (width === null) {
-                        hasFlexColumn = true;
-                        total += 300; // Default width for flexible columns
-                    } else {
-                        total += width;
-                    }
-                }
-                return hasFlexColumn ? `min-width: ${total}px; width: 100%;` : `width: ${total}px;`;
-            };
+            const infoBarHtml = PRListDisplay.buildInfoBarHtml({
+                startIndex, endIndex, totalPRs,
+                allPRsCount: allPRs.length, itemsPerPage, columnsDropdownHtml
+            });
 
             // Helper to conditionally render column
             const col = (columnId, content) => columnVisibility[columnId] ? content : '';
+            const colStyle = (columnId) => PRListDisplay.getColumnStyle(columnId, columnWidths);
+            const sortInd = (column) => PRListDisplay.getSortIndicator(column, currentSort, currentOrder);
 
+            // Build table
             let tableHtml = `
-                <table class="pr-table" style="${calculateTableWidth()}">
+                <table class="pr-table" style="${PRListDisplay.calculateTableWidth(columnWidths, columnVisibility)}">
                     <thead>
                         <tr>
-                            <th class="sortable" data-column="id" onclick="sortPRs('id')" style="${getColumnStyle('id')}">ID${getSortIndicator('id')}<div class="column-resize-handle" data-column="id"></div></th>
-                            ${col('title', `<th class="sortable" data-column="title" onclick="sortPRs('title')" style="${getColumnStyle('title')}">Title${getSortIndicator('title')}<div class="column-resize-handle" data-column="title"></div></th>`)}
-                            ${col('author', `<th class="sortable" data-column="author" onclick="sortPRs('author')" style="${getColumnStyle('author')}">Author${getSortIndicator('author')}<div class="column-resize-handle" data-column="author"></div></th>`)}
-                            ${col('repository', `<th class="sortable" data-column="repository" onclick="sortPRs('repository')" style="${getColumnStyle('repository')}">Repository${getSortIndicator('repository')}<div class="column-resize-handle" data-column="repository"></div></th>`)}
-                            ${col('reviewers', `<th data-column="reviewers" style="${getColumnStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>`)}
-                            ${col('otherAuthors', `<th data-column="otherAuthors" style="${getColumnStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>`)}
-                            ${col('status', `<th class="sortable" data-column="status" onclick="sortPRs('status')" style="${getColumnStyle('status')}">Status${getSortIndicator('status')}<div class="column-resize-handle" data-column="status"></div></th>`)}
-                            ${col('updates', `<th data-column="updates" style="${getColumnStyle('updates')} text-align: center;">🔄<div class="column-resize-handle" data-column="updates"></div></th>`)}
-                            ${col('comments', `<th data-column="comments" style="${getColumnStyle('comments')} text-align: center;">💬<div class="column-resize-handle" data-column="comments"></div></th>`)}
-                            ${col('created', `<th class="sortable" data-column="created" onclick="sortPRs('created')" style="${getColumnStyle('created')}">Created${getSortIndicator('created')}<div class="column-resize-handle" data-column="created"></div></th>`)}
+                            <th class="sortable" data-column="id" onclick="sortPRs('id')" style="${colStyle('id')}">ID${sortInd('id')}<div class="column-resize-handle" data-column="id"></div></th>
+                            ${col('title', `<th class="sortable" data-column="title" onclick="sortPRs('title')" style="${colStyle('title')}">Title${sortInd('title')}<div class="column-resize-handle" data-column="title"></div></th>`)}
+                            ${col('author', `<th class="sortable" data-column="author" onclick="sortPRs('author')" style="${colStyle('author')}">Author${sortInd('author')}<div class="column-resize-handle" data-column="author"></div></th>`)}
+                            ${col('repository', `<th class="sortable" data-column="repository" onclick="sortPRs('repository')" style="${colStyle('repository')}">Repository${sortInd('repository')}<div class="column-resize-handle" data-column="repository"></div></th>`)}
+                            ${col('reviewers', `<th data-column="reviewers" style="${colStyle('reviewers')}">Reviewers<div class="column-resize-handle" data-column="reviewers"></div></th>`)}
+                            ${col('otherAuthors', `<th data-column="otherAuthors" style="${colStyle('otherAuthors')}">Other Authors<div class="column-resize-handle" data-column="otherAuthors"></div></th>`)}
+                            ${col('status', `<th class="sortable" data-column="status" onclick="sortPRs('status')" style="${colStyle('status')}">Status${sortInd('status')}<div class="column-resize-handle" data-column="status"></div></th>`)}
+                            ${col('updates', `<th data-column="updates" style="${colStyle('updates')} text-align: center;">🔄<div class="column-resize-handle" data-column="updates"></div></th>`)}
+                            ${col('comments', `<th data-column="comments" style="${colStyle('comments')} text-align: center;">💬<div class="column-resize-handle" data-column="comments"></div></th>`)}
+                            ${col('created', `<th class="sortable" data-column="created" onclick="sortPRs('created')" style="${colStyle('created')}">Created${sortInd('created')}<div class="column-resize-handle" data-column="created"></div></th>`)}
                         </tr>
                     </thead>
                     <tbody>
@@ -2491,25 +2450,14 @@
 
             pagePRs.forEach(pr => {
                 const prThreadsUrl = `ado-pr-threads.html?prId=${pr.pullRequestId}&project=${encodeURIComponent(pr._project)}&repo=${encodeURIComponent(pr._repo.name)}`;
-
-                // Get comment count display
                 const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
-                let commentDisplay = '<span style="color: #8a8886;">-</span>';
-                if (prCommentCounts[prKey] !== undefined) {
-                    const count = prCommentCounts[prKey].count !== undefined ? prCommentCounts[prKey].count : prCommentCounts[prKey];
-                    commentDisplay = count > 0 ? `<span style="color: #d13438; font-weight: 600;">${count}</span>` : '<span style="color: #8a8886;">0</span>';
 
-                    // Update access time for LRU
-                    if (prCommentCounts[prKey].lastAccess !== undefined) {
-                        prCommentCounts[prKey].lastAccess = Date.now();
-                    }
-                }
+                const commentDisplay = PRListDisplay.buildCommentDisplay(prKey, prCommentCounts);
+                const updatesDisplay = PRListDisplay.buildUpdatesDisplay(prKey, prIterationCounts);
 
-                // Get updates (iterations) count display
-                let updatesDisplay = '<span style="color: #8a8886;">-</span>';
-                if (prIterationCounts[prKey] !== undefined) {
-                    const count = prIterationCounts[prKey].count;
-                    updatesDisplay = count > 1 ? `<span style="color: #0078d4; font-weight: 600;">${count}</span>` : `<span style="color: #8a8886;">${count}</span>`;
+                // Update LRU access time for comment cache
+                if (prCommentCounts[prKey]?.lastAccess !== undefined) {
+                    prCommentCounts[prKey].lastAccess = Date.now();
                 }
 
                 // Check if row should be grayed out
@@ -2519,7 +2467,7 @@
 
                 tableHtml += `
                     <tr data-pr-key="${prKey}" class="${grayedOutClass}">
-                        <td style="${getColumnStyle('id')}">
+                        <td style="${colStyle('id')}">
                             <a href="${prThreadsUrl}"
                                target="_blank"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
@@ -2527,7 +2475,7 @@
                                 <strong>#${pr.pullRequestId}</strong>
                             </a>
                         </td>
-                        ${col('title', `<td style="${getColumnStyle('title')}">
+                        ${col('title', `<td style="${colStyle('title')}">
                             <a href="${prThreadsUrl}"
                                target="_blank"
                                onclick="return openPRLink('${ADOContent.escapeHtml(pr._project)}', '${ADOContent.escapeHtml(pr._repo.name)}', ${pr.pullRequestId})"
@@ -2537,21 +2485,21 @@
                                 <div class="pr-status-indicators">${generateStatusIndicatorsHtml(prKey)}</div>
                             </a>
                         </td>`)}
-                        ${col('author', `<td class="pr-meta" style="${getColumnStyle('author')}">${getAuthorAvatarHtml(pr.createdBy)}</td>`)}
-                        ${col('repository', `<td class="pr-meta" style="${getColumnStyle('repository')}">
+                        ${col('author', `<td class="pr-meta" style="${colStyle('author')}">${getAuthorAvatarHtml(pr.createdBy)}</td>`)}
+                        ${col('repository', `<td class="pr-meta" style="${colStyle('repository')}">
                             ${ADOContent.escapeHtml(pr._project)}<br>
                             <span style="font-size: 12px; color: #8a8886;">${ADOContent.escapeHtml(pr._repo.name)}</span>
                         </td>`)}
-                        ${col('reviewers', `<td class="pr-meta" style="${getColumnStyle('reviewers')}">
+                        ${col('reviewers', `<td class="pr-meta" style="${colStyle('reviewers')}">
                             ${getReviewerAvatarsHtml(pr.reviewers)}
                         </td>`)}
-                        ${col('otherAuthors', `<td class="pr-meta pr-other-authors" style="${getColumnStyle('otherAuthors')}">
+                        ${col('otherAuthors', `<td class="pr-meta pr-other-authors" style="${colStyle('otherAuthors')}">
                             <span style="color: #8a8886;">-</span>
                         </td>`)}
-                        ${col('status', `<td style="${getColumnStyle('status')}">${ADOUI.renderStatusBadge(pr.status, pr)}</td>`)}
-                        ${col('updates', `<td class="pr-meta pr-updates" style="text-align: center; ${getColumnStyle('updates')}">${updatesDisplay}</td>`)}
-                        ${col('comments', `<td class="pr-meta pr-comments" style="text-align: center; ${getColumnStyle('comments')}">${commentDisplay}</td>`)}
-                        ${col('created', `<td class="pr-meta" style="${getColumnStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>`)}
+                        ${col('status', `<td style="${colStyle('status')}">${ADOUI.renderStatusBadge(pr.status, pr)}</td>`)}
+                        ${col('updates', `<td class="pr-meta pr-updates" style="text-align: center; ${colStyle('updates')}">${updatesDisplay}</td>`)}
+                        ${col('comments', `<td class="pr-meta pr-comments" style="text-align: center; ${colStyle('comments')}">${commentDisplay}</td>`)}
+                        ${col('created', `<td class="pr-meta" style="${colStyle('created')}">${ADOUI.formatDate(pr.creationDate)}</td>`)}
                     </tr>
                 `;
             });
@@ -2562,74 +2510,7 @@
             `;
 
             // Build pagination controls
-            let paginationHtml = '';
-            if (totalPages > 1) {
-
-                // Previous button
-                if (currentPage > 1) {
-                    paginationHtml += `<button onclick="changePage(${currentPage - 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #0078d4;">← Previous</button>`;
-                } else {
-                    paginationHtml += `<button disabled style="padding: 8px 12px; background: #f9f8f7; border: 1px solid #d1d1d1; border-radius: 0; cursor: not-allowed; color: #8a8886;">← Previous</button>`;
-                }
-
-                // Page numbers
-                paginationHtml += '<div style="display: flex; gap: 5px;">';
-
-                const maxVisiblePages = 7;
-                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-                // Adjust start if we're near the end
-                if (endPage - startPage < maxVisiblePages - 1) {
-                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                }
-
-                // First page + ellipsis
-                if (startPage > 1) {
-                    paginationHtml += `<button onclick="changePage(1)" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">1</button>`;
-                    if (startPage > 2) {
-                        paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
-                        // Add middle page in the gap
-                        const middlePage = Math.round((1 + startPage) / 2);
-                        if (middlePage > 1 && middlePage < startPage) {
-                            paginationHtml += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
-                            paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
-                        }
-                    }
-                }
-
-                // Page number buttons
-                for (let i = startPage; i <= endPage; i++) {
-                    if (i === currentPage) {
-                        paginationHtml += `<button disabled style="padding: 8px 12px; background: #0078d4; border: 1px solid #0078d4; border-radius: 0; color: white; font-weight: 600; min-width: 40px;">${i}</button>`;
-                    } else {
-                        paginationHtml += `<button onclick="changePage(${i})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #323130; min-width: 40px;">${i}</button>`;
-                    }
-                }
-
-                // Ellipsis + last page
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
-                        // Add middle page in the gap
-                        const middlePage = Math.round((endPage + totalPages) / 2);
-                        if (middlePage > endPage && middlePage < totalPages) {
-                            paginationHtml += `<button onclick="changePage(${middlePage})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #323130; min-width: 40px;">${middlePage}</button>`;
-                            paginationHtml += `<span style="padding: 8px 4px; color: #8a8886;">...</span>`;
-                        }
-                    }
-                    paginationHtml += `<button onclick="changePage(${totalPages})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #0078d4; font-weight: 500; min-width: 40px;">${totalPages}</button>`;
-                }
-
-                paginationHtml += '</div>';
-
-                // Next button
-                if (currentPage < totalPages) {
-                    paginationHtml += `<button onclick="changePage(${currentPage + 1})" style="padding: 8px 12px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; color: #0078d4;">Next →</button>`;
-                } else {
-                    paginationHtml += `<button disabled style="padding: 8px 12px; background: #f9f8f7; border: 1px solid #d1d1d1; border-radius: 0; cursor: not-allowed; color: #8a8886;">Next →</button>`;
-                }
-            }
+            const paginationHtml = PRListDisplay.buildPaginationHtml(currentPage, totalPages);
 
             // Update DOM
             infoBar.innerHTML = infoBarHtml;
