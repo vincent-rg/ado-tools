@@ -6,16 +6,19 @@ Browser-based tools for Azure DevOps Server 2022.1+. Pure HTML/CSS/JS frontend +
 
 **Run:** `python ado-server.py [port]` (default 8000)
 
-## File Map (~26,500 lines total)
+## File Map (~27,900 lines total)
 
 ```
 ado-server.py                        (395 lines)  Python HTTP server + avatar/identity proxy
 index.html                           (208 lines)  Landing page with tool cards
 ado-settings.html                    (263 lines)  Settings form (serverUrl, org, project, repo, PAT)
-ado-pr-list.html                    (4229 lines)  PR list browser
+ado-pr-list.html                    (2834 lines)  PR list browser
 ado-pr-threads.html                 (6517 lines)  PR thread viewer + Files diff
 
 js/common.js                        (2075 lines)  Shared JS modules (API, config, UI, content, avatars, checks)
+js/pr-list-columns.js                (271 lines)  Column resize, visibility, dropdown management
+js/pr-list-fetch.js                  (692 lines)  Comment/check fetching, priority queue, badge updates
+js/pr-list-live-updates.js           (451 lines)  Background polling, change detection, notifications
 js/diff.js                           (391 lines)  Histogram diff algorithm (line-by-line diff)
 js/diff-utils.js                     (474 lines)  Extracted diff/thread utilities from ado-pr-threads.html
 js/diff-virtual-scroller.js         (1306 lines)  Virtual scroll for diff view (DiffVirtualScroller IIFE)
@@ -197,7 +200,7 @@ look at TODO file
 
 - [x] Extract inline CSS from ado-pr-threads.html into 7 CSS files under css/
 - [x] Extract inline JS from ado-pr-threads.html into focused modules under js/
-- [ ] Extract remaining inline JS from ado-pr-list.html into separate files
+- [x] Extract inline JS from ado-pr-list.html into 3 modules under js/ (columns, fetch, live-updates)
 - [ ] Break up `displayPRs()` (~268 lines) in `ado-pr-list.html` into smaller functions
 - [ ] Break up `displayResults()` (~598 lines) in `ado-pr-threads.html` into smaller functions
 - [ ] Organize global state into state objects instead of 50+/25+ loose globals
