@@ -206,6 +206,7 @@
     <script src="js/diff.js"></script>
     <script src="js/diff-utils.js"></script>
     <script src="js/pr-threads-utils.js"></script>
+    <script src="js/pr-threads-display.js"></script>
     <script src="js/mention-utils.js"></script>
     <script src="js/sticky-lines-utils.js"></script>
     <script src="js/diff-virtual-scroller.js"></script>
@@ -2571,19 +2572,9 @@
             const resultsDiv = document.getElementById('results');
 
             // Count threads by status — always use allThreads so stats are unaffected by filters
-            const statusCounts = allThreads.reduce((acc, thread) => {
-                if (PRThreadsUtils.isThreadDeleted(thread)) {
-                    acc.deleted = (acc.deleted || 0) + 1;
-                } else if (thread.status === undefined) {
-                    // Thread has no status field
-                    acc.noStatus = (acc.noStatus || 0) + 1;
-                } else {
-                    // Thread has a status field (including "unknown" as a valid value)
-                    const status = thread.status;
-                    acc[status] = (acc[status] || 0) + 1;
-                }
-                return acc;
-            }, {});
+            const statusCounts = PRThreadsDisplay.countThreadsByStatus(allThreads, {
+                isThreadDeleted: PRThreadsUtils.isThreadDeleted
+            });
 
             // Get active thread counts per author (using all threads, not just filtered)
             const threadCounts = getActiveThreadCounts(allThreads);
@@ -2594,88 +2585,38 @@
             const statusBadgeHtml = ADOUI.renderStatusBadge(prData.status, prData);
 
             // Generate PR author avatar for title
-            let prAuthorAvatarHtml = '';
-            if (prData.createdBy?.id) {
-                const authorTitle = ADOContent.escapeHtml(prData.createdBy.displayName || 'Unknown');
-                const cachedUrl = AvatarLoader.getCached(prData.createdBy.id);
-                if (cachedUrl) {
-                    prAuthorAvatarHtml = `<span class="avatar-wrapper pr-title-avatar"><img src="${cachedUrl}" alt="${authorTitle}" title="${authorTitle}" class="avatar"></span>`;
-                } else {
-                    prAuthorAvatarHtml = `<span class="avatar-wrapper pr-title-avatar"><div class="avatar-placeholder" title="${authorTitle}"></div><img data-user-id="${prData.createdBy.id}" alt="${authorTitle}" title="${authorTitle}" class="avatar avatar-pending"></span>`;
-                }
-            }
+            const prAuthorAvatarHtml = PRThreadsDisplay.buildAvatarHtml(
+                prData.createdBy?.id, prData.createdBy?.displayName,
+                prData.createdBy?.id ? AvatarLoader.getCached(prData.createdBy.id) : null,
+                { escapeHtml: ADOContent.escapeHtml },
+                { extraClass: 'pr-title-avatar', wrapperTag: 'span' }
+            );
 
             // PR title bar HTML (sticky, rendered outside #results)
-            const fileCount = allChangeEntries.length;
-            const voteDropdownHtml = renderVoteDropdown(getCurrentUserVote());
-            const titleBarHtml = `
-                <div class="pr-title-bar">
-                    <h2 style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                        <span style="display: flex; flex: 1; align-items: center; flex-wrap: wrap; gap: 6px;"><span id="prStatusBadges">${statusBadgeHtml}</span><span id="prStatusActions">${renderPRStatusActions(prData)}</span>${prAuthorAvatarHtml}<span id="pr-title-display">PR #${prData.pullRequestId}: <span id="pr-title-text">${ADOContent.escapeHtml(prData.title)}</span><button class="pr-title-edit-btn" id="pr-title-edit-btn" onclick="startEditTitle()" title="Edit title">&#9998;</button></span></span>
-                        <span style="display: inline-flex; align-items: center; gap: 12px;"><span id="voteDropdownContainer">${voteDropdownHtml}</span><span id="autoCompleteBtnContainer">${renderAutoCompleteButton(prData)}</span><a href="${prUrl}" target="_blank" style="font-size: 14px; color: #0078d4; text-decoration: none; white-space: nowrap;" title="Open PR in Azure DevOps">🔗 View in ADO</a></span>
-                    </h2>
-                </div>
-                <div class="view-tabs">
-                    <button class="view-tab${currentView === 'overview' ? ' active' : ''}" data-view="overview" onclick="switchView('overview')">Overview</button>
-                    <button class="view-tab${currentView === 'files' ? ' active' : ''}" data-view="files" onclick="switchView('files')">Files (${fileCount})</button>
-                    <button class="view-tab${currentView === 'updates' ? ' active' : ''}" data-view="updates" onclick="switchView('updates')">Updates (${allIterations.length})</button>
-                </div>
-            `;
+            const titleBarHtml = PRThreadsDisplay.buildTitleBarHtml(prData, prUrl, {
+                statusBadgeHtml,
+                prAuthorAvatarHtml,
+                voteDropdownHtml: renderVoteDropdown(getCurrentUserVote()),
+                statusActionsHtml: renderPRStatusActions(prData),
+                autoCompleteHtml: renderAutoCompleteButton(prData),
+                fileCount: allChangeEntries.length,
+                currentView,
+                iterationCount: allIterations.length
+            }, { escapeHtml: ADOContent.escapeHtml });
 
             // PR header details HTML (non-sticky)
-            const headerHtml = `
-                <div class="pr-header">
-                    <p><strong>Created:</strong> ${ADOUI.formatDate(prData.creationDate)}</p>
-                    <p class="branch-info"><strong>Branches:</strong> <code>${prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown'}</code> → <code id="prTargetBranch">${prData.targetRefName?.replace('refs/heads/', '') || 'Unknown'}</code></p>
-                    <div class="description-card">
-                        <div class="description-card-header">
-                            <span>Description</span>
-                            <button class="description-edit-btn" id="description-edit-btn" onclick="startEditDescription()" title="Edit description">&#9998;</button>
-                        </div>
-                        <div class="description-card-content" id="pr-description-content">
-                            ${prData.description
-                                ? `<div class="pr-description">${ADOContent.processContent(prData.description)}</div>`
-                                : '<div class="pr-description" style="color: #a19f9d; font-style: italic;">No description</div>'}
-                        </div>
-                    </div>
-                </div>
-            `;
+            const headerHtml = PRThreadsDisplay.buildHeaderHtml(prData, {
+                formatDate: ADOUI.formatDate,
+                processContent: ADOContent.processContent
+            });
 
             // Thread list HTML (built separately)
             let threadListHtml = '';
 
             // Stats HTML (right sidebar)
-            const statsHtml = `
-                <h4>Threads</h4>
-                <div id="threadStatsContainer" class="compact-stats">
-                    <span title="Active"><span class="thread-status-dot active"></span> <strong>${statusCounts.active || 0}</strong></span>
-                    <span title="Resolved"><span class="thread-status-dot fixed"></span> <strong>${statusCounts.fixed || 0}</strong></span>
-                    <span title="Closed"><span class="thread-status-dot closed"></span> <strong>${statusCounts.closed || 0}</strong></span>
-                    ${statusCounts.pending ? `<span title="Pending"><span class="thread-status-dot pending"></span> <strong>${statusCounts.pending}</strong></span>` : ''}
-                    ${statusCounts.wontFix ? `<span title="Won't Fix"><span class="thread-status-dot wontFix"></span> <strong>${statusCounts.wontFix}</strong></span>` : ''}
-                    ${statusCounts.deleted ? `<span title="Deleted"><span class="thread-status-dot deleted"></span> <strong>${statusCounts.deleted}</strong></span>` : ''}
-                </div>
-                <div id="changeStatsContainer">
-                ${currentFileChangeStats ? `
-                <h4 style="margin-top: 15px;">Change Stats</h4>
-                <div id="fileStatsContainer" class="compact-stats">
-                    <span>Files</span>
-                    <strong style="color: #107c10;" title="Added">+${currentFileChangeStats.added}</strong>
-                    <strong style="color: #0078d4;" title="Modified">~${currentFileChangeStats.modified}</strong>
-                    <strong style="color: #a4262c;" title="Deleted">-${currentFileChangeStats.deleted}</strong>
-                </div>
-                <div id="lineStatsContainer" class="compact-stats">
-                    <span>Lines</span>
-                    <span style="color: #605e5c;">⏳</span>
-                    ${getLineStatsMenuHtml()}
-                </div>
-                <div id="updatesStatsContainer" class="compact-stats">
-                    <span>Updates</span>
-                    <strong>${iterations.length}</strong>
-                </div>
-                ` : ''}
-                </div>
-            `;
+            const statsHtml = PRThreadsDisplay.buildStatsSidebarHtml(
+                statusCounts, currentFileChangeStats, iterations.length, getLineStatsMenuHtml()
+            );
 
             // Reviewers HTML (right sidebar)
             const reviewersHtml = `
@@ -2696,345 +2637,24 @@
             document.getElementById('rightSidebarChecks').innerHTML = checksHtml;
             document.getElementById('rightSidebar').style.display = '';
 
-            if (threads.length === 0) {
-                threadListHtml += '<div class="info">No threads found for this Pull Request.</div>';
-            } else {
-                threadListHtml += '<div class="thread-container">';
-
-                threads.forEach((thread, index) => {
-                    const hasStatus = thread.status !== undefined;
-                    const status = thread.status; // Keep actual status value (could be undefined, 'unknown', 'active', etc.)
-                    const isThreadDeleted = PRThreadsUtils.isThreadDeleted(thread);
-
-                    const statusClass = ADOUI.getStatusBadgeClass(status, isThreadDeleted);
-                    const statusText = ADOUI.getStatusText(status, isThreadDeleted);
-
-                    const threadId = thread.id;
-                    const threadUrl = ADOURL.buildThreadUrl(config, prData.pullRequestId, threadId, thread.threadContext?.filePath);
-                    const apiEndpoint = `${config.serverUrl}/${config.organization}/${config.project}/_apis/git/repositories/${config.repository}/pullRequests/${prData.pullRequestId}/threads/${threadId}?api-version=6.0`;
-
-                    const isChecked = selectedThreadIds.has(threadId) ? 'checked' : '';
-
-                    // Check if this is a system thread (first comment is system type)
-                    const firstComment = thread.comments && thread.comments[0];
-                    const isSystemThread = firstComment && (firstComment.commentType === 'system' || firstComment.commentType === 3);
-
-                    // Build status dropdown (only when not in bulk mode, not deleted, and not a system thread)
-                    let statusControl = '';
-                    if (!isBulkMode && !isThreadDeleted && !isSystemThread) {
-                        if (hasStatus) {
-                            // Thread has status: show "Change status:" with current selection and remove button
-                            statusControl = `
-                                <span class="thread-status-change">
-                                    <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
-                                        <option value="">Change status...</option>
-                                        <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
-                                        <option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Resolved</option>
-                                        <option value="closed" ${status === 'closed' ? 'selected' : ''}>Closed</option>
-                                        <option value="wontFix" ${status === 'wontFix' ? 'selected' : ''}>Won't Fix</option>
-                                        <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
-                                        <option value="unknown" ${status === 'unknown' ? 'selected' : ''}>Unknown</option>
-                                    </select>
-                                    <button onclick="removeThreadStatus('${threadId}')" class="btn-secondary" style="margin-left: 5px; padding: 2px 8px; font-size: 12px;" title="Remove status from this thread">✕</button>
-                                </span>
-                            `;
-                        } else {
-                            // Thread has no status: show "Try force status:" with no selection
-                            statusControl = `
-                                <span class="thread-status-change">
-                                    <select onchange="changeThreadStatus('${threadId}', this.value); this.blur();">
-                                        <option value="" selected>Try force status...</option>
-                                        <option value="active">Active</option>
-                                        <option value="fixed">Resolved</option>
-                                        <option value="closed">Closed</option>
-                                        <option value="wontFix">Won't Fix</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="unknown">Unknown</option>
-                                    </select>
-                                </span>
-                            `;
-                        }
-                    }
-
-                    // Store thread-level data for first comment integration
-                    const threadHeaderData = {
-                        isBulkMode,
-                        isChecked,
-                        threadUrl,
-                        apiEndpoint,
-                        hasFileContext: !!thread.threadContext,
-                        hasStatus,
-                        statusClass,
-                        statusText,
-                        statusControl
-                    };
-
-                    threadListHtml += `
-                        <div class="thread">
-                    `;
-
-                    // Show thread context if it's a code comment
-                    // threadContext has file path and line info
-                    // pullRequestThreadContext has iteration context
-                    if (thread.threadContext) {
-                        const ctx = thread.threadContext;
-
-                        // Determine which file location to use (rightFile for new code, leftFile for deleted code)
-                        const useRight = !!ctx.rightFileStart;
-                        const fileStart = useRight ? ctx.rightFileStart : ctx.leftFileStart;
-                        const fileEnd = useRight ? ctx.rightFileEnd : ctx.leftFileEnd;
-                        const lineInfo = fileStart ? ` (Line ${fileStart.line}${fileEnd && fileEnd.line !== fileStart.line ? `-${fileEnd.line}` : ''})` : '';
-
-                        // If we have line information, make the file path a collapsible preview header
-                        if (ctx.filePath && fileStart) {
-                            const firstIterationId = thread.pullRequestThreadContext?.iterationContext?.firstComparingIteration;
-                            const secondIterationId = thread.pullRequestThreadContext?.iterationContext?.secondComparingIteration;
-                            const startLine = fileStart.line;
-                            const endLine = fileEnd ? fileEnd.line : startLine;
-
-                            // Determine base iteration: if first !== second, compare between iterations; otherwise from base (0)
-                            const isIterationRange = firstIterationId != null && secondIterationId != null && firstIterationId !== secondIterationId;
-                            const oldIterationId = isIterationRange ? firstIterationId : 0;
-
-                            const showDiff = secondIterationId && secondIterationId >= 1;
-                            const iterationLabel = showDiff
-                                ? ` <span style="color: #605e5c; font-size: 11px;">(${isIterationRange ? `iteration ${firstIterationId}` : 'base'} → iteration ${secondIterationId})</span>`
-                                : '';
-
-                            const onclickHandler = showDiff
-                                ? `toggleIterationPreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${oldIterationId}, ${secondIterationId}, ${startLine}, ${endLine}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`
-                                : `toggleFilePreview('file-preview-${threadId}', '${ADOContent.escapeJs(ctx.filePath)}', ${startLine}, ${endLine}, null, ${secondIterationId !== undefined ? secondIterationId : 'null'}, ${fileStart.offset || 0}, ${fileEnd?.offset || 0}, ${useRight})`;
-
-                            threadListHtml += `
-                                <div class="file-preview">
-                                    <div class="file-preview-header" onclick="${onclickHandler}">
-                                        <span>▶</span>
-                                        <span><strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo}${iterationLabel}${useRight ? '' : ' <span style="color: #a4262c; font-size: 11px;">(deleted)</span>'}</span>
-                                    </div>
-                                    <div id="file-preview-${threadId}" class="file-preview-content"></div>
-                                </div>
-                            `;
-                        } else {
-                            // No line information, just show as regular context
-                            threadListHtml += `
-                                <div class="thread-context">
-                                    <strong>File:</strong> ${ADOContent.escapeHtml(ctx.filePath || 'N/A')}${lineInfo}
-                                </div>
-                            `;
-                        }
-                    }
-
-                    // Show all comments in the thread
-                    if (thread.comments && thread.comments.length > 0) {
-                        let prevCommentIterationId = null;
-                        const filePath = thread.threadContext?.filePath || null;
-                        const ctx = thread.threadContext;
-                        const fileStart = ctx?.rightFileStart || ctx?.leftFileStart;
-                        const fileEnd = ctx?.rightFileEnd || ctx?.leftFileEnd;
-
-                        // Sort iterations for calculating iteration contexts
-                        const sortedIterations = iterations.length > 0
-                            ? [...iterations].sort((a, b) => new Date(a.createdDate) - new Date(b.createdDate))
-                            : [];
-
-                        thread.comments.forEach((comment, commentIdx) => {
-                            const isFirstComment = commentIdx === 0;
-
-                            // Check if iteration changed since last comment (only for file-based threads)
-                            if (filePath && fileStart && sortedIterations.length > 0) {
-                                const commentTime = new Date(comment.publishedDate);
-                                const lastIterBefore = getLastIterationBeforeTime(sortedIterations, commentTime);
-                                const currentIterationId = lastIterBefore ? lastIterBefore.id : sortedIterations[0].id;
-
-                                if (prevCommentIterationId !== null && currentIterationId !== prevCommentIterationId) {
-                                    // Iteration changed - insert a diff preview divider
-                                    const previewId = `iteration-preview-${threadId}-${commentIdx}`;
-                                    const startLine = fileStart.line;
-                                    const endLine = fileEnd ? fileEnd.line : startLine;
-                                    const iterLineInfo = ` (Line ${startLine}${endLine !== startLine ? `-${endLine}` : ''})`;
-
-                                    threadListHtml += `
-                                        <div class="file-preview" style="margin: 12px 0;">
-                                            <div class="file-preview-header" onclick="toggleIterationPreview('${previewId}', '${ADOContent.escapeJs(filePath)}', ${prevCommentIterationId}, ${currentIterationId}, ${startLine}, ${endLine}, 0, 0, ${!!ctx?.rightFileStart})">
-                                                <span>▶</span>
-                                                <span><strong>File changed:</strong> ${ADOContent.escapeHtml(filePath)}${iterLineInfo} <span style="color: #605e5c; font-size: 11px;">(iteration ${prevCommentIterationId} → ${currentIterationId})</span></span>
-                                            </div>
-                                            <div id="${previewId}" class="file-preview-content"></div>
-                                        </div>
-                                    `;
-                                }
-
-                                prevCommentIterationId = currentIterationId;
-                            }
-
-                            // Check if this is a code suggestion
-                            const isCodeSuggestion = comment.content?.includes('```suggestion');
-
-                            // Remove suggestion block from content before processing to avoid duplicate display
-                            let contentToProcess = comment.content;
-                            if (isCodeSuggestion) {
-                                contentToProcess = contentToProcess.replace(/```suggestion\n[\s\S]*?\n```/g, '');
-                            }
-
-                            let resolvedContent = ADOContent.processContent(contentToProcess);
-
-                            // Check if content is essentially empty (just whitespace or empty code blocks)
-                            const contentStripped = resolvedContent.replace(/<pre><code><\/code><\/pre>/g, '').trim();
-                            const hasRealContent = contentStripped.length > 0;
-
-                            // Get iteration links for this comment
-                            const iterationLinks = getIterationLinksForComment(
-                                comment,
-                                thread,
-                                iterations,
-                                isFirstComment
-                            );
-
-                            // Check if comment is deleted
-                            const isDeleted = comment.isDeleted === true;
-
-                            // Determine comment type
-                            const commentType = comment.commentType || 'unknown';
-                            let commentTypeLabel = '';
-                            let commentClass = '';
-                            let commentTypeBadgeClass = '';
-
-                            if (isDeleted) {
-                                commentTypeLabel = 'Deleted';
-                                commentTypeBadgeClass = 'comment-type-deleted';
-                            } else {
-                                switch(commentType) {
-                                    case 'system':
-                                    case 3:
-                                        commentTypeLabel = 'System';
-                                        commentClass = 'system-comment';
-                                        commentTypeBadgeClass = 'comment-type-system';
-                                        break;
-                                    case 'codeChange':
-                                    case 2:
-                                        commentTypeLabel = 'Code Change';
-                                        commentClass = 'code-change-comment';
-                                        commentTypeBadgeClass = 'comment-type-code-change';
-                                        break;
-                                    case 'text':
-                                    case 1:
-                                        commentTypeLabel = 'Text';
-                                        commentTypeBadgeClass = 'comment-type-text';
-                                        break;
-                                    default:
-                                        commentTypeLabel = 'Unknown';
-                                        break;
-                                }
-                            }
-
-                            // Generate avatar HTML for comment author
-                            let commentAvatarHtml = '';
-                            if (comment.author?.id) {
-                                const authorTitle = ADOContent.escapeHtml(comment.author.displayName || 'Unknown');
-                                const isCommentByPRAuthor = comment.author.id === prData.createdBy?.id;
-                                const authorBadge = isCommentByPRAuthor ? `<span class="author-badge" title="PR Author"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#323130"/></svg></span>` : '';
-                                const cachedUrl = AvatarLoader.getCached(comment.author.id);
-                                if (cachedUrl) {
-                                    commentAvatarHtml = `<div class="avatar-wrapper"><img src="${cachedUrl}" alt="${authorTitle}" title="${authorTitle}" class="avatar">${authorBadge}</div>`;
-                                } else {
-                                    commentAvatarHtml = `<div class="avatar-wrapper"><div class="avatar-placeholder" title="${authorTitle}"></div><img data-user-id="${comment.author.id}" alt="${authorTitle}" title="${authorTitle}" class="avatar avatar-pending">${authorBadge}</div>`;
-                                }
-                            }
-
-                            // Determine if we can show action buttons (not deleted, not system comment)
-                            const isSystemComment = commentType === 'system' || commentType === 3;
-                            const showCommentActions = !isDeleted && !isSystemComment;
-                            const escapedContent = (comment.content || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-                            // Build the comment header - first comment has thread controls after edit/delete
-                            // Like button
-                            const likedUsers = comment.usersLiked || [];
-                            const likeCount = likedUsers.length;
-                            const userLiked = likedUsers.some(u => u.id === currentUserId);
-                            // Review timestamp button (other-user comments only)
-                            let reviewButtonHtml = '';
-                            if (showCommentActions && currentUserId && comment.author?.id !== currentUserId) {
-                                const pubMs = new Date(comment.publishedDate).getTime();
-                                if (PRReviewTimestamps.isCommentReviewed(comment, threadId, reviewTimestamps)) {
-                                    reviewButtonHtml = `<button class="comment-action-btn review-btn reviewed" title="Mark unread" onclick="markCommentUnread(${threadId}, ${pubMs})">✓</button>`;
-                                } else {
-                                    reviewButtonHtml = `<button class="comment-action-btn review-btn" title="Mark reviewed" onclick="markCommentReviewed(${threadId}, ${pubMs})">Mark reviewed</button>`;
-                                }
-                            }
-
-                            const editDeleteButtons = showCommentActions ? `
-                                <span class="comment-actions">
-                                    ${reviewButtonHtml}
-                                    <button class="comment-like-btn${userLiked ? ' liked' : ''}" onclick="toggleCommentLike(${threadId}, ${comment.id}, ${userLiked})" title="${userLiked ? 'Unlike' : 'Like'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>${likeCount > 0 ? `<span>${likeCount}</span>` : ''}</button>
-                                    <button class="comment-action-btn comment-copy-url-btn" data-thread-id="${threadId}" onclick="copyCommentUrl(${threadId}, ${ADOContent.escapeHtml(JSON.stringify(thread.threadContext?.filePath || null))})" title="Copy link"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></button>
-                                    <button class="comment-action-btn" onclick="startEditComment(${threadId}, ${comment.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
-                                    <button class="comment-action-btn delete" onclick="deleteComment(${threadId}, ${comment.id})" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
-                                </span>
-                            ` : '';
-
-                            const hasUnread = isFirstComment &&
-                                PRReviewTimestamps.threadHasUnread(thread, reviewTimestamps, currentUserId);
-                            const unreadDot = hasUnread
-                                ? `<span class="thread-unread-dot" title="Has unread comments">✉</span>`
-                                : '';
-
-                            const threadControls = isFirstComment ? `
-                                <span class="thread-controls">
-                                    ${unreadDot}
-                                    <a href="${threadHeaderData.threadUrl}" target="_blank" class="thread-link" title="Open thread in Azure DevOps (${threadHeaderData.hasFileContext ? 'files tab' : 'overview tab'})">🔗</a>
-                                    <a href="${threadHeaderData.apiEndpoint}" target="_blank" class="thread-link" title="Open REST API response (requires authentication)">📡</a>
-                                    ${threadHeaderData.hasStatus ? `<span class="badge ${threadHeaderData.statusClass}">${threadHeaderData.statusText}</span>` : ''}
-                                    ${threadHeaderData.statusControl}
-                                </span>
-                            ` : '';
-
-                            const commentHeaderHtml = `
-                                <div class="comment-header">
-                                    <span class="comment-author-info">
-                                        ${isFirstComment && threadHeaderData.isBulkMode ? `<input type="checkbox" class="thread-checkbox" id="thread-checkbox-${threadId}" data-thread-id="${threadId}" ${threadHeaderData.isChecked} onchange="toggleThreadSelection('${threadId}')" style="margin-right: 8px;">` : ''}
-                                        ${commentAvatarHtml}
-                                        <span class="comment-date">${ADOUI.formatDate(comment.publishedDate)}</span>
-                                        ${iterationLinks.completeLink ? `
-                                        <span class="code-links">
-                                            ${iterationLinks.beforeLink ? `<span class="iteration-range">${iterationLinks.beforeRange}</span><button type="button" class="comment-link" title="Open file view: updates 1–${iterationLinks.beforeIterEnd}" onclick="openCommentInFilesView('${ADOContent.escapeJs(filePath || '')}', ${threadId}, ${iterationLinks.beforeIterStart}, ${iterationLinks.beforeIterEnd})"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>` : ''}
-                                            ${iterationLinks.afterLink ? `<button type="button" class="comment-link" title="Open file view: updates ${iterationLinks.afterIterStart}–${iterationLinks.afterIterEnd}" onclick="openCommentInFilesView('${ADOContent.escapeJs(filePath || '')}', ${threadId}, ${iterationLinks.afterIterStart}, ${iterationLinks.afterIterEnd})"><svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/></svg></button><span class="iteration-range">${iterationLinks.afterRange}</span>` : ''}
-                                            <button type="button" class="comment-link" title="Open file view: all updates" onclick="openCommentInFilesView('${ADOContent.escapeJs(filePath || '')}', ${threadId}, ${iterationLinks.completeIterStart}, ${iterationLinks.completeIterEnd})"><svg viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button><span class="iteration-range">${iterationLinks.completeRange}</span>
-                                        </span>
-                                        ` : ''}
-                                        ${isDeleted || commentTypeLabel !== 'Text' ? `<span class="comment-type-badge ${commentTypeBadgeClass}">${commentTypeLabel}</span>` : ''}
-                                    </span>
-                                    ${editDeleteButtons}
-                                    ${threadControls}
-                                </div>`;
-
-                            threadListHtml += `
-                                <div class="comment ${commentClass}" data-thread-id="${threadId}" data-comment-id="${comment.id}" data-comment-content="${escapedContent}">
-                                    ${commentHeaderHtml}
-                                    <div class="comment-content-wrapper" id="comment-content-${threadId}-${comment.id}">
-                                        ${hasRealContent ? `<div class="comment-content">${resolvedContent}</div>` : ''}
-                                    </div>
-
-                                    ${isCodeSuggestion ? `<div id="code-suggestion-${threadId}-${commentIdx}" data-thread-id="${threadId}" data-comment-idx="${commentIdx}"><div style="padding: 12px; color: #858585;">Loading code suggestion...</div></div>` : ''}
-                                </div>
-                            `;
-                        });
-                    }
-
-                    // Add reply button at end of thread (only for non-deleted, non-system threads)
-                    if (!isThreadDeleted && !isSystemThread) {
-                        threadListHtml += `
-                            <div class="thread-reply-container">
-                                <button class="thread-reply-btn" onclick="showReplyForm(${threadId})" id="reply-btn-${threadId}">Reply</button>
-                                <div id="reply-form-${threadId}"></div>
-                            </div>
-                        `;
-                    }
-
-                    threadListHtml += '</div>';
-                });
-
-                threadListHtml += '</div>';
-            }
+            const threadListDeps = {
+                escapeHtml: ADOContent.escapeHtml,
+                escapeJs: ADOContent.escapeJs,
+                formatDate: ADOUI.formatDate,
+                processContent: ADOContent.processContent,
+                getCachedAvatar: (id) => id ? AvatarLoader.getCached(id) : null,
+                isCommentReviewed: PRReviewTimestamps.isCommentReviewed,
+                threadHasUnread: PRReviewTimestamps.threadHasUnread,
+                getIterationLinksForComment: (c, t, i, f) => PRThreadsUtils.getIterationLinksForComment(c, t, i, f),
+                getLastIterationBeforeTime: (s, t) => PRThreadsUtils.getLastIterationBeforeTime(s, t),
+                isThreadDeleted: PRThreadsUtils.isThreadDeleted,
+                getStatusBadgeClass: ADOUI.getStatusBadgeClass,
+                getStatusText: ADOUI.getStatusText,
+                buildThreadUrl: ADOURL.buildThreadUrl
+            };
+            threadListHtml = PRThreadsDisplay.buildThreadListHtml(threads, {
+                isBulkMode, selectedThreadIds, currentUserId, reviewTimestamps, iterations, prData, config
+            }, threadListDeps);
 
             // Update containers separately (new thread form is static, not re-rendered)
             // If containers don't exist (e.g., after showNoPRError), recreate them
