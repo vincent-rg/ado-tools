@@ -23,6 +23,7 @@ js/diff.js                           (391 lines)  Histogram diff algorithm (line
 js/diff-utils.js                     (474 lines)  Extracted diff/thread utilities from ado-pr-threads.html
 js/diff-virtual-scroller.js         (1306 lines)  Virtual scroll for diff view (DiffVirtualScroller IIFE)
 js/sticky-lines-utils.js             (274 lines)  Sticky line tracking utilities for diff view
+js/pr-list-display.js                 (210 lines)  Display helpers (pagination, info bar, column styles, sort indicators, comment/updates display)
 js/pr-list-utils.js                  (164 lines)  Extracted pure functions from ado-pr-list.html (filters, time, change detection)
 js/mention-utils.js                   (74 lines)  @mention autocomplete utilities (context detection, text insertion)
 js/pr-threads-utils.js               (432 lines)  Extracted pure functions from ado-pr-threads.html (stats, threads, blockers, markdown)
@@ -198,7 +199,7 @@ look at TODO file
 
 ### Medium Impact
 
-- [ ] Break up `displayPRs()` (~268 lines) in `ado-pr-list.html` into smaller functions
+- [x] Break up `displayPRs()` (~268 lines) in `ado-pr-list.html` into smaller functions → `js/pr-list-display.js`
 - [ ] Break up `displayResults()` (~598 lines) in `ado-pr-threads.html` into smaller functions
 - [ ] Organize global state into state objects instead of 50+/25+ loose globals
 - [ ] Consolidate magic numbers (timeouts, thresholds) into config constants objects
