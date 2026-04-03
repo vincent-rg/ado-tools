@@ -83,16 +83,31 @@ const PRThreadsDisplay = {
      * @returns {string}
      */
     buildHeaderHtml(prData, deps) {
-        const { formatDate, processContent } = deps;
+        const { formatDate, processContent, config } = deps;
         const sourceBranch = prData.sourceRefName?.replace('refs/heads/', '') || 'Unknown';
         const targetBranch = prData.targetRefName?.replace('refs/heads/', '') || 'Unknown';
         const descriptionHtml = prData.description
             ? `<div class="pr-description">${processContent(prData.description)}</div>`
             : '<div class="pr-description" style="color: #a19f9d; font-style: italic;">No description</div>';
+
+        let repoHtml = config?.repository || '';
+        let sourceBranchHtml = `<code>${sourceBranch}</code>`;
+        let targetBranchHtml = `<code id="prTargetBranch">${targetBranch}</code>`;
+        if (config?.serverUrl && config?.organization && config?.project && config?.repository) {
+            const base = `${config.serverUrl}/${config.organization}/${config.project}/_git/${config.repository}`;
+            repoHtml = `<a href="${base}" target="_blank" rel="noopener">${config.repository}</a>`;
+            if (sourceBranch !== 'Unknown') {
+                sourceBranchHtml = `<a href="${base}?version=GB${encodeURIComponent(sourceBranch)}" target="_blank" rel="noopener"><code>${sourceBranch}</code></a>`;
+            }
+            if (targetBranch !== 'Unknown') {
+                targetBranchHtml = `<a href="${base}?version=GB${encodeURIComponent(targetBranch)}" target="_blank" rel="noopener"><code id="prTargetBranch">${targetBranch}</code></a>`;
+            }
+        }
+
         return `
                 <div class="pr-header">
                     <p><strong>Created:</strong> ${formatDate(prData.creationDate)}</p>
-                    <p class="branch-info"><strong>Branches:</strong> <code>${sourceBranch}</code> → <code id="prTargetBranch">${targetBranch}</code></p>
+                    <p class="branch-info"><strong>Branches:</strong> ${sourceBranchHtml} → ${targetBranchHtml} &nbsp;·&nbsp; ${repoHtml}</p>
                     <div class="description-card">
                         <div class="description-card-header">
                             <span>Description</span>

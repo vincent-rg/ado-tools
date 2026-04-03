@@ -2607,7 +2607,8 @@
             // PR header details HTML (non-sticky)
             const headerHtml = PRThreadsDisplay.buildHeaderHtml(prData, {
                 formatDate: ADOUI.formatDate,
-                processContent: ADOContent.processContent
+                processContent: ADOContent.processContent,
+                config
             });
 
             // Thread list HTML (built separately)

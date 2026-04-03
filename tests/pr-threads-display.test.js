@@ -172,6 +172,7 @@ describe('PRThreadsDisplay', () => {
     // --- buildHeaderHtml ---
     describe('buildHeaderHtml', () => {
         const deps = { formatDate, processContent };
+        const config = { serverUrl: 'https://ado.example.com', organization: 'myorg', project: 'myproject', repository: 'myrepo' };
 
         it('shows creation date', () => {
             const prData = { creationDate: '2024-01-15', sourceRefName: 'refs/heads/main', targetRefName: 'refs/heads/dev' };
@@ -179,7 +180,7 @@ describe('PRThreadsDisplay', () => {
             expect(html).toContain('2024-01-15');
         });
 
-        it('strips refs/heads/ from branch names', () => {
+        it('strips refs/heads/ from branch names (no config)', () => {
             const prData = { sourceRefName: 'refs/heads/feature', targetRefName: 'refs/heads/main' };
             const html = PRThreadsDisplay.buildHeaderHtml(prData, deps);
             expect(html).toContain('<code>feature</code>');
@@ -200,6 +201,28 @@ describe('PRThreadsDisplay', () => {
         it('shows placeholder when no description', () => {
             const html = PRThreadsDisplay.buildHeaderHtml({}, deps);
             expect(html).toContain('No description');
+        });
+
+        it('makes branches links when config provided', () => {
+            const prData = { sourceRefName: 'refs/heads/feature', targetRefName: 'refs/heads/main' };
+            const html = PRThreadsDisplay.buildHeaderHtml(prData, { ...deps, config });
+            expect(html).toContain('href="https://ado.example.com/myorg/myproject/_git/myrepo?version=GBfeature"');
+            expect(html).toContain('href="https://ado.example.com/myorg/myproject/_git/myrepo?version=GBmain"');
+            expect(html).toContain('<code>feature</code>');
+            expect(html).toContain('<code id="prTargetBranch">main</code>');
+        });
+
+        it('shows repo name as link when config provided', () => {
+            const prData = { sourceRefName: 'refs/heads/main', targetRefName: 'refs/heads/dev' };
+            const html = PRThreadsDisplay.buildHeaderHtml(prData, { ...deps, config });
+            expect(html).toContain('href="https://ado.example.com/myorg/myproject/_git/myrepo"');
+            expect(html).toContain('>myrepo</a>');
+        });
+
+        it('shows plain repo name when config missing', () => {
+            const prData = { sourceRefName: 'refs/heads/main', targetRefName: 'refs/heads/dev' };
+            const html = PRThreadsDisplay.buildHeaderHtml(prData, deps);
+            expect(html).not.toContain('<a href=');
         });
     });
 
