@@ -1178,7 +1178,7 @@ const ADOContent = {
 
         return text.replace(/@<([^>]+)>/g, (match, id) => {
             const displayName = identityCache[id] || id;
-            return `<span class="mention">@${this.escapeHtml(displayName)}</span>`;
+            return `<span class="mention">@${ADOContent.escapeHtml(displayName)}</span>`;
         });
     },
 
@@ -1190,7 +1190,7 @@ const ADOContent = {
 
         return escapedHtml.replace(/@&lt;([^&]+)&gt;/g, (match, id) => {
             const displayName = identityCache[id] || id;
-            return `<span class="mention">@${this.escapeHtml(displayName)}</span>`;
+            return `<span class="mention">@${ADOContent.escapeHtml(displayName)}</span>`;
         });
     },
 
@@ -1412,9 +1412,9 @@ const ADOContent = {
      */
     processContent(content) {
         if (!content) return '';
-        const escaped = this.escapeHtml(content);
-        const withMentions = this.resolveMentionsInEscaped(escaped);
-        return this.parseMarkdown(withMentions);
+        const escaped = ADOContent.escapeHtml(content);
+        const withMentions = ADOContent.resolveMentionsInEscaped(escaped);
+        return ADOContent.parseMarkdown(withMentions);
     }
 };
 
