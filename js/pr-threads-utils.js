@@ -379,7 +379,7 @@ const PRThreadsUtils = {
         }
         // Fallback to timestamp-based if not first comment or not available
         if (targetIterationId === null || targetIterationId === undefined) {
-            const lastBefore = this.getLastIterationBeforeTime(sortedIterations, commentTime);
+            const lastBefore = PRThreadsUtils.getLastIterationBeforeTime(sortedIterations, commentTime);
             targetIterationId = lastBefore ? lastBefore.id : sortedIterations[0].id;
         }
 

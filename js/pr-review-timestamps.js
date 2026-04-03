@@ -101,7 +101,7 @@ const PRReviewTimestamps = (() => {
          * A thread with no other-user comments is never "unread".
          */
         threadHasUnread(thread, reviewTimestamps, currentUserId) {
-            const others = this.getOtherUserComments(thread, currentUserId);
+            const others = PRReviewTimestamps.getOtherUserComments(thread, currentUserId);
             if (others.length === 0) return false;
             const ts = reviewTimestamps.get(Number(thread.id));
             if (ts === undefined) return true;
