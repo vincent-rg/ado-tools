@@ -161,6 +161,10 @@ describe('ADOContent', () => {
                 expect(ADOContent.processContent('> quoted')).toBe('<blockquote class="md-blockquote">quoted</blockquote>');
             });
 
+            it('applies bold and italic inside blockquotes', () => {
+                expect(ADOContent.processContent('> **bold** and *italic*')).toBe('<blockquote class="md-blockquote"><strong>bold</strong> and <em>italic</em></blockquote>');
+            });
+
             it('lazy continuation: non-empty lines following > are in the same blockquote', () => {
                 expect(ADOContent.parseMarkdown('&gt; quote line\ncontinuation here\n')).toBe('<blockquote class="md-blockquote">quote line\ncontinuation here</blockquote>');
             });

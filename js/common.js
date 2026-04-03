@@ -1374,12 +1374,20 @@ const ADOContent = {
         // > line are part of the same blockquote; only a truly empty line breaks the quote.
         // Lone backslash lines (leading-spaces + "\" + nothing) render as blank lines inside
         // the blockquote; they are applied here so they don't prematurely break continuation.
+        function applyInlineFormatting(text) {
+            let t = text;
+            t = t.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
+            t = t.replace(/(?<![a-zA-Z0-9_])__([^_]+)__(?![a-zA-Z0-9_])/g, '<strong>$1</strong>');
+            t = t.replace(/(?<!\*)\*(?!\*)([^\*]+)\*(?!\*)/g, '<em>$1</em>');
+            t = t.replace(/(?<![a-zA-Z0-9_])_(?!_)([^_]+)_(?!_)(?![a-zA-Z0-9_])/g, '<em>$1</em>');
+            return t;
+        }
         function loneBackslash(text) { return text.replace(/^[ \t]*\\$/gm, ''); }
         function parseBlockquotes(text) {
             return text.replace(/(?:^&gt; ?.*(?:\n|$))+(?:^(?!$)[^\n]*(?:\n|$))*/gm, (block) => {
                 const inner = loneBackslash(block.replace(/\n$/, '').split('\n')
                     .map(line => line.replace(/^&gt; ?/, '')).join('\n'));
-                const innerHtml = parseBlockquotes(inner);
+                const innerHtml = applyInlineFormatting(parseBlockquotes(inner));
                 return createPlaceholder(`<blockquote class="md-blockquote">${innerHtml}</blockquote>\n`);
             });
         }
@@ -1387,16 +1395,8 @@ const ADOContent = {
         // Apply lone-backslash → empty for content outside blockquotes (which are now placeholders).
         result = loneBackslash(result);
 
-        // 5. Parse bold
-        result = result.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
-        // Only match __ for bold when not part of longer underscore sequences (word boundaries)
-        result = result.replace(/(?<![a-zA-Z0-9_])__([^_]+)__(?![a-zA-Z0-9_])/g, '<strong>$1</strong>');
-
-        // 6. Parse italic
-        result = result.replace(/(?<!\*)\*(?!\*)([^\*]+)\*(?!\*)/g, '<em>$1</em>');
-        // Only match _ for italic when not part of identifier names (word boundaries)
-        // Must not be preceded or followed by alphanumeric or underscore characters
-        result = result.replace(/(?<![a-zA-Z0-9_])_(?!_)([^_]+)_(?!_)(?![a-zA-Z0-9_])/g, '<em>$1</em>');
+        // 5. Parse bold and italic
+        result = applyInlineFormatting(result);
 
         // 7. Restore placeholders
         result = restorePlaceholders(result);
