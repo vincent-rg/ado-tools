@@ -1039,6 +1039,14 @@
             urlProject = urlParams.get('project');
             urlRepo = urlParams.get('repo');
 
+            // Markdown task-list checkbox toggle
+            document.addEventListener('change', (e) => {
+                const el = e.target;
+                if (el.type === 'checkbox' && el.dataset.checkboxIndex !== undefined) {
+                    toggleMarkdownCheckbox(el);
+                }
+            });
+
             // Set up PR action modal event listeners
             const prActionModal = document.getElementById('prActionModal');
             if (prActionModal) {

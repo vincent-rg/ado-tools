@@ -1272,12 +1272,13 @@ const ADOContent = {
         });
 
         // 4b. Parse task lists (checkboxes): - [ ] unchecked, - [x] checked
+        let _cbIdx = 0;
         result = result.replace(/(?:^[ \t]*- \[([ xX])\] .+(?:\n|$))+/gm, (block) => {
             const items = block.replace(/\n$/, '').split('\n').map(line => {
                 const m = line.match(/^[ \t]*- \[([ xX])\] (.+)/);
                 if (!m) return '';
-                const checked = m[1] !== ' ' ? ' checked disabled' : ' disabled';
-                return `<li class="md-task-item"><input type="checkbox"${checked}> ${m[2]}</li>`;
+                const checked = m[1] !== ' ' ? ' checked' : '';
+                return `<li class="md-task-item"><input type="checkbox"${checked} data-checkbox-index="${_cbIdx++}"> ${m[2]}</li>`;
             }).join('');
             return createPlaceholder(`<ul class="md-list">${items}</ul>\n`);
         });

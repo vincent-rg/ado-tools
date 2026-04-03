@@ -93,11 +93,11 @@ describe('ADOContent', () => {
         });
 
         it('parses task list checkboxes', () => {
-            expect(ADOContent.parseMarkdown('- [ ] todo\n- [x] done\n')).toBe('<ul class="md-list"><li class="md-task-item"><input type="checkbox" disabled> todo</li><li class="md-task-item"><input type="checkbox" checked disabled> done</li></ul>');
+            expect(ADOContent.parseMarkdown('- [ ] todo\n- [x] done\n')).toBe('<ul class="md-list"><li class="md-task-item"><input type="checkbox" data-checkbox-index="0"> todo</li><li class="md-task-item"><input type="checkbox" checked data-checkbox-index="1"> done</li></ul>');
         });
 
         it('parses checkboxes after a heading', () => {
-            expect(ADOContent.parseMarkdown('### liste choix\n- [X] choix A\n- [ ] choix B\n')).toBe('<h3 class="md-h3">liste choix</h3><ul class="md-list"><li class="md-task-item"><input type="checkbox" checked disabled> choix A</li><li class="md-task-item"><input type="checkbox" disabled> choix B</li></ul>');
+            expect(ADOContent.parseMarkdown('### liste choix\n- [X] choix A\n- [ ] choix B\n')).toBe('<h3 class="md-h3">liste choix</h3><ul class="md-list"><li class="md-task-item"><input type="checkbox" checked data-checkbox-index="0"> choix A</li><li class="md-task-item"><input type="checkbox" data-checkbox-index="1"> choix B</li></ul>');
         });
 
         it('parses bullet lists', () => {

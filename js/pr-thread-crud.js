@@ -571,6 +571,86 @@ function copyCommentUrl(threadId, filePath) {
     }).catch(() => {});
 }
 
+/**
+ * Toggle the nth markdown checkbox (0-based) within a markdown string.
+ */
+function toggleNthCheckbox(markdown, n) {
+    let count = 0;
+    return markdown.replace(/^([ \t]*- \[)([ xX])(\] .*)$/gm, (match, prefix, state, suffix) => {
+        if (count++ === n) {
+            return `${prefix}${state === ' ' ? 'x' : ' '}${suffix}`;
+        }
+        return match;
+    });
+}
+
+/**
+ * Called when a markdown task-list checkbox is clicked.
+ * Persists the toggle via the API and re-renders the content on success.
+ */
+async function toggleMarkdownCheckbox(checkbox) {
+    const checkboxIndex = parseInt(checkbox.dataset.checkboxIndex);
+    const isChecked = checkbox.checked;
+
+    checkbox.disabled = true;
+
+    const commentEl = checkbox.closest('.comment[data-comment-id]');
+    if (commentEl) {
+        if (commentEl.querySelector('.comment-editor')) {
+            checkbox.checked = !isChecked;
+            checkbox.disabled = false;
+            return;
+        }
+        const threadId = parseInt(commentEl.dataset.threadId);
+        const commentId = parseInt(commentEl.dataset.commentId);
+        const rawContent = commentEl.dataset.commentContent || '';
+        const newContent = toggleNthCheckbox(rawContent, checkboxIndex);
+        try {
+            await ADOAPI.updateComment(currentConfig, currentPRId, threadId, commentId, newContent);
+            commentEl.dataset.commentContent = newContent;
+            const wrapper = document.getElementById(`comment-content-${threadId}-${commentId}`);
+            if (wrapper) {
+                wrapper.innerHTML = ADOContent.processContent(newContent);
+            }
+        } catch (error) {
+            console.error('Failed to update checkbox:', error);
+            checkbox.checked = !isChecked;
+            checkbox.disabled = false;
+        }
+        return;
+    }
+
+    const descEl = checkbox.closest('#pr-description-content');
+    if (descEl) {
+        if (descEl.querySelector('.comment-editor')) {
+            checkbox.checked = !isChecked;
+            checkbox.disabled = false;
+            return;
+        }
+        const rawContent = (typeof currentPRData !== 'undefined' && currentPRData?.description) || '';
+        const newContent = toggleNthCheckbox(rawContent, checkboxIndex);
+        try {
+            await ADOAPI.updatePRDescription(currentConfig, currentPRId, newContent);
+            if (typeof currentPRData !== 'undefined') currentPRData.description = newContent;
+            const contentEl = document.getElementById('pr-description-content');
+            if (contentEl) {
+                contentEl.innerHTML = newContent
+                    ? `<div class="pr-description">${ADOContent.processContent(newContent)}</div>`
+                    : '<div class="pr-description" style="color: #a19f9d; font-style: italic;">No description</div>';
+            }
+        } catch (error) {
+            console.error('Failed to update checkbox:', error);
+            checkbox.checked = !isChecked;
+            checkbox.disabled = false;
+        }
+        return;
+    }
+
+    // Not in an editable context — revert
+    checkbox.checked = !isChecked;
+    checkbox.disabled = true;
+}
+
 // Convenience aliases for inline view (kept for backward compat with existing onclick handlers)
 function showInlineReplyForm(threadId) { showReplyForm(threadId, 'inline-'); }
 function hideInlineReplyForm(threadId) { hideReplyForm(threadId, 'inline-'); }
