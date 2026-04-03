@@ -3,9 +3,13 @@ import { ADOContent } from '../js/common.js';
 
 describe('ADOContent', () => {
     describe('escapeHtml', () => {
-        it('escapes all 5 HTML entities', () => {
-            expect(ADOContent.escapeHtml('&<>"\''))
-                .toBe('&amp;&lt;&gt;&quot;&#39;');
+        it('escapes 4 HTML entities (& < > ")', () => {
+            expect(ADOContent.escapeHtml('&<>"'))
+                .toBe('&amp;&lt;&gt;&quot;');
+        });
+
+        it('does not escape single quotes', () => {
+            expect(ADOContent.escapeHtml("it's")).toBe("it's");
         });
 
         it('returns empty string for null/undefined', () => {
@@ -124,6 +128,12 @@ describe('ADOContent', () => {
 
         it('parses code blocks', () => {
             expect(ADOContent.parseMarkdown('```js\nconst x = 1;\n```')).toBe('<pre><code class="language-js hljs">const x = 1;</code></pre>');
+        });
+
+        it('preserves single quotes in code blocks (via processContent)', () => {
+            const result = ADOContent.processContent("```\nit's a 'test'\n```");
+            expect(result).toContain("it's a 'test'");
+            expect(result).not.toContain('&#39;');
         });
 
         it('parses images', () => {
