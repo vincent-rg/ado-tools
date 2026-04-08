@@ -153,7 +153,34 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             with urllib.request.urlopen(req, timeout=10) as response:
                 image_data = response.read()
                 content_type = response.headers.get('Content-Type', 'application/octet-stream')
-                print(f'[attachment] <- {response.status} {content_type} {len(image_data)} bytes', flush=True)
+                magic = image_data[:16]
+                magic_hex = ' '.join(f'{b:02x}' for b in magic)
+                # Detect common formats
+                if image_data.startswith(b'\x89PNG\r\n\x1a\n'):
+                    fmt = 'PNG (valid)'
+                elif image_data.startswith(b'\xff\xd8\xff'):
+                    fmt = 'JPEG (valid)'
+                elif image_data.startswith(b'GIF8'):
+                    fmt = 'GIF (valid)'
+                elif image_data.startswith(b'<svg') or image_data.startswith(b'<?xml'):
+                    fmt = 'SVG/XML'
+                elif image_data[:1] == b'<':
+                    fmt = 'HTML/XML (NOT AN IMAGE)'
+                elif image_data[:1] == b'{':
+                    fmt = 'JSON (NOT AN IMAGE)'
+                else:
+                    fmt = 'unknown'
+                print(f'[attachment] <- {response.status} {content_type} {len(image_data)} bytes  format={fmt}  magic={magic_hex}', flush=True)
+                if 'NOT AN IMAGE' in fmt or fmt == 'unknown':
+                    preview = image_data[:500].decode('utf-8', errors='replace')
+                    print(f'[attachment]    body preview: {preview!r}', flush=True)
+                # Save first failing/suspicious payload to disk for inspection
+                try:
+                    with open('/tmp/ado-attachment-debug.bin', 'wb') as f:
+                        f.write(image_data)
+                    print('[attachment]    saved bytes to /tmp/ado-attachment-debug.bin', flush=True)
+                except Exception as _e:
+                    pass
 
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
