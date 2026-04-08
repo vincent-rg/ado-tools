@@ -108,6 +108,13 @@ describe('ADOContent', () => {
             expect(ADOContent.parseMarkdown('1. first\n2. second\n')).toBe('<ol class="md-list"><li>first</li><li>second</li></ol>');
         });
 
+        it('preserves start number on interrupted numbered lists', () => {
+            // When a non-list line breaks an ordered list, the continuation should keep its numbering.
+            const out = ADOContent.parseMarkdown('1. one\n2. two\nfoo\n3. three\n4. four\n');
+            expect(out).toContain('<ol class="md-list"><li>one</li><li>two</li></ol>');
+            expect(out).toContain('<ol class="md-list" start="3"><li>three</li><li>four</li></ol>');
+        });
+
         it('lone backslash line (nothing after) renders as empty line', () => {
             expect(ADOContent.parseMarkdown('\\')).toBe('');
             expect(ADOContent.parseMarkdown('  \\')).toBe('');  // leading spaces stripped

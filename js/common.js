@@ -1305,11 +1305,15 @@ const ADOContent = {
 
         // 4d. Parse numbered lists (1. item, 2. item)
         result = result.replace(/(?:^[ \t]*\d+\. .+(?:\n|$))+/gm, (block) => {
-            const items = block.replace(/\n$/, '').split('\n').map(line => {
+            const lines = block.replace(/\n$/, '').split('\n');
+            const firstMatch = lines[0].match(/^[ \t]*(\d+)\. /);
+            const startNum = firstMatch ? parseInt(firstMatch[1], 10) : 1;
+            const items = lines.map(line => {
                 const m = line.match(/^[ \t]*\d+\. (.+)/);
                 return m ? `<li>${m[1]}</li>` : '';
             }).join('');
-            return createPlaceholder(`<ol class="md-list">${items}</ol>\n`);
+            const startAttr = startNum !== 1 ? ` start="${startNum}"` : '';
+            return createPlaceholder(`<ol class="md-list"${startAttr}>${items}</ol>\n`);
         });
 
         // 4e. Emoji shortcodes (:smile:, :+1:, etc.) and text emoticons (:) :D etc.)
