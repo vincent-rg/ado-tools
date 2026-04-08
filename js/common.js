@@ -1245,9 +1245,20 @@ const ADOContent = {
         });
 
         // 3. Parse images
+        // ADO attachment URLs need PAT auth and are loaded through the /attachment proxy
+        // by pr-thread-crud.js. Emit data-ado-src (and a placeholder src) so the browser
+        // doesn't fire a doomed unauthenticated request to ADO before the proxy kicks in.
+        let adoServerUrl = '';
+        try {
+            adoServerUrl = (typeof ADOConfig !== 'undefined' && ADOConfig.get && ADOConfig.get()?.serverUrl) || '';
+        } catch (_) { /* localStorage not available (e.g. in unit tests) */ }
+        const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
         result = result.replace(/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+['"]([^'"]+)['"])?\)/g, (match, alt, url, title) => {
             const titleAttr = title ? ` title="${ADOContent.escapeHtml(title)}"` : '';
-            const html = `<img src="${ADOContent.escapeHtml(url)}" alt="${ADOContent.escapeHtml(alt)}"${titleAttr} />`;
+            const isADOAttachment = adoServerUrl && url.startsWith(adoServerUrl) && url.includes('/attachments/');
+            const html = isADOAttachment
+                ? `<img src="${TRANSPARENT_PIXEL}" data-ado-src="${ADOContent.escapeHtml(url)}" alt="${ADOContent.escapeHtml(alt)}"${titleAttr} />`
+                : `<img src="${ADOContent.escapeHtml(url)}" alt="${ADOContent.escapeHtml(alt)}"${titleAttr} />`;
             return createPlaceholder(html);
         });
 

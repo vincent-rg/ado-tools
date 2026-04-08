@@ -572,11 +572,17 @@ function isADOAttachmentUrl(src) {
 }
 
 async function loadAttachmentImage(img) {
-    const src = img.getAttribute('src');
-    if (!src || !isADOAttachmentUrl(src)) return;
+    // Prefer data-ado-src (set by the markdown parser for known ADO attachment URLs)
+    // so we never fire an unauthenticated request against ADO. Fall back to src for
+    // any <img> that slipped through without the data attribute.
+    const dataSrc = img.getAttribute('data-ado-src');
+    const src = dataSrc || img.getAttribute('src');
+    if (!src) return;
+    if (!dataSrc && !isADOAttachmentUrl(src)) return;
 
     if (attachmentBlobCache.has(src)) {
         img.src = attachmentBlobCache.get(src);
+        img.removeAttribute('data-ado-src');
         return;
     }
 
@@ -593,6 +599,7 @@ async function loadAttachmentImage(img) {
             const blobUrl = URL.createObjectURL(blob);
             attachmentBlobCache.set(src, blobUrl);
             img.src = blobUrl;
+            img.removeAttribute('data-ado-src');
         }
     } catch (e) {
         console.warn('Failed to load attachment image:', e);
