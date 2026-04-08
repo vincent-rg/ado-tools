@@ -7,6 +7,105 @@
     margin-top: 8px;
 }
 
+/* Markdown formatting toolbar */
+.md-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 0 2px 0;
+    margin-top: 4px;
+    border-top: 1px solid #e8e6e4;
+    flex-wrap: wrap;
+}
+
+.md-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 3px 5px;
+    cursor: pointer;
+    color: #444;
+    line-height: 1;
+}
+
+.md-btn:hover {
+    background: #f3f2f1;
+    border-color: #d1d1d1;
+    color: #201f1e;
+}
+
+.md-btn:active {
+    background: #e8e6e4;
+}
+
+.md-toolbar-sep {
+    width: 1px;
+    height: 16px;
+    background: #d1d1d1;
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+
+/* Heading dropdown */
+.md-heading-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.md-heading-btn {
+    gap: 1px;
+}
+
+.md-chevron {
+    opacity: 0.6;
+}
+
+.md-heading-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    background: #fff;
+    border: 1px solid #d1d1d1;
+    border-radius: 2px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 200;
+    min-width: 56px;
+    padding: 3px 0;
+}
+
+.md-heading-item {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 4px 12px;
+    text-align: left;
+    font-size: 12px;
+    cursor: pointer;
+    color: #323130;
+    white-space: nowrap;
+}
+
+.md-heading-item:hover {
+    background: #f3f2f1;
+}
+
+.md-heading-item[data-heading="1"] { font-size: 15px; font-weight: 700; }
+.md-heading-item[data-heading="2"] { font-size: 14px; font-weight: 700; }
+.md-heading-item[data-heading="3"] { font-size: 13px; font-weight: 600; }
+.md-heading-item[data-heading="4"] { font-size: 12px; font-weight: 600; }
+.md-heading-item[data-heading="5"] { font-size: 12px; font-weight: 500; }
+.md-heading-item[data-heading="6"] { font-size: 12px; font-weight: 500; color: #605e5c; }
+
+.md-heading-sep {
+    height: 1px;
+    background: #e8e6e4;
+    margin: 3px 0;
+}
+
 .comment-editor textarea {
     width: 100%;
     min-height: 80px;

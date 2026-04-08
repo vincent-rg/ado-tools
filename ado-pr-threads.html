@@ -643,6 +643,7 @@
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
                 attachImagePaste(textarea);
+                attachFormattingToolbar(textarea);
                 attachEditPreview(textarea);
             }
         }
@@ -950,6 +951,7 @@
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
                 attachImagePaste(textarea);
+                attachFormattingToolbar(textarea);
                 attachEditPreview(textarea);
                 saveDraft(_k, '', { lineLen });
                 textarea.addEventListener('input', () => { saveDraft(_k, textarea.value, { lineLen }); updateFileTreeDraftInfo(filePath); });
@@ -1731,6 +1733,7 @@
             newThreadTextarea.focus();
             MentionAutocomplete.attach(newThreadTextarea);
             attachImagePaste(newThreadTextarea);
+            attachFormattingToolbar(newThreadTextarea);
             attachEditPreview(newThreadTextarea);
         }
 
@@ -5868,6 +5871,7 @@
                 textarea.focus();
                 MentionAutocomplete.attach(textarea);
                 attachImagePaste(textarea);
+                attachFormattingToolbar(textarea);
                 attachEditPreview(textarea);
                 saveDraft(_k, '', {});
                 textarea.addEventListener('input', () => { saveDraft(_k, textarea.value); updateFileTreeDraftInfo(selectedFilePath); });

@@ -22,6 +22,7 @@ function showReplyForm(threadId, prefix = '') {
     if (textarea) {
         MentionAutocomplete.attach(textarea);
         attachImagePaste(textarea);
+        attachFormattingToolbar(textarea);
         attachEditPreview(textarea);
         const _k = 'reply\x00' + threadId;
         saveDraft(_k, commentDrafts.get(_k)?.content ?? ''); // mark form as open immediately
@@ -149,6 +150,7 @@ function startEditComment(threadId, commentId, prefix = '') {
         textarea._mentionMap = resolved.mentionMap;
         MentionAutocomplete.attach(textarea);
         attachImagePaste(textarea);
+        attachFormattingToolbar(textarea);
         const { update } = attachEditPreview(textarea);
         update();
         const _k = 'edit\x00' + threadId + '\x00' + commentId;
@@ -287,6 +289,7 @@ function startEditDescription() {
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
         MentionAutocomplete.attach(textarea);
         attachImagePaste(textarea);
+        attachFormattingToolbar(textarea);
         const { update } = attachEditPreview(textarea);
         update();
     }
@@ -321,6 +324,205 @@ function attachEditPreview(textarea) {
     return { previewId, update };
 }
 
+
+// One global mousedown listener to close heading dropdowns when clicking outside.
+if (!window._mdHeadingDropdownListenerAttached) {
+    window._mdHeadingDropdownListenerAttached = true;
+    document.addEventListener('mousedown', (e) => {
+        if (!e.target.closest('.md-heading-wrap')) {
+            document.querySelectorAll('.md-heading-dropdown').forEach(d => { d.style.display = 'none'; });
+        }
+    }, true);
+}
+
+function attachFormattingToolbar(textarea) {
+    const editor = textarea.closest('.comment-editor');
+    if (!editor || editor.querySelector('.md-toolbar')) return;
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'md-toolbar';
+    toolbar.innerHTML = `
+        <button type="button" class="md-btn" title="Bold" data-action="bold">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <text x="2" y="13" font-family="Georgia,serif" font-size="14" font-weight="900" fill="currentColor">B</text>
+            </svg>
+        </button>
+        <button type="button" class="md-btn" title="Italic" data-action="italic">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <text x="4" y="13" font-family="Georgia,serif" font-size="14" font-style="italic" fill="currentColor">I</text>
+            </svg>
+        </button>
+        <button type="button" class="md-btn" title="Inline code" data-action="code">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M5 4.5L1.5 8 5 11.5M11 4.5L14.5 8 11 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <button type="button" class="md-btn" title="Code block" data-action="codeblock">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M5.5 6.5L3.5 8.5 5.5 10.5M10.5 6.5L12.5 8.5 10.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <span class="md-toolbar-sep"></span>
+        <button type="button" class="md-btn" title="Link" data-action="link">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M6.5 9.5a3.54 3.54 0 0 0 5 .12l1.5-1.5a3.54 3.54 0 0 0-5-5L7 4.17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M9.5 6.5a3.54 3.54 0 0 0-5-.12L3 7.88a3.54 3.54 0 0 0 5 5L9 11.83" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+        <button type="button" class="md-btn" title="Image" data-action="image">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="5" cy="6" r="1.2" fill="currentColor"/>
+                <path d="M1.5 11.5l3.5-3.5 2.5 2.5 2-2 4.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <span class="md-toolbar-sep"></span>
+        <button type="button" class="md-btn" title="Blockquote" data-action="quote">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.5" y="2.5" width="2" height="11" rx="1" fill="currentColor"/>
+                <path d="M5.5 5h8M5.5 8h6M5.5 11h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+        <div class="md-heading-wrap">
+            <button type="button" class="md-btn md-heading-btn" title="Heading">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M2.5 3.5v9M13.5 3.5v9M2.5 8h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <svg width="7" height="7" viewBox="0 0 8 8" fill="none" class="md-chevron" aria-hidden="true">
+                    <path d="M1.5 2.5l2.5 3 2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <div class="md-heading-dropdown" style="display:none;">
+                <button type="button" class="md-heading-item" data-heading="1">H1</button>
+                <button type="button" class="md-heading-item" data-heading="2">H2</button>
+                <button type="button" class="md-heading-item" data-heading="3">H3</button>
+                <button type="button" class="md-heading-item" data-heading="4">H4</button>
+                <button type="button" class="md-heading-item" data-heading="5">H5</button>
+                <button type="button" class="md-heading-item" data-heading="6">H6</button>
+                <div class="md-heading-sep"></div>
+                <button type="button" class="md-heading-item" data-heading="0">None</button>
+            </div>
+        </div>
+    `;
+
+    toolbar.addEventListener('mousedown', (e) => {
+        // Prevent textarea from losing focus
+        e.preventDefault();
+    });
+
+    toolbar.addEventListener('click', (e) => {
+        const actionBtn = e.target.closest('[data-action]');
+        if (actionBtn) {
+            applyFormattingAction(textarea, actionBtn.dataset.action);
+            return;
+        }
+        if (e.target.closest('.md-heading-btn')) {
+            const dropdown = toolbar.querySelector('.md-heading-dropdown');
+            dropdown.style.display = dropdown.style.display === 'none' ? '' : 'none';
+            return;
+        }
+        const headingItem = e.target.closest('.md-heading-item');
+        if (headingItem) {
+            applyHeadingLevel(textarea, parseInt(headingItem.dataset.heading, 10));
+            toolbar.querySelector('.md-heading-dropdown').style.display = 'none';
+        }
+    });
+
+    // Insert toolbar between textarea and action buttons
+    const actions = editor.querySelector('.comment-editor-actions');
+    if (actions) {
+        editor.insertBefore(toolbar, actions);
+    } else {
+        editor.appendChild(toolbar);
+    }
+}
+
+// Replace textarea[replaceFrom..replaceTo] with text, then position cursor.
+// Uses execCommand('insertText') so the edit lands on the browser undo/redo stack.
+function mdInsert(textarea, replaceFrom, replaceTo, text, newSelStart, newSelEnd) {
+    textarea.focus();
+    textarea.setSelectionRange(replaceFrom, replaceTo);
+    if (!document.execCommand('insertText', false, text)) {
+        // Fallback (execCommand not supported in this context)
+        const v = textarea.value;
+        textarea.value = v.substring(0, replaceFrom) + text + v.substring(replaceTo);
+    }
+    textarea.setSelectionRange(Math.max(0, newSelStart), Math.max(0, newSelEnd));
+    textarea.dispatchEvent(new Event('input'));
+}
+
+function applyHeadingLevel(textarea, level) {
+    const s = textarea.selectionStart;
+    const e = textarea.selectionEnd;
+    const before = textarea.value.substring(0, s);
+
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const linePrefix = before.substring(lineStart);
+    const headingMatch = linePrefix.match(/^(#{1,6}) /);
+    const currentLen = headingMatch ? headingMatch[1].length + 1 : 0;
+
+    if (level === 0) {
+        mdInsert(textarea, lineStart, s, linePrefix.substring(currentLen),
+            Math.max(lineStart, s - currentLen), Math.max(lineStart, e - currentLen));
+    } else {
+        const newPrefix = '#'.repeat(level) + ' ';
+        const delta = newPrefix.length - currentLen;
+        mdInsert(textarea, lineStart, s, newPrefix + linePrefix.substring(currentLen),
+            s + delta, e + delta);
+    }
+}
+
+function applyFormattingAction(textarea, action) {
+    const s = textarea.selectionStart;
+    const e = textarea.selectionEnd;
+    const sel = textarea.value.substring(s, e);
+    const before = textarea.value.substring(0, s);
+    const after = textarea.value.substring(e);
+
+    switch (action) {
+        case 'bold':
+            if (sel) mdInsert(textarea, s, e, `**${sel}**`, e + 4, e + 4);
+            else     mdInsert(textarea, s, s, `****`,       s + 2, s + 2);
+            break;
+        case 'italic':
+            if (sel) mdInsert(textarea, s, e, `*${sel}*`, e + 2, e + 2);
+            else     mdInsert(textarea, s, s, `**`,       s + 1, s + 1);
+            break;
+        case 'code':
+            if (sel) mdInsert(textarea, s, e, `\`${sel}\``, e + 2, e + 2);
+            else     mdInsert(textarea, s, s, `\`\``,       s + 1, s + 1);
+            break;
+        case 'codeblock': {
+            const pre = (before === '' || before.endsWith('\n')) ? '' : '\n';
+            const suf = (after === '' || after.startsWith('\n')) ? '' : '\n';
+            if (sel) mdInsert(textarea, s, e, `${pre}\`\`\`\n${sel}\n\`\`\`${suf}`,
+                s + pre.length + 4 + sel.length + 1, s + pre.length + 4 + sel.length + 1);
+            else     mdInsert(textarea, s, s, `${pre}\`\`\`\n\n\`\`\`${suf}`,
+                s + pre.length + 4, s + pre.length + 4);
+            break;
+        }
+        case 'link':
+            if (sel) mdInsert(textarea, s, e, `[${sel}](url)`,  s + sel.length + 3, s + sel.length + 6);
+            else     mdInsert(textarea, s, s, `[text](url)`,    s + 1, s + 5);
+            break;
+        case 'image':
+            if (sel) mdInsert(textarea, s, e, `![${sel}](url)`, s + sel.length + 4, s + sel.length + 7);
+            else     mdInsert(textarea, s, s, `![alt](url)`,    s + 2, s + 5);
+            break;
+        case 'quote': {
+            const lineStart = before.lastIndexOf('\n') + 1;
+            const linePrefix = before.substring(lineStart);
+            if (linePrefix.startsWith('> '))
+                mdInsert(textarea, lineStart, s, linePrefix.substring(2), s - 2, e - 2);
+            else
+                mdInsert(textarea, lineStart, s, `> ${linePrefix}`,       s + 2, e + 2);
+            break;
+        }
+        default:
+            return;
+    }
+}
 
 function attachImagePaste(textarea) {
     textarea.addEventListener('paste', async (e) => {
