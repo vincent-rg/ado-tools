@@ -577,8 +577,19 @@ async function loadAttachmentImage(img) {
     // any <img> that slipped through without the data attribute.
     const dataSrc = img.getAttribute('data-ado-src');
     const src = dataSrc || img.getAttribute('src');
+    const cfgServerUrl = (currentConfig || ADOConfig.get())?.serverUrl;
+    console.log('[attachment-debug] loadAttachmentImage', {
+        dataSrc,
+        rawSrc: img.getAttribute('src'),
+        chosen: src,
+        cfgServerUrl,
+        detected: src ? isADOAttachmentUrl(src) : false,
+    });
     if (!src) return;
-    if (!dataSrc && !isADOAttachmentUrl(src)) return;
+    if (!dataSrc && !isADOAttachmentUrl(src)) {
+        console.log('[attachment-debug] skipping (not detected as ADO attachment)', src);
+        return;
+    }
 
     if (attachmentBlobCache.has(src)) {
         img.src = attachmentBlobCache.get(src);
@@ -588,11 +599,16 @@ async function loadAttachmentImage(img) {
 
     try {
         const config = currentConfig || ADOConfig.get();
-        if (!config?.pat) return;
+        if (!config?.pat) {
+            console.log('[attachment-debug] no PAT in config, aborting');
+            return;
+        }
 
+        console.log('[attachment-debug] fetching via proxy', `/attachment?url=${encodeURIComponent(src)}`);
         const response = await fetch(`/attachment?url=${encodeURIComponent(src)}`, {
             headers: { 'X-ADO-PAT': config.pat }
         });
+        console.log('[attachment-debug] proxy response', response.status, response.statusText, 'for', src);
 
         if (response.ok) {
             const blob = await response.blob();
@@ -600,6 +616,9 @@ async function loadAttachmentImage(img) {
             attachmentBlobCache.set(src, blobUrl);
             img.src = blobUrl;
             img.removeAttribute('data-ado-src');
+        } else {
+            const bodyText = await response.text().catch(() => '');
+            console.warn('[attachment-debug] proxy returned non-OK', response.status, 'body:', bodyText.slice(0, 300));
         }
     } catch (e) {
         console.warn('Failed to load attachment image:', e);

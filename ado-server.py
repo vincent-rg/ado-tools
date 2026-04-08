@@ -136,7 +136,10 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
         attachment_url = params.get('url', [None])[0]
         pat = self.headers.get('X-ADO-PAT', '')
 
+        print(f'[attachment] incoming url={attachment_url!r} pat_present={bool(pat)}', flush=True)
+
         if not attachment_url or not pat:
+            print('[attachment] -> 400 missing url or PAT', flush=True)
             self.send_error(400, 'Missing required parameters (url) or X-ADO-PAT header')
             return
 
@@ -144,10 +147,13 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             auth_string = base64.b64encode(f":{pat}".encode()).decode()
             req = urllib.request.Request(attachment_url)
             req.add_header('Authorization', f'Basic {auth_string}')
+            req.add_header('Accept', 'application/octet-stream, image/*, */*')
 
+            print(f'[attachment] forwarding GET {attachment_url}', flush=True)
             with urllib.request.urlopen(req, timeout=10) as response:
                 image_data = response.read()
                 content_type = response.headers.get('Content-Type', 'application/octet-stream')
+                print(f'[attachment] <- {response.status} {content_type} {len(image_data)} bytes', flush=True)
 
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
@@ -156,10 +162,20 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(image_data)
 
         except urllib.error.HTTPError as e:
+            body_preview = ''
+            try:
+                body_preview = e.read(500).decode('utf-8', errors='replace')
+            except Exception:
+                pass
+            print(f'[attachment] <- HTTPError {e.code} {e.reason} for {attachment_url}', flush=True)
+            print(f'[attachment]    response headers: {dict(e.headers) if e.headers else {}}', flush=True)
+            print(f'[attachment]    body preview: {body_preview!r}', flush=True)
             self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
         except urllib.error.URLError as e:
+            print(f'[attachment] <- URLError {e.reason} for {attachment_url}', flush=True)
             self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
         except Exception as e:
+            print(f'[attachment] <- Exception {type(e).__name__}: {e} for {attachment_url}', flush=True)
             self.send_error(500, f'Proxy error: {str(e)}')
 
     def handle_identity_resolve_proxy(self):
