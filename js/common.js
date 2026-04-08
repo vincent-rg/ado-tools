@@ -1256,13 +1256,6 @@ const ADOContent = {
         result = result.replace(/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+['"]([^'"]+)['"])?\)/g, (match, alt, url, title) => {
             const titleAttr = title ? ` title="${ADOContent.escapeHtml(title)}"` : '';
             const isADOAttachment = adoServerUrl && url.startsWith(adoServerUrl) && url.includes('/attachments/');
-            console.log('[attachment-debug] markdown img', {
-                url,
-                adoServerUrl,
-                startsWithServer: !!(adoServerUrl && url.startsWith(adoServerUrl)),
-                hasAttachmentsSegment: url.includes('/attachments/'),
-                isADOAttachment,
-            });
             const html = isADOAttachment
                 ? `<img src="${TRANSPARENT_PIXEL}" data-ado-src="${ADOContent.escapeHtml(url)}" alt="${ADOContent.escapeHtml(alt)}"${titleAttr} />`
                 : `<img src="${ADOContent.escapeHtml(url)}" alt="${ADOContent.escapeHtml(alt)}"${titleAttr} />`;

@@ -129,17 +129,22 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, f'Proxy error: {str(e)}')
 
     def handle_attachment_proxy(self):
-        """Proxy ADO PR attachment image requests with PAT authentication"""
+        """Proxy ADO PR attachment image requests with PAT authentication.
+
+        On self-hosted Azure DevOps Server, attachment responses can come back
+        gzip-compressed even when the client doesn't advertise it. We force
+        Accept-Encoding: identity, but also defensively decompress if the body
+        still arrives compressed, and warn loudly if the bytes don't look like
+        the declared image type — otherwise the browser would silently render
+        a broken image with no clue why.
+        """
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
 
         attachment_url = params.get('url', [None])[0]
         pat = self.headers.get('X-ADO-PAT', '')
 
-        print(f'[attachment] incoming url={attachment_url!r} pat_present={bool(pat)}', flush=True)
-
         if not attachment_url or not pat:
-            print('[attachment] -> 400 missing url or PAT', flush=True)
             self.send_error(400, 'Missing required parameters (url) or X-ADO-PAT header')
             return
 
@@ -148,61 +153,65 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             req = urllib.request.Request(attachment_url)
             req.add_header('Authorization', f'Basic {auth_string}')
             req.add_header('Accept', 'application/octet-stream, image/*, */*')
+            req.add_header('Accept-Encoding', 'identity')
 
-            print(f'[attachment] forwarding GET {attachment_url}', flush=True)
             with urllib.request.urlopen(req, timeout=10) as response:
-                image_data = response.read()
+                body = response.read()
                 content_type = response.headers.get('Content-Type', 'application/octet-stream')
-                magic = image_data[:16]
-                magic_hex = ' '.join(f'{b:02x}' for b in magic)
-                # Detect common formats
-                if image_data.startswith(b'\x89PNG\r\n\x1a\n'):
-                    fmt = 'PNG (valid)'
-                elif image_data.startswith(b'\xff\xd8\xff'):
-                    fmt = 'JPEG (valid)'
-                elif image_data.startswith(b'GIF8'):
-                    fmt = 'GIF (valid)'
-                elif image_data.startswith(b'<svg') or image_data.startswith(b'<?xml'):
-                    fmt = 'SVG/XML'
-                elif image_data[:1] == b'<':
-                    fmt = 'HTML/XML (NOT AN IMAGE)'
-                elif image_data[:1] == b'{':
-                    fmt = 'JSON (NOT AN IMAGE)'
-                else:
-                    fmt = 'unknown'
-                print(f'[attachment] <- {response.status} {content_type} {len(image_data)} bytes  format={fmt}  magic={magic_hex}', flush=True)
-                if 'NOT AN IMAGE' in fmt or fmt == 'unknown':
-                    preview = image_data[:500].decode('utf-8', errors='replace')
-                    print(f'[attachment]    body preview: {preview!r}', flush=True)
-                # Save first failing/suspicious payload to disk for inspection
-                try:
-                    with open('/tmp/ado-attachment-debug.bin', 'wb') as f:
-                        f.write(image_data)
-                    print('[attachment]    saved bytes to /tmp/ado-attachment-debug.bin', flush=True)
-                except Exception as _e:
-                    pass
+                content_encoding = (response.headers.get('Content-Encoding') or '').lower().strip()
+
+                # Defensive decompression: some on-prem ADO instances gzip even
+                # when we asked for identity. Detect by Content-Encoding header
+                # or by gzip magic bytes (1f 8b).
+                if content_encoding == 'gzip' or body[:2] == b'\x1f\x8b':
+                    try:
+                        import gzip
+                        body = gzip.decompress(body)
+                        print(f'[attachment] decompressed gzip response from {attachment_url}', flush=True)
+                    except Exception as de:
+                        print(f'[attachment] WARNING: failed to gunzip response from {attachment_url}: {de}', flush=True)
+                elif content_encoding == 'deflate':
+                    try:
+                        import zlib
+                        body = zlib.decompress(body)
+                        print(f'[attachment] decompressed deflate response from {attachment_url}', flush=True)
+                    except Exception as de:
+                        print(f'[attachment] WARNING: failed to inflate response from {attachment_url}: {de}', flush=True)
+
+                # Sanity-check: if Content-Type claims an image but the body
+                # doesn't start with a known image magic, log a warning. The
+                # response is still forwarded so debugging in the browser stays
+                # possible, but the operator gets a clear signal in the console.
+                declared_image = content_type.lower().startswith('image/')
+                magic = body[:16]
+                looks_like_image = (
+                    body.startswith(b'\x89PNG\r\n\x1a\n')
+                    or body.startswith(b'\xff\xd8\xff')
+                    or body.startswith(b'GIF8')
+                    or body.startswith(b'BM')  # BMP
+                    or body[:4] == b'RIFF'    # WebP container
+                    or body.startswith(b'<svg') or body.startswith(b'<?xml')
+                )
+                if declared_image and not looks_like_image:
+                    magic_hex = ' '.join(f'{b:02x}' for b in magic)
+                    preview = body[:200].decode('utf-8', errors='replace')
+                    print(
+                        f'[attachment] WARNING: response declared {content_type} but body does not look like an image '
+                        f'(url={attachment_url}, {len(body)} bytes, magic={magic_hex}, preview={preview!r})',
+                        flush=True,
+                    )
 
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
-                self.send_header('Content-Length', len(image_data))
+                self.send_header('Content-Length', len(body))
                 self.end_headers()
-                self.wfile.write(image_data)
+                self.wfile.write(body)
 
         except urllib.error.HTTPError as e:
-            body_preview = ''
-            try:
-                body_preview = e.read(500).decode('utf-8', errors='replace')
-            except Exception:
-                pass
-            print(f'[attachment] <- HTTPError {e.code} {e.reason} for {attachment_url}', flush=True)
-            print(f'[attachment]    response headers: {dict(e.headers) if e.headers else {}}', flush=True)
-            print(f'[attachment]    body preview: {body_preview!r}', flush=True)
             self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
         except urllib.error.URLError as e:
-            print(f'[attachment] <- URLError {e.reason} for {attachment_url}', flush=True)
             self.send_error(502, f'Failed to connect to Azure DevOps: {e.reason}')
         except Exception as e:
-            print(f'[attachment] <- Exception {type(e).__name__}: {e} for {attachment_url}', flush=True)
             self.send_error(500, f'Proxy error: {str(e)}')
 
     def handle_identity_resolve_proxy(self):
