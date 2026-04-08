@@ -563,12 +563,29 @@ function attachImagePaste(textarea) {
     });
 }
 
-// Proxy ADO attachment images through the local server (they require PAT auth)
+// Proxy ADO attachment images through the local server (they require PAT auth).
+// The cache stores the in-flight Promise (not just the resolved blob URL) so
+// concurrent loads of the same image — e.g. the same comment rendered both in
+// the Overview thread list and in the inline diff thread, or a re-render that
+// happens before the first fetch resolves — share a single proxy request.
 const attachmentBlobCache = new Map();
 
 function isADOAttachmentUrl(src) {
     const serverUrl = currentConfig?.serverUrl || ADOConfig.get()?.serverUrl;
     return PRThreadCrudUtils.isADOAttachmentUrl(src, serverUrl);
+}
+
+function fetchAttachmentBlobUrl(src) {
+    const config = currentConfig || ADOConfig.get();
+    if (!config?.pat) return Promise.resolve(null);
+
+    return fetch(`/attachment?url=${encodeURIComponent(src)}`, {
+        headers: { 'X-ADO-PAT': config.pat }
+    }).then(async response => {
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+    });
 }
 
 async function loadAttachmentImage(img) {
@@ -580,30 +597,23 @@ async function loadAttachmentImage(img) {
     if (!src) return;
     if (!dataSrc && !isADOAttachmentUrl(src)) return;
 
-    if (attachmentBlobCache.has(src)) {
-        img.src = attachmentBlobCache.get(src);
-        img.removeAttribute('data-ado-src');
-        return;
-    }
-
-    try {
-        const config = currentConfig || ADOConfig.get();
-        if (!config?.pat) return;
-
-        const response = await fetch(`/attachment?url=${encodeURIComponent(src)}`, {
-            headers: { 'X-ADO-PAT': config.pat }
+    let cached = attachmentBlobCache.get(src);
+    if (!cached) {
+        // Cache the Promise immediately so concurrent callers join this fetch
+        // instead of firing duplicate requests.
+        cached = fetchAttachmentBlobUrl(src).catch(e => {
+            // On failure, evict so a later attempt can retry.
+            attachmentBlobCache.delete(src);
+            console.warn('Failed to load attachment image:', e);
+            return null;
         });
-
-        if (response.ok) {
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            attachmentBlobCache.set(src, blobUrl);
-            img.src = blobUrl;
-            img.removeAttribute('data-ado-src');
-        }
-    } catch (e) {
-        console.warn('Failed to load attachment image:', e);
+        attachmentBlobCache.set(src, cached);
     }
+
+    const blobUrl = await cached;
+    if (!blobUrl) return;
+    img.src = blobUrl;
+    img.removeAttribute('data-ado-src');
 }
 
 const attachmentImageObserver = new MutationObserver(mutations => {

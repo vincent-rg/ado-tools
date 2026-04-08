@@ -129,7 +129,15 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, f'Proxy error: {str(e)}')
 
     def handle_attachment_proxy(self):
-        """Proxy ADO PR attachment image requests with PAT authentication"""
+        """Proxy ADO PR attachment image requests with PAT authentication.
+
+        On self-hosted Azure DevOps Server, attachment responses can come back
+        gzip-compressed even when the client doesn't advertise it. We force
+        Accept-Encoding: identity, but also defensively decompress if the body
+        still arrives compressed, and warn loudly if the bytes don't look like
+        the declared image type — otherwise the browser would silently render
+        a broken image with no clue why.
+        """
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
 
@@ -144,16 +152,60 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
             auth_string = base64.b64encode(f":{pat}".encode()).decode()
             req = urllib.request.Request(attachment_url)
             req.add_header('Authorization', f'Basic {auth_string}')
+            req.add_header('Accept', 'application/octet-stream, image/*, */*')
+            req.add_header('Accept-Encoding', 'identity')
 
             with urllib.request.urlopen(req, timeout=10) as response:
-                image_data = response.read()
+                body = response.read()
                 content_type = response.headers.get('Content-Type', 'application/octet-stream')
+                content_encoding = (response.headers.get('Content-Encoding') or '').lower().strip()
+
+                # Defensive decompression: some on-prem ADO instances gzip even
+                # when we asked for identity. Detect by Content-Encoding header
+                # or by gzip magic bytes (1f 8b).
+                if content_encoding == 'gzip' or body[:2] == b'\x1f\x8b':
+                    try:
+                        import gzip
+                        body = gzip.decompress(body)
+                        print(f'[attachment] decompressed gzip response from {attachment_url}', flush=True)
+                    except Exception as de:
+                        print(f'[attachment] WARNING: failed to gunzip response from {attachment_url}: {de}', flush=True)
+                elif content_encoding == 'deflate':
+                    try:
+                        import zlib
+                        body = zlib.decompress(body)
+                        print(f'[attachment] decompressed deflate response from {attachment_url}', flush=True)
+                    except Exception as de:
+                        print(f'[attachment] WARNING: failed to inflate response from {attachment_url}: {de}', flush=True)
+
+                # Sanity-check: if Content-Type claims an image but the body
+                # doesn't start with a known image magic, log a warning. The
+                # response is still forwarded so debugging in the browser stays
+                # possible, but the operator gets a clear signal in the console.
+                declared_image = content_type.lower().startswith('image/')
+                magic = body[:16]
+                looks_like_image = (
+                    body.startswith(b'\x89PNG\r\n\x1a\n')
+                    or body.startswith(b'\xff\xd8\xff')
+                    or body.startswith(b'GIF8')
+                    or body.startswith(b'BM')  # BMP
+                    or body[:4] == b'RIFF'    # WebP container
+                    or body.startswith(b'<svg') or body.startswith(b'<?xml')
+                )
+                if declared_image and not looks_like_image:
+                    magic_hex = ' '.join(f'{b:02x}' for b in magic)
+                    preview = body[:200].decode('utf-8', errors='replace')
+                    print(
+                        f'[attachment] WARNING: response declared {content_type} but body does not look like an image '
+                        f'(url={attachment_url}, {len(body)} bytes, magic={magic_hex}, preview={preview!r})',
+                        flush=True,
+                    )
 
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
-                self.send_header('Content-Length', len(image_data))
+                self.send_header('Content-Length', len(body))
                 self.end_headers()
-                self.wfile.write(image_data)
+                self.wfile.write(body)
 
         except urllib.error.HTTPError as e:
             self.send_error(e.code, f'Azure DevOps returned: {e.reason}')
