@@ -331,7 +331,7 @@ function updatePRRowInPlace(prKey, freshPR) {
         // Re-apply cached thread badges immediately (getReviewerAvatarsHtml only renders vote badges)
         const cached = prCommentCounts[prKey];
         if (cached && cached.authorCounts) {
-            updateReviewerThreadBadges(prKey, cached.authorCounts);
+            updateReviewerThreadBadges(prKey, cached.authorCounts, cached.unreadAuthors || new Set());
         }
         AvatarLoader.loadPending();
     }

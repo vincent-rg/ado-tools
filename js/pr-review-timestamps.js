@@ -72,6 +72,26 @@ const PRReviewTimestamps = (() => {
             return _cache;
         },
 
+        /**
+         * Batch-load all review timestamps for a server/org across every PR.
+         * Returns a Map<prId (string), Map<threadId (number), timestamp (number)>>.
+         * Does not touch the per-PR internal cache.
+         */
+        async loadAllForOrg(serverUrl, org) {
+            const qs = new URLSearchParams({ serverUrl, org });
+            const res = await fetch(`/review-timestamps?${qs}`);
+            if (!res.ok) throw new Error(`review-timestamps loadAllForOrg failed: ${res.status}`);
+            const rows = await res.json();
+            const byPr = new Map();
+            for (const r of rows) {
+                const prId = String(r.prId);
+                let inner = byPr.get(prId);
+                if (!inner) { inner = new Map(); byPr.set(prId, inner); }
+                inner.set(Number(r.threadId), Number(r.timestamp));
+            }
+            return byPr;
+        },
+
         // ----------------------------------------------------------------
         // Pure query helpers — accept reviewTimestamps as an argument so
         // they are fully testable without touching the internal cache.

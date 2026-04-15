@@ -313,27 +313,39 @@ class ADOHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def handle_review_timestamps_get(self):
-        """Return all review timestamps for a PR."""
+        """Return review timestamps. With prId, returns rows for that PR.
+        Without prId, returns rows for every PR under serverUrl/org with prId field."""
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
         server_url = params.get('serverUrl', [None])[0]
         org = params.get('org', [None])[0]
         pr_id = params.get('prId', [None])[0]
-        if not server_url or not org or not pr_id:
-            self.send_error(400, 'Missing required parameters: serverUrl, org, prId')
+        if not server_url or not org:
+            self.send_error(400, 'Missing required parameters: serverUrl, org')
             return
         with _db_lock:
             conn = _get_db()
             try:
-                rows = conn.execute(
-                    'SELECT thread_id, timestamp FROM review_timestamps '
-                    'WHERE server_url=? AND org=? AND pr_id=?',
-                    (server_url, org, pr_id)
-                ).fetchall()
+                if pr_id:
+                    rows = conn.execute(
+                        'SELECT thread_id, timestamp FROM review_timestamps '
+                        'WHERE server_url=? AND org=? AND pr_id=?',
+                        (server_url, org, pr_id)
+                    ).fetchall()
+                    result = json.dumps([{'threadId': int(r['thread_id']), 'timestamp': r['timestamp']}
+                                          for r in rows]).encode()
+                else:
+                    rows = conn.execute(
+                        'SELECT pr_id, thread_id, timestamp FROM review_timestamps '
+                        'WHERE server_url=? AND org=?',
+                        (server_url, org)
+                    ).fetchall()
+                    result = json.dumps([{'prId': str(r['pr_id']),
+                                          'threadId': int(r['thread_id']),
+                                          'timestamp': r['timestamp']}
+                                          for r in rows]).encode()
             finally:
                 conn.close()
-        result = json.dumps([{'threadId': int(r['thread_id']), 'timestamp': r['timestamp']}
-                              for r in rows]).encode()
         self._send_json(result)
 
     def handle_review_timestamps_post(self):

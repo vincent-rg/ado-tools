@@ -35,6 +35,11 @@ globalThis.ChecksFormatter = {
 globalThis.ADOSearch = { normalize: vi.fn((s) => s?.toLowerCase() || '') };
 globalThis.PRListUtils = { getPRKey: (pr) => `${pr._project}/${pr._repo.id}/${pr.pullRequestId}` };
 
+const { default: PRReviewTimestamps } = await import('../js/pr-review-timestamps.js');
+globalThis.PRReviewTimestamps = PRReviewTimestamps;
+globalThis.currentUserId = null;
+globalThis.allReviewTimestamps = new Map();
+
 globalThis.getSortedPRs = vi.fn(() => globalThis.allPRs);
 globalThis.getPRKey = (pr) => PRListUtils.getPRKey(pr);
 globalThis.isUserActivelyInteracting = vi.fn(() => false);
@@ -50,6 +55,7 @@ globalThis.document = {
 const {
     generateStatusIndicatorsHtml,
     buildCommentFetchQueue,
+    computeUnreadAuthorIds,
 } = await import('../js/pr-list-fetch.js');
 
 const makePR = (id, project = 'Proj', repoId = 'r1') => ({
@@ -259,6 +265,91 @@ describe('pr-list-fetch', () => {
             const queue = buildCommentFetchQueue();
             const commentFilter = queue.filter(q => q.reason === 'comment-filter');
             expect(commentFilter).toHaveLength(7); // 10 - 3 visible
+        });
+    });
+
+    describe('computeUnreadAuthorIds', () => {
+        const ME = 'me';
+        const T_OLD = 1_000_000;
+        const T_NEW = 2_000_000;
+        const ISO_OLD = new Date(T_OLD).toISOString();
+        const ISO_NEW = new Date(T_NEW).toISOString();
+
+        const makeThread = (id, authorId, publishedDate, { commentType = 'text' } = {}) => ({
+            id,
+            status: 'active',
+            comments: [
+                { author: { id: authorId }, commentType, publishedDate, isDeleted: false },
+            ],
+        });
+
+        beforeEach(() => {
+            globalThis.currentUserId = ME;
+            globalThis.allReviewTimestamps = new Map();
+        });
+
+        it('returns an empty set when there are no active threads', () => {
+            const result = computeUnreadAuthorIds(makePR(1), []);
+            expect(result.size).toBe(0);
+        });
+
+        it('marks author as unread when no review timestamp exists for the thread', () => {
+            const thread = makeThread(10, 'alice', ISO_OLD);
+            const result = computeUnreadAuthorIds(makePR(1), [thread]);
+            expect(result.has('alice')).toBe(true);
+        });
+
+        it('does not mark author as unread when all their comments are at or before the timestamp', () => {
+            const thread = makeThread(10, 'alice', ISO_OLD);
+            globalThis.allReviewTimestamps.set('1', new Map([[10, T_NEW]]));
+            const result = computeUnreadAuthorIds(makePR(1), [thread]);
+            expect(result.has('alice')).toBe(false);
+        });
+
+        it('marks author as unread when a comment is newer than the timestamp', () => {
+            const thread = makeThread(10, 'alice', ISO_NEW);
+            globalThis.allReviewTimestamps.set('1', new Map([[10, T_OLD]]));
+            const result = computeUnreadAuthorIds(makePR(1), [thread]);
+            expect(result.has('alice')).toBe(true);
+        });
+
+        it('skips threads started by the current user', () => {
+            const thread = makeThread(10, ME, ISO_NEW);
+            const result = computeUnreadAuthorIds(makePR(1), [thread]);
+            expect(result.has(ME)).toBe(false);
+            expect(result.size).toBe(0);
+        });
+
+        it('skips system/codeChange threads', () => {
+            const t1 = makeThread(10, 'alice', ISO_NEW, { commentType: 'system' });
+            const t2 = makeThread(11, 'bob', ISO_NEW, { commentType: 'codeChange' });
+            const result = computeUnreadAuthorIds(makePR(1), [t1, t2]);
+            expect(result.size).toBe(0);
+        });
+
+        it('uses PR-specific timestamps (no cross-PR bleed)', () => {
+            const thread = makeThread(10, 'alice', ISO_NEW);
+            // Timestamp set for a different PR should not apply
+            globalThis.allReviewTimestamps.set('2', new Map([[10, T_NEW]]));
+            const result = computeUnreadAuthorIds(makePR(1), [thread]);
+            expect(result.has('alice')).toBe(true);
+        });
+
+        it('aggregates multiple authors across multiple threads', () => {
+            const threads = [
+                makeThread(10, 'alice', ISO_NEW),
+                makeThread(11, 'bob', ISO_NEW),
+                makeThread(12, 'carol', ISO_OLD),
+            ];
+            globalThis.allReviewTimestamps.set('1', new Map([
+                [10, T_OLD], // alice: unread (comment newer than ts)
+                [11, T_NEW], // bob: reviewed
+                // carol: no ts → unread
+            ]));
+            const result = computeUnreadAuthorIds(makePR(1), threads);
+            expect(result.has('alice')).toBe(true);
+            expect(result.has('bob')).toBe(false);
+            expect(result.has('carol')).toBe(true);
         });
     });
 });

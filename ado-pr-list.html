@@ -1071,9 +1071,34 @@
             z-index: 5;
         }
 
+        /* Unread-mail badge — shown on authors of threads with comments the current user has not reviewed */
+        .reviewer-mail-badge {
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: #0078d4;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .reviewer-mail-badge svg {
+            width: 11px;
+            height: 11px;
+            fill: white;
+        }
+
         /* Hover effects for badges */
         .avatar-wrapper:hover .reviewer-status-badge,
-        .avatar-wrapper:hover .reviewer-thread-badge {
+        .avatar-wrapper:hover .reviewer-thread-badge,
+        .avatar-wrapper:hover .reviewer-mail-badge {
             transform: scale(1.15);
             z-index: 11;
         }
@@ -1252,6 +1277,7 @@
     </div>
 
     <script src="js/common.js"></script>
+    <script src="js/pr-review-timestamps.js"></script>
     <script src="js/pr-list-utils.js"></script>
     <script src="js/pr-list-columns.js"></script>
     <script src="js/pr-list-display.js"></script>
@@ -1269,6 +1295,8 @@
         let currentSort = 'id';
         let currentOrder = 'desc';
         let prCommentCounts = {}; // Cache for active comment counts: { prKey: { count: N, lastFetch: timestamp, lastAccess: timestamp } }
+        let currentUserId = null; // Populated on DOMContentLoaded
+        let allReviewTimestamps = new Map(); // Map<prId(string), Map<threadId(number), timestamp(number)>>
         let prChecks = {}; // Cache for PR checks (statuses, policies, conflicts): { prKey: { data: {...}, lastFetch: timestamp } }
         let prIterationCounts = {}; // Cache for iteration counts: { prKey: { count: N, lastFetch: timestamp } }
         let isFetchingComments = false;
@@ -1308,6 +1336,17 @@
             // Load saved column widths and visibility
             loadColumnWidths();
             loadColumnVisibility();
+
+            // Load current user id and all review timestamps (used to mark unread threads)
+            Promise.all([
+                ADOAPI.getCurrentUser(config).catch(() => null),
+                PRReviewTimestamps.loadAllForOrg(config.serverUrl, config.organization).catch(() => new Map())
+            ]).then(([user, tsMap]) => {
+                currentUserId = user?.id || null;
+                allReviewTimestamps = tsMap;
+                // Refresh badges for any PRs already fetched
+                if (typeof refreshUnreadMailBadges === 'function') refreshUnreadMailBadges();
+            });
 
             await loadProjects();
             await restoreFiltersFromURL();

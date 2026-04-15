@@ -311,10 +311,15 @@ async function fetchPRCommentCount(config, pr, forceRefresh = false) {
             }
         });
 
+        // Compute set of thread authors with at least one unread comment in a thread they started.
+        // Uses global currentUserId + allReviewTimestamps (populated in ado-pr-list.html).
+        const unreadAuthors = computeUnreadAuthorIds(pr, activeThreads);
+
         prCommentCounts[prKey] = {
             count: activeCount,
             authorCounts: authorCounts,
             authorObjects: authorObjects,
+            unreadAuthors: unreadAuthors,
             lastFetch: now,
             lastAccess: now
         };
@@ -343,8 +348,8 @@ async function fetchPRCommentCount(config, pr, forceRefresh = false) {
 
         updatePRCommentDisplay(prKey, activeCount);
         updatePRUpdatesDisplay(prKey, iterationCount);
-        updateReviewerThreadBadges(prKey, authorCounts);
-        updateOtherAuthorsDisplay(prKey, pr.reviewers, authorObjects, authorCounts);
+        updateReviewerThreadBadges(prKey, authorCounts, unreadAuthors);
+        updateOtherAuthorsDisplay(prKey, pr.reviewers, authorObjects, authorCounts, unreadAuthors);
     } catch (error) {
         // On error, mark as fetched with 0 to avoid retrying
         prCommentCounts[prKey] = {
@@ -356,6 +361,59 @@ async function fetchPRCommentCount(config, pr, forceRefresh = false) {
         };
         updatePRCommentDisplay(prKey, 0);
     }
+}
+
+// Envelope icon used for the "unreviewed comments" badge
+const MAIL_BADGE_HTML = '<span class="reviewer-mail-badge" title="Unreviewed comments in threads this user started"><svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M2 3h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm0 1v1.2l6 3.8 6-3.8V4H2zm0 2.4V12h12V6.4l-6 3.8-6-3.8z"/></svg></span>';
+
+/**
+ * Given a PR and its active threads, returns a Set of author IDs for whom the
+ * current user has not yet reviewed all comments in the thread(s) they started.
+ * Relies on globals currentUserId and allReviewTimestamps.
+ */
+function computeUnreadAuthorIds(pr, activeThreads) {
+    const unread = new Set();
+    if (typeof PRReviewTimestamps === 'undefined') return unread;
+    const prId = String(pr.pullRequestId);
+    const tsMap = (typeof allReviewTimestamps !== 'undefined' && allReviewTimestamps.get(prId)) || new Map();
+    const userId = typeof currentUserId !== 'undefined' ? currentUserId : null;
+
+    activeThreads.forEach(thread => {
+        const firstComment = thread.comments && thread.comments[0];
+        const ct = firstComment?.commentType;
+        const isRealComment = ct === 1 || ct === 'text';
+        const authorId = firstComment?.author?.id;
+        if (!isRealComment || !authorId) return;
+        if (userId && authorId === userId) return; // skip threads started by me
+        if (PRReviewTimestamps.threadHasUnread(thread, tsMap, userId)) {
+            unread.add(authorId);
+        }
+    });
+    return unread;
+}
+
+/**
+ * Refresh mail badges on all currently visible rows using cached thread data.
+ * Called after review timestamps or currentUserId are (re)loaded.
+ */
+function refreshUnreadMailBadges() {
+    // Rebuild unreadAuthors per cached PR so badges update without a full re-fetch.
+    // We only need thread data; since we don't keep the full thread list in cache,
+    // we just re-render badges from existing authorCounts + cached threads via the
+    // live path the next time fetchPRCommentCount runs. For now, force a light-touch
+    // re-application of stored unreadAuthors if present.
+    const rows = document.querySelectorAll('tr[data-pr-key]');
+    rows.forEach(row => {
+        const prKey = row.dataset.prKey;
+        const cached = prCommentCounts[prKey];
+        if (!cached) return;
+        const pr = allPRs.find(p => `${p._project}/${p._repo.id}/${p.pullRequestId}` === prKey);
+        if (!pr) return;
+        updateReviewerThreadBadges(prKey, cached.authorCounts || {}, cached.unreadAuthors || new Set());
+        if (cached.authorObjects) {
+            updateOtherAuthorsDisplay(prKey, pr.reviewers, cached.authorObjects, cached.authorCounts || {}, cached.unreadAuthors || new Set());
+        }
+    });
 }
 
 function updatePRCommentDisplay(prKey, count) {
@@ -386,20 +444,18 @@ function updatePRUpdatesDisplay(prKey, count) {
     }
 }
 
-function updateReviewerThreadBadges(prKey, authorCounts) {
+function updateReviewerThreadBadges(prKey, authorCounts, unreadAuthors) {
     const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
     if (!row) return;
+    const unread = unreadAuthors || new Set();
 
     // Find all reviewer avatar wrappers in this row
     const avatarWrappers = row.querySelectorAll('.avatar-wrapper[data-user-id]');
     avatarWrappers.forEach(wrapper => {
         const reviewerId = wrapper.dataset.userId;
 
-        // Remove existing thread badge if any
-        const existingBadge = wrapper.querySelector('.reviewer-thread-badge');
-        if (existingBadge) {
-            existingBadge.remove();
-        }
+        // Remove existing thread/mail badges if any
+        wrapper.querySelectorAll('.reviewer-thread-badge, .reviewer-mail-badge').forEach(el => el.remove());
 
         // Add badge if this reviewer has active threads
         const threadCount = authorCounts[reviewerId];
@@ -410,10 +466,16 @@ function updateReviewerThreadBadges(prKey, authorCounts) {
             badge.title = `${threadCount} active thread${threadCount > 1 ? 's' : ''} started`;
             wrapper.appendChild(badge);
         }
+
+        // Add mail badge if this reviewer has unreviewed comments
+        if (unread.has(reviewerId)) {
+            wrapper.insertAdjacentHTML('beforeend', MAIL_BADGE_HTML);
+        }
     });
 }
 
-function updateOtherAuthorsDisplay(prKey, reviewers, authorObjects, authorCounts) {
+function updateOtherAuthorsDisplay(prKey, reviewers, authorObjects, authorCounts, unreadAuthors) {
+    const unread = unreadAuthors || new Set();
     const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
     if (!row) return;
 
@@ -460,7 +522,10 @@ function updateOtherAuthorsDisplay(prKey, reviewers, authorObjects, authorCounts
             badgeHtml = `<span class="reviewer-thread-badge">${threadCount}</span>`;
         }
 
-        return `<div class="avatar-wrapper" data-user-id="${author.id || ''}">${avatarHtml}${badgeHtml}</div>`;
+        // Mail badge for unreviewed comments
+        const mailHtml = author.id && unread.has(author.id) ? MAIL_BADGE_HTML : '';
+
+        return `<div class="avatar-wrapper" data-user-id="${author.id || ''}">${avatarHtml}${badgeHtml}${mailHtml}</div>`;
     }).join('');
 
     cell.innerHTML = `<div class="avatars-container">${avatarsHtml}</div>`;
@@ -489,12 +554,13 @@ function restoreDynamicBadges() {
         const pr = prByKey[prKey];
 
         if (cachedData && cachedData.authorCounts) {
+            const unread = cachedData.unreadAuthors || new Set();
             // Restore thread badges on reviewer avatars
-            updateReviewerThreadBadges(prKey, cachedData.authorCounts);
+            updateReviewerThreadBadges(prKey, cachedData.authorCounts, unread);
 
             // Restore other authors display
             if (pr && cachedData.authorObjects) {
-                updateOtherAuthorsDisplay(prKey, pr.reviewers, cachedData.authorObjects, cachedData.authorCounts);
+                updateOtherAuthorsDisplay(prKey, pr.reviewers, cachedData.authorObjects, cachedData.authorCounts, unread);
             }
         }
     });
@@ -692,5 +758,5 @@ function generateStatusIndicatorsHtml(prKey) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { generateStatusIndicatorsHtml, buildCommentFetchQueue, updatePRCommentDisplay, updatePRUpdatesDisplay };
+    module.exports = { generateStatusIndicatorsHtml, buildCommentFetchQueue, updatePRCommentDisplay, updatePRUpdatesDisplay, computeUnreadAuthorIds };
 }
