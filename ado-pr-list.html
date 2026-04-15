@@ -1310,6 +1310,7 @@
         let lastUserInteraction = Date.now();
         let lastBackgroundPoll = 0; // Timestamp of last background poll
         let isBackgroundPolling = false;
+        let isLoadingAllPRs = false; // True during refreshPRs / initial bulk load; suppresses background poll diff
         let liveUpdatesEnabled = localStorage.getItem('prListLiveUpdates') !== 'false'; // default: true
         let newPRsDetected = [];
         let newFilterMatchesDetected = [];
@@ -2083,21 +2084,26 @@
         }
 
         async function refreshPRs() {
-            // Clear cache and reload all selected repos
-            loadedRepoKeys.clear();
-            prCommentCounts = {};
-            allPRs = [];
-            allAuthors = new Set();
-            allReviewers = new Set();
-            allCommentAuthors = new Set();
+            isLoadingAllPRs = true;
+            try {
+                // Clear cache and reload all selected repos
+                loadedRepoKeys.clear();
+                prCommentCounts = {};
+                allPRs = [];
+                allAuthors = new Set();
+                allReviewers = new Set();
+                allCommentAuthors = new Set();
 
-            // Clear live update state
-            grayedOutPRKeys.clear();
-            newPRsDetected = [];
-            newFilterMatchesDetected = [];
-            dismissNotification();
+                // Clear live update state
+                grayedOutPRKeys.clear();
+                newPRsDetected = [];
+                newFilterMatchesDetected = [];
+                dismissNotification();
 
-            await loadPRsFromSelection();
+                await loadPRsFromSelection();
+            } finally {
+                isLoadingAllPRs = false;
+            }
         }
 
         function getSelectedProjects() {

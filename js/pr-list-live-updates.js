@@ -125,6 +125,9 @@ async function performBackgroundPoll() {
     if (isBackgroundPolling) {
         return; // Already polling
     }
+    if (typeof isLoadingAllPRs !== 'undefined' && isLoadingAllPRs) {
+        return; // Refresh/initial load in progress; its result is authoritative
+    }
 
     isBackgroundPolling = true;
     console.log('Performing background poll...');
@@ -149,6 +152,11 @@ async function performBackgroundPoll() {
 
         const prResults = await Promise.all(prPromises);
 
+        // If a refresh started while we were fetching, its result is authoritative — discard this poll.
+        if (typeof isLoadingAllPRs !== 'undefined' && isLoadingAllPRs) {
+            return;
+        }
+
         // Build fresh PR list with metadata
         const freshPRs = [];
         prResults.forEach(result => {
@@ -158,6 +166,12 @@ async function performBackgroundPoll() {
                 freshPRs.push(pr);
             });
         });
+
+        // If allPRs is empty there is no meaningful baseline to diff against — a diff here would
+        // flag every fetched PR as "new" and spam the notification banner. Skip detection.
+        if (allPRs.length === 0) {
+            return;
+        }
 
         // Detect changes
         const changes = detectChanges(allPRs, freshPRs);
