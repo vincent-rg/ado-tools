@@ -1942,6 +1942,7 @@
 
                 // Start background polling after successful load
                 startBackgroundPolling();
+                updateLiveIndicator(liveUpdatesEnabled);
 
             } catch (error) {
                 ADOUI.showError('results', error.message);
