@@ -113,7 +113,7 @@ function updateLiveIndicator(isActive, isUpdating = false) {
         indicator.style.display = 'inline-flex';
         indicator.classList.add('updating');
         dot.classList.add('updating');
-        text.textContent = 'Updating\u2026';
+        text.textContent = 'Updating';
     } else if (isActive && loadedRepoKeys.size > 0) {
         indicator.style.display = 'inline-flex';
         indicator.classList.add('active');
