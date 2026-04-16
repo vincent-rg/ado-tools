@@ -2064,9 +2064,9 @@
 
             const timeAgo = oldestTimestamp ? getTimeAgo(oldestTimestamp) : '';
             const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(oldest: ${timeAgo})</span>` : '';
-            const refreshButton = oldestTimestamp ? `<button onclick="refreshPRs()" style="margin-left: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; font-size: 12px; color: #0078d4;" title="Refresh PRs">↻ Refresh</button>` : '';
+            const reloadButton = oldestTimestamp ? `<button onclick="refreshPRs()" style="margin-right: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; font-size: 12px; color: #0078d4;" title="Reload PRs">↻ Reload</button>` : '';
 
-            prSourceDisplay.innerHTML = `<strong>Loaded from:</strong> ${repoList}${timeDisplay}${refreshButton}`;
+            prSourceDisplay.innerHTML = `${reloadButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}`;
             prSourceDisplay.classList.add('show');
 
             // Start updating time display if not already running
