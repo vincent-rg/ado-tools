@@ -115,7 +115,7 @@ export const test = base.extend({
                 // Review timestamps (local server endpoint)
                 {
                     pattern: /\/review-timestamps/,
-                    response: overrides.reviewTimestamps ?? {},
+                    response: overrides.reviewTimestamps ?? [],
                 },
                 // Avatar proxy (local server endpoint)
                 {

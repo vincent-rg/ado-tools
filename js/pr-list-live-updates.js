@@ -8,10 +8,11 @@
  *   newPRsDetected, newFilterMatchesDetected, getSelectedRepos, getPRKey,
  *   prMatchesFilters, getCurrentFilters, displayPRs, updateSelectedFilters, updateURL,
  *   updatePRSourceDisplay, processPriorityQueue, getReviewerAvatarsHtml,
- *   updateReviewerThreadBadges, hasPRChanged
+ *   updateReviewerThreadBadges, hasPRChanged, ADOConfig, PRReviewTimestamps
  * Globals written: liveUpdatesEnabled, backgroundPollInterval, lastUserInteraction,
  *   lastBackgroundPoll, isBackgroundPolling, allPRs, filteredPRs, allAuthors,
- *   allReviewers, allCommentAuthors, grayedOutPRKeys, newPRsDetected, newFilterMatchesDetected
+ *   allReviewers, allCommentAuthors, allReviewTimestamps, grayedOutPRKeys,
+ *   newPRsDetected, newFilterMatchesDetected
  */
 
 // Polling constants
@@ -99,22 +100,28 @@ function stopBackgroundPolling() {
     }
 }
 
-function updateLiveIndicator(isActive) {
+function updateLiveIndicator(isActive, isUpdating = false) {
     const indicator = document.getElementById('liveIndicator');
     const dot = indicator.querySelector('.live-dot');
     const text = document.getElementById('liveIndicatorText');
 
-    if (isActive && loadedRepoKeys.size > 0) {
+    // Clear all states
+    indicator.classList.remove('active', 'paused', 'updating');
+    dot.classList.remove('active', 'updating');
+
+    if (isUpdating && loadedRepoKeys.size > 0) {
+        indicator.style.display = 'inline-flex';
+        indicator.classList.add('updating');
+        dot.classList.add('updating');
+        text.textContent = 'Updating\u2026';
+    } else if (isActive && loadedRepoKeys.size > 0) {
         indicator.style.display = 'inline-flex';
         indicator.classList.add('active');
-        indicator.classList.remove('paused');
         dot.classList.add('active');
         text.textContent = 'Live';
     } else if (loadedRepoKeys.size > 0) {
         indicator.style.display = 'inline-flex';
-        indicator.classList.remove('active');
         indicator.classList.add('paused');
-        dot.classList.remove('active');
         text.textContent = 'Paused';
     } else {
         indicator.style.display = 'none';
@@ -130,6 +137,7 @@ async function performBackgroundPoll() {
     }
 
     isBackgroundPolling = true;
+    updateLiveIndicator(true, true);
     console.log('Performing background poll...');
 
     try {
@@ -189,6 +197,12 @@ async function performBackgroundPoll() {
 
         updatePRSourceDisplay();
 
+        // Reload review timestamps from DB so mail badges reflect changes
+        // made while viewing PRs in other tabs.
+        try {
+            allReviewTimestamps = await PRReviewTimestamps.loadAllForOrg(config.serverUrl, config.organization);
+        } catch (e) { /* non-critical — stale badges are tolerable */ }
+
         // Refresh comment counts using priority queue (force refresh for visible PRs)
         await processPriorityQueue(true);
 
@@ -199,6 +213,7 @@ async function performBackgroundPoll() {
         console.error('Background poll error:', error);
     } finally {
         isBackgroundPolling = false;
+        updateLiveIndicator(liveUpdatesEnabled);
     }
 }
 

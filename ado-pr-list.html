@@ -925,6 +925,19 @@
             animation: rowHighlight 2s ease;
         }
 
+        /* Per-PR fetch spinner (shown next to #ID while loading details) */
+        .pr-fetch-spinner {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: 1.5px solid rgba(0, 120, 212, 0.2);
+            border-top-color: #0078d4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+
         /* Live update indicator */
         .live-indicator {
             display: inline-flex;
@@ -966,6 +979,22 @@
             50% {
                 opacity: 0.4;
             }
+        }
+
+        .live-indicator.updating {
+            color: #0078d4;
+            border-color: #0078d4;
+        }
+
+        .live-dot.updating {
+            background: #0078d4;
+            border-radius: 2px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
         }
 
         /* Live updates toggle */
@@ -2099,6 +2128,12 @@
                 newPRsDetected = [];
                 newFilterMatchesDetected = [];
                 dismissNotification();
+
+                // Reload review timestamps so mail badges reflect changes from other tabs
+                const config = ADOConfig.get();
+                try {
+                    allReviewTimestamps = await PRReviewTimestamps.loadAllForOrg(config.serverUrl, config.organization);
+                } catch (e) { /* non-critical */ }
 
                 await loadPRsFromSelection();
             } finally {

@@ -14,6 +14,23 @@ const BATCH_DELAY_MS = 200;
 const MAX_CALLS_PER_CYCLE = 120;
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
+function markPRFetchingDetails(pr) {
+    const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+    const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+    if (!row) return;
+    const idCell = row.querySelector('td:first-child');
+    if (idCell && !idCell.querySelector('.pr-fetch-spinner')) {
+        idCell.querySelector('a').insertAdjacentHTML('beforeend', '<span class="pr-fetch-spinner"></span>');
+    }
+}
+
+function unmarkPRFetchingDetails(pr) {
+    const prKey = `${pr._project}/${pr._repo.id}/${pr.pullRequestId}`;
+    const row = document.querySelector(`tr[data-pr-key="${prKey}"]`);
+    if (!row) return;
+    row.querySelectorAll('.pr-fetch-spinner').forEach(el => el.remove());
+}
+
 function showFilterProgress(fetched, total) {
     const el = document.getElementById('filterProgress');
     el.style.display = '';
@@ -147,11 +164,13 @@ async function processPriorityQueue(forceRefresh = false) {
 
             // Visible PRs: fetch comments + checks as normal
             if (visibleItems.length > 0) {
+                visibleItems.forEach(item => markPRFetchingDetails(item.pr));
                 const promises = visibleItems.flatMap(item => [
                     fetchPRCommentCount(config, item.pr, forceRefresh),
                     fetchPRChecks(config, item.pr, forceRefresh)
                 ]);
                 await Promise.all(promises);
+                visibleItems.forEach(item => unmarkPRFetchingDetails(item.pr));
             }
 
             // Comment-filter PRs: only fetch comments with higher throughput
@@ -172,10 +191,12 @@ async function processPriorityQueue(forceRefresh = false) {
                     currentBatch.push(commentFilterItems[i].pr);
 
                     if (currentBatch.length >= COMMENT_FILTER_BATCH_SIZE || i === commentFilterItems.length - 1) {
+                        currentBatch.forEach(markPRFetchingDetails);
                         const promises = currentBatch.map(pr =>
                             fetchPRCommentCount(config, pr, forceRefresh)
                         );
                         await Promise.all(promises);
+                        currentBatch.forEach(unmarkPRFetchingDetails);
                         batchCount++;
                         fetched += currentBatch.length;
                         updateFilterProgress(fetched, total);
@@ -224,11 +245,13 @@ async function processPriorityQueue(forceRefresh = false) {
 
             if (isBatchFull || isEndOfPriority) {
                 // Fetch batch concurrently (comments, statuses, and policy evaluations)
+                currentBatch.forEach(markPRFetchingDetails);
                 const promises = currentBatch.flatMap(pr => [
                     fetchPRCommentCount(config, pr, forceRefresh),
                     fetchPRChecks(config, pr, forceRefresh)
                 ]);
                 await Promise.all(promises);
+                currentBatch.forEach(unmarkPRFetchingDetails);
 
                 // Delay between batches (except for last batch)
                 if (i < queue.length - 1 && fetchedCount < MAX_CALLS_PER_CYCLE) {
