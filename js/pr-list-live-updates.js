@@ -331,10 +331,8 @@ async function handleDetectedChanges(changes, freshPRs) {
         }
     }
 
-    // Show notification if needed
-    if ((newPRsDetected.length > 0 || newFilterMatchesDetected.length > 0) && !document.getElementById('notificationBanner').classList.contains('show')) {
-        showNotification();
-    }
+    // Update the source display to show/hide the "Show PR changes" button
+    updatePRSourceDisplay();
 
     // Re-apply filters to update grayed out rows
     if (changes.updatedPRs.length > 0 || changes.removedPRKeys.length > 0) {
@@ -408,32 +406,6 @@ function updateAuthorsAndReviewers() {
     });
 }
 
-function showNotification() {
-    const banner = document.getElementById('notificationBanner');
-    const text = document.getElementById('notificationText');
-
-    let message = '';
-    const parts = [];
-
-    if (newPRsDetected.length > 0) {
-        parts.push(`${newPRsDetected.length} new PR${newPRsDetected.length !== 1 ? 's' : ''} available`);
-    }
-
-    if (newFilterMatchesDetected.length > 0) {
-        parts.push(`${newFilterMatchesDetected.length} PR${newFilterMatchesDetected.length !== 1 ? 's' : ''} now match your filters`);
-    }
-
-    message = parts.join(' • ');
-
-    text.textContent = message;
-    banner.classList.add('show');
-}
-
-function dismissNotification() {
-    const banner = document.getElementById('notificationBanner');
-    banner.classList.remove('show');
-}
-
 function applyLiveUpdates() {
     // Clear grayed out PRs
     grayedOutPRKeys.clear();
@@ -457,11 +429,9 @@ function applyLiveUpdates() {
     newPRsDetected = [];
     newFilterMatchesDetected = [];
 
-    // Dismiss notification
-    dismissNotification();
-
     // Re-apply filters and display
     applyFilters();
+    updatePRSourceDisplay();
 }
 
 // Trigger background poll when tab becomes visible (with cooldown to prevent spam)

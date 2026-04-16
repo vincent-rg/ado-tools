@@ -812,86 +812,6 @@
         }
 
         /* Live update notification banner */
-        .notification-banner {
-            display: none;
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #0078d4;
-            color: white;
-            padding: 12px 16px;
-            border-radius: 0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            z-index: 2000;
-            max-width: 400px;
-            animation: slideIn 0.3s ease;
-        }
-
-        .notification-banner.show {
-            display: block;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(450px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .notification-content {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .notification-icon {
-            font-size: 20px;
-        }
-
-        .notification-text {
-            flex: 1;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
-        .notification-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .notification-btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 0;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .notification-btn-primary {
-            background: white;
-            color: #0078d4;
-        }
-
-        .notification-btn-primary:hover {
-            background: #f9f8f7;
-        }
-
-        .notification-btn-secondary {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-        }
-
-        .notification-btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
         /* Grayed out PR rows */
         .pr-table tbody tr.grayed-out {
             opacity: 0.4;
@@ -1134,20 +1054,6 @@
     </style>
 </head>
 <body>
-    <!-- Notification Banner -->
-    <div id="notificationBanner" class="notification-banner">
-        <div class="notification-content">
-            <span class="notification-icon">🔔</span>
-            <div>
-                <div class="notification-text" id="notificationText"></div>
-                <div class="notification-actions">
-                    <button class="notification-btn notification-btn-primary" onclick="applyLiveUpdates()">Refresh Now</button>
-                    <button class="notification-btn notification-btn-secondary" onclick="dismissNotification()">Dismiss</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="container wide">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0px; padding-top: 8px; padding-bottom: 8px;">
             <div>
@@ -2066,7 +1972,16 @@
             const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(oldest: ${timeAgo})</span>` : '';
             const reloadButton = oldestTimestamp ? `<button onclick="refreshPRs()" style="margin-right: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; font-size: 12px; color: #0078d4;" title="Reload PRs">↻ Reload</button>` : '';
 
-            prSourceDisplay.innerHTML = `${reloadButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}`;
+            // Count pending changes relevant to current filters
+            const filters = getCurrentFilters();
+            const newMatchCount = newPRsDetected.filter(pr => prMatchesFilters(pr, filters)).length
+                + newFilterMatchesDetected.length;
+            const changesCount = newMatchCount + grayedOutPRKeys.size;
+            const changesButton = changesCount > 0
+                ? `<button onclick="applyLiveUpdates()" style="margin-left: 10px; padding: 4px 8px; background: #0078d4; border: 1px solid #0078d4; border-radius: 0; cursor: pointer; font-size: 12px; color: white;" title="Apply pending changes">Show PR changes (${changesCount})</button>`
+                : '';
+
+            prSourceDisplay.innerHTML = `${reloadButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}${changesButton}`;
             prSourceDisplay.classList.add('show');
 
             // Start updating time display if not already running
@@ -2127,7 +2042,6 @@
                 grayedOutPRKeys.clear();
                 newPRsDetected = [];
                 newFilterMatchesDetected = [];
-                dismissNotification();
 
                 // Reload review timestamps so mail badges reflect changes from other tabs
                 const config = ADOConfig.get();
