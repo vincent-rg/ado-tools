@@ -1254,7 +1254,7 @@
             <!-- Main Content -->
             <div class="main-content">
                 <div class="toolbar">
-                    <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="width: auto; padding: 10px 20px;">Load Pull Requests</button>
+                    <button onclick="openLoadPRModal()" class="btn-primary" id="loadButton" style="width: auto; padding: 10px 20px;">Select Repos</button>
                     <div id="liveIndicator" class="live-indicator" style="display: none;">
                         <span class="live-dot"></span>
                         <span id="liveIndicatorText">Live</span>
@@ -2466,7 +2466,7 @@
             const paginationBar = document.getElementById('paginationBar');
 
             if (allPRs.length === 0) {
-                resultsDiv.innerHTML = '<div class="info">No Pull Requests loaded yet. Click "Load Pull Requests" to fetch data.</div>';
+                resultsDiv.innerHTML = '<div class="info">No Pull Requests loaded yet. Click "Select Repos" to get started.</div>';
                 infoBar.innerHTML = '';
                 paginationBar.innerHTML = '';
                 return;
