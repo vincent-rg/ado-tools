@@ -734,6 +734,9 @@ summary:hover {
     margin: 0.3em 0;
     padding-left: 1.5em;
 }
+.md-list .md-list {
+    margin: 0.1em 0;
+}
 .md-task-item {
     list-style: none;
 }

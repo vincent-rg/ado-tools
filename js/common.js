@@ -1282,38 +1282,87 @@ const ADOContent = {
             return createPlaceholder(html) + rest;
         });
 
+        // Helper: build nested list HTML from indented lines
+        function buildNestedList(lines, makeItem, makeListTag, closeTag = '</ul>') {
+            const indents = lines.map(l => {
+                const ws = l.match(/^([ \t]*)/)[1];
+                return ws.replace(/\t/g, '    ').length;
+            });
+            // Normalize: find the set of unique indent levels and map to depth 0, 1, 2, ...
+            const uniqueIndents = [...new Set(indents)].sort((a, b) => a - b);
+            const depthMap = new Map(uniqueIndents.map((ind, i) => [ind, i]));
+            const depths = indents.map(ind => depthMap.get(ind));
+
+            let html = '';
+            let curDepth = -1;
+            for (let i = 0; i < lines.length; i++) {
+                const depth = depths[i];
+                const prevDepth = curDepth;
+                while (curDepth < depth) {
+                    html += makeListTag(i);
+                    curDepth++;
+                }
+                while (curDepth > depth) {
+                    html += `</li>${closeTag}`;
+                    curDepth--;
+                }
+                // Close previous <li> at same level, but not if we just opened a deeper level
+                if (curDepth === depth && i > 0 && prevDepth >= depth) html += '</li>';
+                html += makeItem(lines[i], i);
+            }
+            while (curDepth >= 0) {
+                html += `</li>${closeTag}`;
+                curDepth--;
+            }
+            return html;
+        }
+
         // 4b. Parse task lists (checkboxes): - [ ] unchecked, - [x] checked
         let _cbIdx = 0;
         result = result.replace(/(?:^[ \t]*- \[([ xX])\] .+(?:\n|$))+/gm, (block) => {
-            const items = block.replace(/\n$/, '').split('\n').map(line => {
-                const m = line.match(/^[ \t]*- \[([ xX])\] (.+)/);
-                if (!m) return '';
-                const checked = m[1] !== ' ' ? ' checked' : '';
-                return `<li class="md-task-item"><input type="checkbox"${checked} data-checkbox-index="${_cbIdx++}"> ${m[2]}</li>`;
-            }).join('');
-            return createPlaceholder(`<ul class="md-list">${items}</ul>\n`);
+            const lines = block.replace(/\n$/, '').split('\n').filter(Boolean);
+            const html = buildNestedList(lines,
+                (line) => {
+                    const m = line.match(/^[ \t]*- \[([ xX])\] (.+)/);
+                    if (!m) return '';
+                    const checked = m[1] !== ' ' ? ' checked' : '';
+                    return `<li class="md-task-item"><input type="checkbox"${checked} data-checkbox-index="${_cbIdx++}"> ${m[2]}`;
+                },
+                () => '<ul class="md-list">'
+            );
+            return createPlaceholder(html + '\n');
         });
 
         // 4c. Parse bullet lists (- item, + item, * item)
         result = result.replace(/(?:^[ \t]*[-+*] (?!\[[ xX]\]).+(?:\n|$))+/gm, (block) => {
-            const items = block.replace(/\n$/, '').split('\n').map(line => {
-                const m = line.match(/^[ \t]*[-+*] (.+)/);
-                return m ? `<li>${m[1]}</li>` : '';
-            }).join('');
-            return createPlaceholder(`<ul class="md-list">${items}</ul>\n`);
+            const lines = block.replace(/\n$/, '').split('\n').filter(Boolean);
+            const html = buildNestedList(lines,
+                (line) => {
+                    const m = line.match(/^[ \t]*[-+*] (.+)/);
+                    return m ? `<li>${m[1]}` : '';
+                },
+                () => '<ul class="md-list">'
+            );
+            return createPlaceholder(html + '\n');
         });
 
         // 4d. Parse numbered lists (1. item, 2. item)
         result = result.replace(/(?:^[ \t]*\d+\. .+(?:\n|$))+/gm, (block) => {
-            const lines = block.replace(/\n$/, '').split('\n');
-            const firstMatch = lines[0].match(/^[ \t]*(\d+)\. /);
-            const startNum = firstMatch ? parseInt(firstMatch[1], 10) : 1;
-            const items = lines.map(line => {
-                const m = line.match(/^[ \t]*\d+\. (.+)/);
-                return m ? `<li>${m[1]}</li>` : '';
-            }).join('');
-            const startAttr = startNum !== 1 ? ` start="${startNum}"` : '';
-            return createPlaceholder(`<ol class="md-list"${startAttr}>${items}</ol>\n`);
+            const lines = block.replace(/\n$/, '').split('\n').filter(Boolean);
+            const html = buildNestedList(lines,
+                (line) => {
+                    const m = line.match(/^[ \t]*\d+\. (.+)/);
+                    return m ? `<li>${m[1]}` : '';
+                },
+                (i) => {
+                    const m = lines[i].match(/^[ \t]*(\d+)\. /);
+                    const startNum = m ? parseInt(m[1], 10) : 1;
+                    const startAttr = startNum !== 1 ? ` start="${startNum}"` : '';
+                    return `<ol class="md-list"${startAttr}>`;
+                },
+                '</ol>'
+            );
+            return createPlaceholder(html + '\n');
         });
 
         // 4e. Emoji shortcodes (:smile:, :+1:, etc.) and text emoticons (:) :D etc.)

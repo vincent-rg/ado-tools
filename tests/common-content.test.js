@@ -104,8 +104,26 @@ describe('ADOContent', () => {
             expect(ADOContent.parseMarkdown('- item1\n- item2\n')).toBe('<ul class="md-list"><li>item1</li><li>item2</li></ul>');
         });
 
+        it('parses nested bullet lists', () => {
+            const input = '- parent\n  - child\n- sibling\n';
+            const result = ADOContent.parseMarkdown(input);
+            expect(result).toBe('<ul class="md-list"><li>parent<ul class="md-list"><li>child</li></ul></li><li>sibling</li></ul>');
+        });
+
+        it('parses deeply nested bullet lists', () => {
+            const input = '- a\n  - b\n    - c\n  - d\n';
+            const result = ADOContent.parseMarkdown(input);
+            expect(result).toBe('<ul class="md-list"><li>a<ul class="md-list"><li>b<ul class="md-list"><li>c</li></ul></li><li>d</li></ul></li></ul>');
+        });
+
         it('parses numbered lists', () => {
             expect(ADOContent.parseMarkdown('1. first\n2. second\n')).toBe('<ol class="md-list"><li>first</li><li>second</li></ol>');
+        });
+
+        it('parses nested numbered lists', () => {
+            const input = '1. parent\n  1. child\n2. sibling\n';
+            const result = ADOContent.parseMarkdown(input);
+            expect(result).toBe('<ol class="md-list"><li>parent<ol class="md-list"><li>child</li></ol></li><li>sibling</li></ol>');
         });
 
         it('preserves start number on interrupted numbered lists', () => {
