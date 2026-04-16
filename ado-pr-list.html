@@ -1970,7 +1970,7 @@
 
             const timeAgo = oldestTimestamp ? getTimeAgo(oldestTimestamp) : '';
             const timeDisplay = timeAgo ? `<span style="color: #605e5c; font-size: 12px; margin-left: 10px;" id="timeAgo">(oldest: ${timeAgo})</span>` : '';
-            const reloadButton = oldestTimestamp ? `<button onclick="refreshPRs()" style="margin-right: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; font-size: 12px; color: #0078d4;" title="Reload PRs">↻ Reload</button>` : '';
+            const refreshButton = oldestTimestamp ? `<button onclick="manualRefresh()" style="margin-right: 10px; padding: 4px 8px; background: white; border: 1px solid #d1d1d1; border-radius: 0; cursor: pointer; font-size: 12px; color: #0078d4;" title="Refresh PRs">↻ Refresh</button>` : '';
 
             // Count pending changes relevant to current filters
             const filters = getCurrentFilters();
@@ -1981,7 +1981,7 @@
                 ? `<button onclick="applyLiveUpdates()" style="margin-left: 10px; padding: 4px 8px; background: #0078d4; border: 1px solid #0078d4; border-radius: 0; cursor: pointer; font-size: 12px; color: white;" title="Apply pending changes">Show PR changes (${changesCount})</button>`
                 : '';
 
-            prSourceDisplay.innerHTML = `${reloadButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}${changesButton}`;
+            prSourceDisplay.innerHTML = `${refreshButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}${changesButton}`;
             prSourceDisplay.classList.add('show');
 
             // Start updating time display if not already running

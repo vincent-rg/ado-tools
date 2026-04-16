@@ -128,6 +128,14 @@ function updateLiveIndicator(isActive, isUpdating = false) {
     }
 }
 
+async function manualRefresh() {
+    await performBackgroundPoll();
+    // Auto-apply any detected changes
+    if (newPRsDetected.length > 0 || newFilterMatchesDetected.length > 0 || grayedOutPRKeys.size > 0) {
+        applyLiveUpdates();
+    }
+}
+
 async function performBackgroundPoll() {
     if (isBackgroundPolling) {
         return; // Already polling
