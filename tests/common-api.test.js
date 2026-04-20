@@ -126,53 +126,69 @@ describe('ADOAPI', () => {
     // --- getPRs pagination ---
 
     describe('getPRs', () => {
+        // getPRs fetches 5 pages in parallel; mock must provide responses for all 5
+        function mockParallelPages(...pageResults) {
+            pageResults.forEach(prs => mockFetch.mockResolvedValueOnce(jsonResponse({ value: prs })));
+            // Fill remaining parallel slots with empty responses
+            const remaining = 5 - (pageResults.length % 5);
+            if (remaining < 5) {
+                for (let i = 0; i < remaining; i++) {
+                    mockFetch.mockResolvedValueOnce(jsonResponse({ value: [] }));
+                }
+            }
+        }
+
         it('returns all PRs from a single page', async () => {
-            mockFetch.mockResolvedValueOnce(jsonResponse({ value: [{ id: 1 }, { id: 2 }] }));
+            mockParallelPages([{ id: 1 }, { id: 2 }]);
             const result = await ADOAPI.getPRs(config, 'proj', 'repo');
             expect(result.value).toHaveLength(2);
-            expect(mockFetch).toHaveBeenCalledTimes(1);
         });
 
         it('paginates when first page returns exactly 100 results', async () => {
             const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i }));
             const page2 = [{ id: 100 }, { id: 101 }];
-            mockFetch
-                .mockResolvedValueOnce(jsonResponse({ value: page1 }))
-                .mockResolvedValueOnce(jsonResponse({ value: page2 }));
+            // First batch: page1 is full, pages 2-5 are empty (but page2 has 2 items)
+            mockParallelPages(page1, page2);
 
             const result = await ADOAPI.getPRs(config, 'proj', 'repo');
             expect(result.value).toHaveLength(102);
-            expect(mockFetch).toHaveBeenCalledTimes(2);
         });
 
         it('URL includes status=all by default', async () => {
-            mockFetch.mockResolvedValueOnce(jsonResponse({ value: [] }));
+            mockParallelPages([]);
             await ADOAPI.getPRs(config, 'proj', 'repo');
             expect(capturedUrl()).toContain('searchCriteria.status=all');
         });
 
         it('URL includes custom status parameter', async () => {
-            mockFetch.mockResolvedValueOnce(jsonResponse({ value: [] }));
+            mockParallelPages([]);
             await ADOAPI.getPRs(config, 'proj', 'repo', 'active');
             expect(capturedUrl()).toContain('searchCriteria.status=active');
         });
 
         it('URL includes $top=100 and $skip=0 on first request', async () => {
-            mockFetch.mockResolvedValueOnce(jsonResponse({ value: [] }));
+            mockParallelPages([]);
             await ADOAPI.getPRs(config, 'proj', 'repo');
             expect(capturedUrl()).toContain('$top=100');
             expect(capturedUrl()).toContain('$skip=0');
         });
 
-        it('increments $skip for subsequent pages', async () => {
+        it('fetches pages in parallel with correct skip values', async () => {
             const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i }));
-            mockFetch
-                .mockResolvedValueOnce(jsonResponse({ value: page1 }))
-                .mockResolvedValueOnce(jsonResponse({ value: [] }));
+            const page2 = Array.from({ length: 100 }, (_, i) => ({ id: 100 + i }));
+            const page3 = [{ id: 200 }];
+            // First 5 parallel pages: page1 (full), page2 (full) → needs second round
+            // But since pages 1-2 are full and 3 is partial, all in first batch of 5
+            mockParallelPages(page1, page2, page3);
 
-            await ADOAPI.getPRs(config, 'proj', 'repo');
-            const secondUrl = mockFetch.mock.calls[1][0];
-            expect(secondUrl).toContain('$skip=100');
+            const result = await ADOAPI.getPRs(config, 'proj', 'repo');
+            expect(result.value).toHaveLength(201);
+
+            // Verify parallel skip values in first batch
+            const urls = mockFetch.mock.calls.map(c => c[0]);
+            expect(urls[0]).toContain('$skip=0');
+            expect(urls[1]).toContain('$skip=100');
+            expect(urls[2]).toContain('$skip=200');
         });
     });
 

@@ -424,39 +424,34 @@ const ADOAPI = {
      * Get PRs from a repository
      */
     async getPRs(config, project, repository, status = 'all') {
+        const top = 100;
+        const parallelPages = 5;
         let allPRs = [];
         let skip = 0;
-        const top = 100; // Max items per request
-        let hasMore = true;
 
-        while (hasMore) {
-            let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests?api-version=6.0`;
+        while (true) {
+            const offsets = Array.from({ length: parallelPages }, (_, i) => skip + i * top);
+            const pages = await Promise.all(offsets.map(async (pageSkip) => {
+                let url = `${config.serverUrl}/${config.organization}/${project}/_apis/git/repositories/${repository}/pullRequests?api-version=6.0`;
+                url += `&searchCriteria.status=${status}`;
+                url += `&$top=${top}&$skip=${pageSkip}`;
 
-            // Always add status parameter (Azure DevOps defaults to 'active' if omitted)
-            url += `&searchCriteria.status=${status}`;
-            url += `&$top=${top}&$skip=${skip}`;
+                const response = await this.fetchWithAuth(url, config.pat);
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.message || `Failed to fetch PRs: ${response.status} ${response.statusText}`);
+                }
+                const data = await response.json();
+                return data.value || [];
+            }));
 
-            const response = await this.fetchWithAuth(url, config.pat);
-
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.message || `Failed to fetch PRs: ${response.status} ${response.statusText}`);
+            for (const prs of pages) {
+                allPRs = allPRs.concat(prs);
+                if (prs.length < top) return { value: allPRs };
             }
 
-            const data = await response.json();
-            const prs = data.value || [];
-
-            allPRs = allPRs.concat(prs);
-
-            // Check if there are more results
-            if (prs.length < top) {
-                hasMore = false;
-            } else {
-                skip += top;
-            }
+            skip += parallelPages * top;
         }
-
-        return { value: allPRs };
     },
 
     /**
