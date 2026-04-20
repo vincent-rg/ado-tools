@@ -1,5 +1,4 @@
 PR list
-- "Show PR changes" button: add a "v" dropdown button to show a recap of pending changes
 - Background polling PR details: prioritize PRs currently visible in the list
 - Tri sur nombre d'update
 - Tri sur nombre de commentaires ouverts

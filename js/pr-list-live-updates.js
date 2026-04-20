@@ -12,7 +12,7 @@
  * Globals written: liveUpdatesEnabled, backgroundPollInterval, lastUserInteraction,
  *   lastBackgroundPoll, isBackgroundPolling, allPRs, filteredPRs, allAuthors,
  *   allReviewers, allCommentAuthors, allReviewTimestamps, grayedOutPRKeys,
- *   newPRsDetected, newFilterMatchesDetected
+ *   newPRsDetected, newFilterMatchesDetected, pendingChangeDescriptions
  */
 
 // Polling constants
@@ -284,6 +284,16 @@ function detectChanges(oldPRs, freshPRs) {
     return changes;
 }
 
+function describeChange(oldPR, freshPR) {
+    const parts = [];
+    if (oldPR.status !== freshPR.status) parts.push(`${oldPR.status} → ${freshPR.status}`);
+    if (oldPR.isDraft !== freshPR.isDraft) parts.push(freshPR.isDraft ? 'marked as draft' : 'unmarked as draft');
+    if (oldPR.title !== freshPR.title) parts.push('title changed');
+    if (JSON.stringify(oldPR.reviewers) !== JSON.stringify(freshPR.reviewers)) parts.push('reviewers changed');
+    if (oldPR.description !== freshPR.description) parts.push('description changed');
+    return parts.join(', ');
+}
+
 async function handleDetectedChanges(changes, freshPRs) {
     // Handle updated PRs (in-place updates)
     if (changes.updatedPRs.length > 0) {
@@ -301,14 +311,28 @@ async function handleDetectedChanges(changes, freshPRs) {
             if (wasVisible && !stillMatches) {
                 // PR no longer matches, gray it out
                 grayedOutPRKeys.add(update.prKey);
+                pendingChangeDescriptions.set(update.prKey, {
+                    type: 'removed',
+                    prId: update.fresh.pullRequestId,
+                    title: update.fresh.title,
+                    detail: describeChange(update.old, update.fresh),
+                });
             } else if (wasVisible && stillMatches) {
                 // Update in place with highlight
                 updatePRRowInPlace(update.prKey, update.fresh);
                 // If PR was grayed out but now matches again, un-gray it
-                grayedOutPRKeys.delete(update.prKey);
+                if (grayedOutPRKeys.delete(update.prKey)) {
+                    pendingChangeDescriptions.delete(update.prKey);
+                }
             } else if (!wasVisible && stillMatches) {
                 // PR was hidden but now matches filters — treat as new filter match
                 newFilterMatchesDetected = [...newFilterMatchesDetected, update.fresh];
+                pendingChangeDescriptions.set(update.prKey, {
+                    type: 'added',
+                    prId: update.fresh.pullRequestId,
+                    title: update.fresh.title,
+                    detail: describeChange(update.old, update.fresh),
+                });
             }
         });
 
@@ -320,6 +344,13 @@ async function handleDetectedChanges(changes, freshPRs) {
     if (changes.removedPRKeys.length > 0) {
         changes.removedPRKeys.forEach(prKey => {
             grayedOutPRKeys.add(prKey);
+            const oldPR = allPRs.find(pr => getPRKey(pr) === prKey);
+            pendingChangeDescriptions.set(prKey, {
+                type: 'removed',
+                prId: oldPR?.pullRequestId,
+                title: oldPR?.title || prKey,
+                detail: 'No longer in results',
+            });
         });
     }
 
@@ -328,6 +359,14 @@ async function handleDetectedChanges(changes, freshPRs) {
         // Append new PRs instead of replacing to preserve PRs from previous polls
         const existingKeys = new Set(newPRsDetected.map(pr => getPRKey(pr)));
         const trulyNewPRs = changes.newPRs.filter(pr => !existingKeys.has(getPRKey(pr)));
+        trulyNewPRs.forEach(pr => {
+            pendingChangeDescriptions.set(getPRKey(pr), {
+                type: 'added',
+                prId: pr.pullRequestId,
+                title: pr.title,
+                detail: 'New PR',
+            });
+        });
         newPRsDetected = [...newPRsDetected, ...trulyNewPRs];
     }
 
@@ -460,6 +499,7 @@ function applyLiveUpdates() {
     // Clear detection arrays
     newPRsDetected = [];
     newFilterMatchesDetected = [];
+    pendingChangeDescriptions.clear();
 
     // Re-apply filters and display
     applyFilters();

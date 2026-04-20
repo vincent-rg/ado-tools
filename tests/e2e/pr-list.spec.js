@@ -444,6 +444,38 @@ test.describe('PR list background polling', () => {
         await expect(page.locator('tr[data-pr-key*="104"]')).toBeVisible();
     });
 
+    test('changes dropdown shows recap of pending changes', async ({ page }) => {
+        // PR 102 abandoned + new PR 104
+        const pr102Abandoned = makePR({ status: 'abandoned' });
+        const pr104 = newActivePR(104, 'Incoming PR');
+        await swapPRRoute(page, buildPRResponse([pullRequests.value[0], pr102Abandoned, pullRequests.value[2], pr104]));
+        await page.evaluate(() => performBackgroundPoll());
+
+        // Dropdown toggle button should be visible
+        const toggleBtn = page.locator('.changes-toggle-btn');
+        await expect(toggleBtn).toBeVisible();
+
+        // Dropdown should be hidden initially
+        const dropdown = page.locator('#changesDropdown');
+        await expect(dropdown).not.toBeVisible();
+
+        // Click toggle to open
+        await toggleBtn.click();
+        await expect(dropdown).toBeVisible();
+
+        // Should list both changes
+        const items = dropdown.locator('.changes-dropdown-item');
+        await expect(items).toHaveCount(2);
+
+        // PR 102: status change detail
+        await expect(dropdown).toContainText('#102');
+        await expect(dropdown).toContainText('active → abandoned');
+
+        // PR 104: new PR
+        await expect(dropdown).toContainText('#104');
+        await expect(dropdown).toContainText('Incoming PR');
+    });
+
     test('draft toggle detected as in-place update', async ({ page }) => {
         await expect(page.locator('.pr-table tbody tr')).toHaveCount(2);
 

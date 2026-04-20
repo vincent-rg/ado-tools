@@ -604,6 +604,81 @@
             margin-right: 8px;
         }
 
+        .changes-button-group {
+            position: relative;
+            display: inline-block;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .changes-apply-btn {
+            padding: 4px 8px;
+            background: #0078d4;
+            border: 1px solid #0078d4;
+            border-right: 1px solid rgba(255,255,255,0.3);
+            border-radius: 0;
+            cursor: pointer;
+            font-size: 12px;
+            color: white;
+        }
+
+        .changes-apply-btn:hover {
+            background: #106ebe;
+        }
+
+        .changes-toggle-btn {
+            padding: 4px 6px;
+            background: #0078d4;
+            border: 1px solid #0078d4;
+            border-left: none;
+            border-radius: 0;
+            cursor: pointer;
+            font-size: 12px;
+            color: white;
+        }
+
+        .changes-toggle-btn:hover {
+            background: #106ebe;
+        }
+
+        .changes-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            background: white;
+            border: 1px solid #d1d1d1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 100;
+            min-width: 350px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .changes-dropdown.show {
+            display: block;
+        }
+
+        .changes-dropdown-item {
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #333;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .changes-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .changes-detail {
+            color: #888;
+            margin-left: 8px;
+        }
+
         /* Sidebar layout */
         .page-layout {
             display: flex;
@@ -686,7 +761,7 @@
             flex: 1;
             margin: 0;
             min-width: 0;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .results-container {
@@ -1257,6 +1332,7 @@
         let newPRsDetected = [];
         let newFilterMatchesDetected = [];
         let grayedOutPRKeys = new Set(); // Track PRs that no longer match filters
+        let pendingChangeDescriptions = new Map(); // prKey → { type, prId, title, detail }
 
         // Comment fetch state (constants and queue functions in pr-list-fetch.js)
         let commentFetchQueue = [];
@@ -1985,16 +2061,44 @@
             const newMatchCount = newPRsDetected.filter(pr => prMatchesFilters(pr, filters)).length
                 + newFilterMatchesDetected.length;
             const changesCount = newMatchCount + grayedOutPRKeys.size;
-            const changesButton = changesCount > 0
-                ? `<button onclick="applyLiveUpdates()" style="margin-left: 10px; padding: 4px 8px; background: #0078d4; border: 1px solid #0078d4; border-radius: 0; cursor: pointer; font-size: 12px; color: white;" title="Apply pending changes">Show PR changes (${changesCount})</button>`
-                : '';
+            let changesHtml = '';
+            if (changesCount > 0) {
+                const dropdownItems = Array.from(pendingChangeDescriptions.values()).map(desc => {
+                    const icon = desc.type === 'added' ? '+' : '−';
+                    const iconColor = desc.type === 'added' ? '#107c10' : '#d13438';
+                    return `<div class="changes-dropdown-item"><span style="color: ${iconColor}; font-weight: bold; margin-right: 6px;">${icon}</span><strong>#${desc.prId}</strong> ${ADOContent.escapeHtml(desc.title)}<span class="changes-detail">${ADOContent.escapeHtml(desc.detail)}</span></div>`;
+                }).join('');
 
-            prSourceDisplay.innerHTML = `${refreshButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}${changesButton}`;
+                changesHtml = `<span class="changes-button-group">` +
+                    `<button onclick="applyLiveUpdates()" class="changes-apply-btn" title="Apply pending changes">Show PR changes (${changesCount})</button>` +
+                    `<button onclick="toggleChangesDropdown(event)" class="changes-toggle-btn" title="Preview changes">▾</button>` +
+                    `<div class="changes-dropdown" id="changesDropdown">${dropdownItems}</div>` +
+                    `</span>`;
+            }
+
+            prSourceDisplay.innerHTML = `${refreshButton}<strong>Loaded from:</strong> ${repoList}${timeDisplay}${changesHtml}`;
             prSourceDisplay.classList.add('show');
 
             // Start updating time display if not already running
             if (oldestTimestamp && !updateTimeInterval) {
                 startUpdateTimeInterval();
+            }
+        }
+
+        function toggleChangesDropdown(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('changesDropdown');
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+                if (dropdown.classList.contains('show')) {
+                    const closeOnClick = (e) => {
+                        if (!dropdown.contains(e.target) && !e.target.classList.contains('changes-toggle-btn')) {
+                            dropdown.classList.remove('show');
+                            document.removeEventListener('click', closeOnClick);
+                        }
+                    };
+                    setTimeout(() => document.addEventListener('click', closeOnClick), 0);
+                }
             }
         }
 
