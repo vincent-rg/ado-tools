@@ -304,6 +304,11 @@ async function handleDetectedChanges(changes, freshPRs) {
             } else if (wasVisible && stillMatches) {
                 // Update in place with highlight
                 updatePRRowInPlace(update.prKey, update.fresh);
+                // If PR was grayed out but now matches again, un-gray it
+                grayedOutPRKeys.delete(update.prKey);
+            } else if (!wasVisible && stillMatches) {
+                // PR was hidden but now matches filters — treat as new filter match
+                newFilterMatchesDetected = [...newFilterMatchesDetected, update.fresh];
             }
         });
 
@@ -382,6 +387,22 @@ function applyFiltersWithoutReset() {
     const filters = getCurrentFilters();
     filteredPRs = allPRs.filter(pr => prMatchesFilters(pr, filters));
 
+    // Exclude PRs pending "Show PR changes" approval (would otherwise silently appear)
+    if (newFilterMatchesDetected.length > 0) {
+        const pendingKeys = new Set(newFilterMatchesDetected.map(pr => getPRKey(pr)));
+        filteredPRs = filteredPRs.filter(pr => !pendingKeys.has(getPRKey(pr)));
+    }
+
+    // Keep grayed-out PRs visible even though they no longer match filters
+    if (grayedOutPRKeys.size > 0) {
+        const filteredKeys = new Set(filteredPRs.map(pr => getPRKey(pr)));
+        const grayedNotInFiltered = allPRs.filter(pr => {
+            const key = getPRKey(pr);
+            return grayedOutPRKeys.has(key) && !filteredKeys.has(key);
+        });
+        filteredPRs = [...filteredPRs, ...grayedNotInFiltered];
+    }
+
     displayPRs();
     updateSelectedFilters();
     updateURL();
@@ -415,8 +436,11 @@ function updateAuthorsAndReviewers() {
 }
 
 function applyLiveUpdates() {
-    // Clear grayed out PRs
-    grayedOutPRKeys.clear();
+    // Remove grayed-out PRs from allPRs (they either no longer match or were removed from API)
+    if (grayedOutPRKeys.size > 0) {
+        allPRs = allPRs.filter(pr => !grayedOutPRKeys.has(getPRKey(pr)));
+        grayedOutPRKeys.clear();
+    }
 
     // Add new PRs to allPRs
     newPRsDetected.forEach(pr => {
