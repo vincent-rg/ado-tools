@@ -1451,8 +1451,17 @@ const ADOContent = {
             });
         }
         result = parseBlockquotes(result);
-        // Apply lone-backslash → empty for content outside blockquotes (which are now placeholders).
-        result = loneBackslash(result);
+        // Outside blockquotes: line-break / paragraph rules.
+        //   - Multiple consecutive blank lines collapse to one (single paragraph break).
+        //   - A line containing only `\` renders as an empty line but does NOT collapse with
+        //     adjacent blank lines — stack `\` lines to add multiple empty lines.
+        //   - A trailing `\` on a content line is the conventional hard-break marker; strip
+        //     the `\` (the surrounding `\n` already produces the visual break under pre-wrap).
+        const LB_MARKER = 'LB';
+        result = result.replace(/^[ \t]*\\$/gm, LB_MARKER);
+        result = result.replace(/\\$/gm, '');
+        result = result.replace(/\n{3,}/g, '\n\n');
+        result = result.split(LB_MARKER).join('');
 
         // 5. Parse bold and italic
         result = applyInlineFormatting(result);

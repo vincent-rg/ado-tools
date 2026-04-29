@@ -145,6 +145,38 @@ describe('ADOContent', () => {
             expect(ADOContent.parseMarkdown('\\ text')).toContain('\\ text'); // trailing text → kept
         });
 
+        it('multiple consecutive blank lines collapse to one paragraph break', () => {
+            expect(ADOContent.parseMarkdown('a\n\n\nb')).toBe('a\n\nb');       // 2 blank → 1
+            expect(ADOContent.parseMarkdown('a\n\n\n\n\nb')).toBe('a\n\nb');   // 4 blank → 1
+            expect(ADOContent.parseMarkdown('a\n\nb')).toBe('a\n\nb');         // 1 blank stays
+            expect(ADOContent.parseMarkdown('a\nb')).toBe('a\nb');             // no blank stays
+        });
+
+        it('stacked lone-backslash lines render as multiple empty lines', () => {
+            // 1 `\` line → 1 empty line (paragraph stays continuous)
+            expect(ADOContent.parseMarkdown('a\n\\\nb')).toBe('a\n\nb');
+            // 2 `\` lines → 2 empty lines
+            expect(ADOContent.parseMarkdown('a\n\\\n\\\nb')).toBe('a\n\n\nb');
+            // 3 `\` lines → 3 empty lines
+            expect(ADOContent.parseMarkdown('a\n\\\n\\\n\\\nb')).toBe('a\n\n\n\nb');
+        });
+
+        it('blank line + N backslash lines = paragraph break + N empty lines', () => {
+            // blank + 1 `\` → 2 empty lines (1 break + 1 from `\`)
+            expect(ADOContent.parseMarkdown('a\n\n\\\nb')).toBe('a\n\n\nb');
+            // blank + 2 `\` → 3 empty lines
+            expect(ADOContent.parseMarkdown('a\n\n\\\n\\\nb')).toBe('a\n\n\n\nb');
+            // multiple blanks (collapse to 1) + 2 `\` → 3 empty lines
+            expect(ADOContent.parseMarkdown('a\n\n\n\n\\\n\\\nb')).toBe('a\n\n\n\nb');
+        });
+
+        it('trailing backslash on a content line is stripped (hard-break marker)', () => {
+            expect(ADOContent.parseMarkdown('foo\\')).toBe('foo');
+            expect(ADOContent.parseMarkdown('foo\\\nbar')).toBe('foo\nbar');
+            // multi-line with mixed trailing backslashes
+            expect(ADOContent.parseMarkdown('foo\\\nbar\\\nbaz')).toBe('foo\nbar\nbaz');
+        });
+
         it('handles backslash escapes', () => {
             const result = ADOContent.parseMarkdown('\\*not italic\\*');
             expect(result).not.toContain('<em>');
