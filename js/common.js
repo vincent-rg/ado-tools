@@ -1276,6 +1276,22 @@ const ADOContent = {
             const html = `<a href="${stripped}" target="_blank" rel="noopener noreferrer">${stripped}</a>`;
             return createPlaceholder(html) + rest;
         });
+        // 4c. ADO PR references: !123 → link to that pull request.
+        // (Images use ![...]; by this point those are already placeholders, so a bare
+        //  ! followed by digits is a PR reference.)
+        let adoCfg = null;
+        try {
+            adoCfg = (typeof ADOConfig !== 'undefined' && ADOConfig.get && ADOConfig.get()) || null;
+        } catch (_) { /* localStorage not available (e.g. in unit tests) */ }
+        if (adoCfg && adoCfg.serverUrl) {
+            result = result.replace(/(?<![\w/])!(\d+)\b/g, (match, prId) => {
+                const url = ADOURL.buildPRUrl(adoCfg, prId);
+                const cached = ADOContent._prTitleCache.get(String(prId));
+                const text = cached ? `PR ${prId}: ${ADOContent.escapeHtml(cached)}` : `!${prId}`;
+                const html = `<a href="${ADOContent.escapeHtml(url)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+                return createPlaceholder(html);
+            });
+        }
 
         // Helper: build nested list HTML from indented lines
         function buildNestedList(lines, makeItem, makeListTag, closeTag = '</ul>') {
@@ -1484,6 +1500,47 @@ const ADOContent = {
         const escaped = ADOContent.escapeHtml(content);
         const withMentions = ADOContent.resolveMentionsInEscaped(escaped);
         return ADOContent.parseMarkdown(withMentions);
+    },
+
+    // Cache of PR id -> title, populated by resolvePRRefs() for !N references.
+    _prTitleCache: new Map(),
+
+    /**
+     * Resolve ADO PR references (!N) inside a rendered container: fetch each
+     * referenced PR's title and rewrite the link text to "PR N: <title>".
+     */
+    async resolvePRRefs(container) {
+        if (!container) return;
+        let config = null;
+        try {
+            config = (typeof ADOConfig !== 'undefined' && ADOConfig.get && ADOConfig.get()) || null;
+        } catch (_) { return; }
+        if (!config || !config.serverUrl) return;
+
+        const links = container.querySelectorAll('a.ado-pr-ref[data-pr-id]');
+        const pending = new Map();
+        links.forEach(a => {
+            const id = a.getAttribute('data-pr-id');
+            if (!pending.has(id)) pending.set(id, []);
+            pending.get(id).push(a);
+        });
+
+        await Promise.all([...pending.keys()].map(async (id) => {
+            let title = ADOContent._prTitleCache.get(id);
+            if (title === undefined) {
+                try {
+                    const pr = await ADOAPI.getPR(config, id);
+                    title = pr?.title || null;
+                } catch (_) {
+                    title = null;
+                }
+                ADOContent._prTitleCache.set(id, title);
+            }
+            if (!title) return;
+            pending.get(id).forEach(a => {
+                a.textContent = `PR ${id}: ${title}`;
+            });
+        }));
     }
 };
 

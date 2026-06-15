@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { ADOContent } from '../js/common.js';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { ADOContent, ADOConfig } from '../js/common.js';
 
 describe('ADOContent', () => {
     describe('escapeHtml', () => {
@@ -64,6 +64,27 @@ describe('ADOContent', () => {
 
         it('auto-links bare http URLs', () => {
             expect(ADOContent.parseMarkdown('see http://www.foo.com for details')).toBe('see <a href="http://www.foo.com" target="_blank" rel="noopener noreferrer">http://www.foo.com</a> for details');
+        });
+
+        describe('ADO PR references (!N)', () => {
+            const origGet = ADOConfig.get;
+            beforeAll(() => {
+                ADOConfig.get = () => ({ serverUrl: 'http://s', organization: 'o', project: 'p', repository: 'r' });
+            });
+            afterAll(() => { ADOConfig.get = origGet; });
+
+            it('links a bare !N to the pull request', () => {
+                expect(ADOContent.parseMarkdown('see !2 here')).toBe(
+                    'see <a href="http://s/o/p/_git/r/pullrequest/2?_a=overview" class="ado-pr-ref" data-pr-id="2" target="_blank" rel="noopener noreferrer">!2</a> here');
+            });
+
+            it('does not treat image syntax ![alt](url) as a PR reference', () => {
+                expect(ADOContent.parseMarkdown('![alt](http://x/a.png)')).toBe('<img src="http://x/a.png" alt="alt" />');
+            });
+
+            it('does not match ! attached to a preceding word/path char', () => {
+                expect(ADOContent.parseMarkdown('path/to/file!2')).toBe('path/to/file!2');
+            });
         });
 
         it('auto-links bare https URLs', () => {

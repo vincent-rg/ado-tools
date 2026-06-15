@@ -1523,6 +1523,9 @@
             // Display filtered threads
             displayResults(currentPRData, filtered, allIterations, currentConfig);
 
+            // Resolve ADO PR references (!N) to "PR N: <title>" links
+            ADOContent.resolvePRRefs(document.querySelector('.main-content') || document.body);
+
             // Restore form state after re-render
             if (!skipFormRestore) {
                 restoreFormState(formState);
