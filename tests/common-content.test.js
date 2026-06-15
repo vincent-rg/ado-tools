@@ -99,6 +99,14 @@ describe('ADOContent', () => {
                 expect(ADOContent.parseMarkdown('# Heading\n')).toBe('<h1 class="md-h1">Heading</h1>');
             });
 
+            // ADO disambiguation: "#2" is a work item link, "# 2" is an h1 with text "2".
+            it('treats #2 (no space) as a work item link', () => {
+                expect(ADOContent.parseMarkdown('#2')).toContain('class="ado-wi-ref"');
+            });
+            it('treats # 2 (with space) as a heading', () => {
+                expect(ADOContent.parseMarkdown('# 2\n')).toBe('<h1 class="md-h1">2</h1>');
+            });
+
             it('does not match # without digits (e.g. hex colors)', () => {
                 expect(ADOContent.parseMarkdown('color #fff value')).toBe('color #fff value');
             });
