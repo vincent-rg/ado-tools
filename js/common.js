@@ -1305,7 +1305,7 @@ const ADOContent = {
                 const cached = ADOContent._prTitleCache.get(String(prId));
                 const href = (cached && cached.url) || url;
                 const text = (cached && cached.title) ? `PR ${prId}: ${ADOContent.escapeHtml(cached.title)}` : `!${prId}`;
-                const html = `<a href="${ADOContent.escapeHtml(href)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+                const html = `<a href="${ADOContent.escapeHtml(href)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${ADOContent.PR_REF_ICON}<span class="ado-pr-ref-text">${text}</span></a>`;
                 return createPlaceholder(html);
             });
         }
@@ -1523,6 +1523,9 @@ const ADOContent = {
     // resolvePRRefs() for !N references.
     _prTitleCache: new Map(),
 
+    // Azure DevOps "pull request" glyph, drawn inline next to !N references.
+    PR_REF_ICON: '<svg class="ado-pr-ref-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M4.5 2a2.5 2.5 0 0 0-.75 4.885v2.23a2.5 2.5 0 1 0 1.5 0v-2.23A2.5 2.5 0 0 0 4.5 2zm0 1.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 7a1 1 0 1 1 0 2 1 1 0 0 1 0-2zM11 2a2.5 2.5 0 0 0-.75 4.885v2.323a2.5 2.5 0 1 0 1.5 0V6.885A2.5 2.5 0 0 0 11 2zm0 1.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 7a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>',
+
     /**
      * Resolve ADO PR references (!N) inside a rendered container: fetch each
      * referenced PR's title and rewrite the link text to "PR N: <title>".
@@ -1556,7 +1559,8 @@ const ADOContent = {
             }
             if (!info || !info.title) return;
             pending.get(id).forEach(a => {
-                a.textContent = `PR ${id}: ${info.title}`;
+                const span = a.querySelector('.ado-pr-ref-text');
+                if (span) span.textContent = `PR ${id}: ${info.title}`;
                 if (info.url) a.setAttribute('href', info.url);
             });
         }));

@@ -746,3 +746,23 @@ summary:hover {
 .md-h4 { margin: 0.5em 0; font-size: 1.05em; }
 .md-h5 { margin: 0.5em 0; font-size: 0.9em; }
 .md-h6 { margin: 0.5em 0; font-size: 0.75em; }
+
+/* ADO PR reference links (!N -> "PR N: title") */
+.ado-pr-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #f0f0f0;
+    text-decoration: none;
+    line-height: 1.4;
+}
+.ado-pr-ref:hover {
+    background: #e1e1e1;
+    text-decoration: underline;
+}
+.ado-pr-ref-icon {
+    flex: 0 0 auto;
+    color: #0078d4;
+}

@@ -74,8 +74,10 @@ describe('ADOContent', () => {
             afterAll(() => { ADOConfig.get = origGet; });
 
             it('links a bare !N to the pull request', () => {
-                expect(ADOContent.parseMarkdown('see !2 here')).toBe(
-                    'see <a href="http://s/o/p/_git/r/pullrequest/2?_a=overview" class="ado-pr-ref" data-pr-id="2" target="_blank" rel="noopener noreferrer">!2</a> here');
+                const out = ADOContent.parseMarkdown('see !2 here');
+                expect(out).toContain('<a href="http://s/o/p/_git/r/pullrequest/2?_a=overview" class="ado-pr-ref" data-pr-id="2" target="_blank" rel="noopener noreferrer">');
+                expect(out).toContain('<span class="ado-pr-ref-text">!2</span>');
+                expect(out).toContain('ado-pr-ref-icon');
             });
 
             it('does not treat image syntax ![alt](url) as a PR reference', () => {
