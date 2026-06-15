@@ -1273,51 +1273,65 @@ const ADOContent = {
             return createPlaceholder(html);
         });
 
-        // 4. Parse headers (h1-h6) - consume trailing newline to avoid double spacing with pre-wrap
-        result = result.replace(/^(#{1,6})\s+(.+)(\n?)/gm, (match, hashes, text, trailing) => {
-            const level = hashes.length;
-            const html = `<h${level} class="md-h${level}">${text}</h${level}>`;
-            return createPlaceholder(html) + trailing;
-        });
-
-        // 4a. Parse links before block elements so links inside list items/blockquotes work
-        result = result.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, text, url) => {
-            const html = `<a href="${ADOContent.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-            return createPlaceholder(html);
-        });
-        // Auto-link bare URLs (https?://) not already converted to placeholders
-        result = result.replace(/(https?:\/\/[^\s〔〕]+)/g, (match, url) => {
-            const stripped = url.replace(/[.,!?;:'"]+$/, '');
-            const rest = url.slice(stripped.length);
-            const html = `<a href="${stripped}" target="_blank" rel="noopener noreferrer">${stripped}</a>`;
-            return createPlaceholder(html) + rest;
-        });
-        // 4c. ADO PR references: !123 → link to that pull request.
-        // (Images use ![...]; by this point those are already placeholders, so a bare
-        //  ! followed by digits is a PR reference.)
         let adoCfg = null;
         try {
             adoCfg = (typeof ADOConfig !== 'undefined' && ADOConfig.get && ADOConfig.get()) || null;
         } catch (_) { /* localStorage not available (e.g. in unit tests) */ }
-        if (adoCfg && adoCfg.serverUrl) {
-            result = result.replace(/(?<![\w/])!(\d+)\b/g, (match, prId) => {
-                const url = ADOURL.buildPRUrl(adoCfg, prId);
-                const cached = ADOContent._prTitleCache.get(String(prId));
-                const href = (cached && cached.url) || url;
-                const text = (cached && cached.title) ? `PR ${prId}: ${ADOContent.escapeHtml(cached.title)}` : `!${prId}`;
-                const html = `<a href="${ADOContent.escapeHtml(href)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${ADOContent.PR_REF_ICON}<span class="ado-pr-ref-text">${text}</span></a>`;
+
+        // Inline-link parsing, shared so it also runs inside header text.
+        //   - [text](url) markdown links
+        //   - bare http(s) URLs
+        //   - ADO PR references (!N) and work item references (#N) when configured
+        function applyLinkParsing(text) {
+            let t = text;
+            // Markdown links before block elements so links inside list items/blockquotes work
+            t = t.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (match, label, url) => {
+                const html = `<a href="${ADOContent.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 return createPlaceholder(html);
             });
-            // 4d. ADO work item references: #123 → link to that work item.
-            // (Headers `# text` are already consumed above; `#` glued to digits is a ref.)
-            result = result.replace(/(?<![\w/#])#(\d+)\b/g, (match, wiId) => {
-                const url = `${adoCfg.serverUrl}/${adoCfg.organization}/${adoCfg.project}/_workitems/edit/${wiId}`;
-                const cached = ADOContent._wiTitleCache.get(String(wiId));
-                const text = (cached && cached.title) ? `#${wiId}: ${ADOContent.escapeHtml(cached.title)}` : `#${wiId}`;
-                const html = `<a href="${ADOContent.escapeHtml(url)}" class="ado-wi-ref" data-wi-id="${wiId}" target="_blank" rel="noopener noreferrer">${ADOContent.WI_REF_ICON}<span class="ado-wi-ref-text">${text}</span></a>`;
-                return createPlaceholder(html);
+            // Auto-link bare URLs (https?://) not already converted to placeholders
+            t = t.replace(/(https?:\/\/[^\s〔〕]+)/g, (match, url) => {
+                const stripped = url.replace(/[.,!?;:'"]+$/, '');
+                const rest = url.slice(stripped.length);
+                const html = `<a href="${stripped}" target="_blank" rel="noopener noreferrer">${stripped}</a>`;
+                return createPlaceholder(html) + rest;
             });
+            if (adoCfg && adoCfg.serverUrl) {
+                // ADO PR references: !123 → link to that pull request.
+                // (Images use ![...]; those are already placeholders, so a bare ! + digits is a ref.)
+                t = t.replace(/(?<![\w/])!(\d+)\b/g, (match, prId) => {
+                    const url = ADOURL.buildPRUrl(adoCfg, prId);
+                    const cached = ADOContent._prTitleCache.get(String(prId));
+                    const href = (cached && cached.url) || url;
+                    const label = (cached && cached.title) ? `PR ${prId}: ${ADOContent.escapeHtml(cached.title)}` : `!${prId}`;
+                    const html = `<a href="${ADOContent.escapeHtml(href)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${ADOContent.PR_REF_ICON}<span class="ado-pr-ref-text">${label}</span></a>`;
+                    return createPlaceholder(html);
+                });
+                // ADO work item references: #123 → link to that work item.
+                // (Headers `# text` are consumed first; `#` glued to digits is a ref.)
+                t = t.replace(/(?<![\w/#])#(\d+)\b/g, (match, wiId) => {
+                    const url = `${adoCfg.serverUrl}/${adoCfg.organization}/${adoCfg.project}/_workitems/edit/${wiId}`;
+                    const cached = ADOContent._wiTitleCache.get(String(wiId));
+                    const label = (cached && cached.title) ? `#${wiId}: ${ADOContent.escapeHtml(cached.title)}` : `#${wiId}`;
+                    const html = `<a href="${ADOContent.escapeHtml(url)}" class="ado-wi-ref" data-wi-id="${wiId}" target="_blank" rel="noopener noreferrer">${ADOContent.WI_REF_ICON}<span class="ado-wi-ref-text">${label}</span></a>`;
+                    return createPlaceholder(html);
+                });
+            }
+            return t;
         }
+
+        // 4. Parse headers (h1-h6) - consume trailing newline to avoid double spacing with pre-wrap.
+        // Header text is run through inline link + bold/italic parsing so links/formatting inside
+        // a heading (e.g. "## [Foo](url)") are rendered.
+        result = result.replace(/^(#{1,6})\s+(.+)(\n?)/gm, (match, hashes, text, trailing) => {
+            const level = hashes.length;
+            const inner = applyInlineFormatting(applyLinkParsing(text));
+            const html = `<h${level} class="md-h${level}">${inner}</h${level}>`;
+            return createPlaceholder(html) + trailing;
+        });
+
+        // 4a. Parse remaining (non-header) links and ADO references
+        result = applyLinkParsing(result);
 
         // Helper: build nested list HTML from indented lines
         function buildNestedList(lines, makeItem, makeListTag, closeTag = '</ul>') {

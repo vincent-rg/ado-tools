@@ -110,6 +110,15 @@ describe('ADOContent', () => {
             it('does not match # without digits (e.g. hex colors)', () => {
                 expect(ADOContent.parseMarkdown('color #fff value')).toBe('color #fff value');
             });
+
+            it('parses a markdown link inside a heading', () => {
+                expect(ADOContent.parseMarkdown('## [Foo](http://foo.com)\n')).toBe(
+                    '<h2 class="md-h2"><a href="http://foo.com" target="_blank" rel="noopener noreferrer">Foo</a></h2>');
+            });
+            it('parses bold inside a heading', () => {
+                expect(ADOContent.parseMarkdown('### **bold** title\n')).toBe(
+                    '<h3 class="md-h3"><strong>bold</strong> title</h3>');
+            });
         });
 
         it('auto-links bare https URLs', () => {
