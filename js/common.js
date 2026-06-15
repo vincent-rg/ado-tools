@@ -133,6 +133,22 @@ const ADOAPI = {
     },
 
     /**
+     * Get a PR by ID across the whole organization (any project/repository).
+     * Used to resolve !N references that may point to other repositories.
+     */
+    async getPRById(config, prId) {
+        const url = `${config.serverUrl}/${config.organization}/_apis/git/pullrequests/${prId}?api-version=6.0`;
+        const response = await this.fetchWithAuth(url, config.pat);
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || `Failed to fetch PR details: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
      * Get PR threads
      * @param {object} config - ADO configuration
      * @param {string} [project] - Project name (defaults to config.project)
@@ -1287,8 +1303,9 @@ const ADOContent = {
             result = result.replace(/(?<![\w/])!(\d+)\b/g, (match, prId) => {
                 const url = ADOURL.buildPRUrl(adoCfg, prId);
                 const cached = ADOContent._prTitleCache.get(String(prId));
-                const text = cached ? `PR ${prId}: ${ADOContent.escapeHtml(cached)}` : `!${prId}`;
-                const html = `<a href="${ADOContent.escapeHtml(url)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+                const href = (cached && cached.url) || url;
+                const text = (cached && cached.title) ? `PR ${prId}: ${ADOContent.escapeHtml(cached.title)}` : `!${prId}`;
+                const html = `<a href="${ADOContent.escapeHtml(href)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${text}</a>`;
                 return createPlaceholder(html);
             });
         }
@@ -1502,7 +1519,8 @@ const ADOContent = {
         return ADOContent.parseMarkdown(withMentions);
     },
 
-    // Cache of PR id -> title, populated by resolvePRRefs() for !N references.
+    // Cache of PR id -> { title, url } (or null when not found), populated by
+    // resolvePRRefs() for !N references.
     _prTitleCache: new Map(),
 
     /**
@@ -1526,21 +1544,31 @@ const ADOContent = {
         });
 
         await Promise.all([...pending.keys()].map(async (id) => {
-            let title = ADOContent._prTitleCache.get(id);
-            if (title === undefined) {
+            let info = ADOContent._prTitleCache.get(id);
+            if (info === undefined) {
                 try {
-                    const pr = await ADOAPI.getPR(config, id);
-                    title = pr?.title || null;
+                    const pr = await ADOAPI.getPRById(config, id);
+                    info = pr?.title ? { title: pr.title, url: ADOContent._buildPRUrlFromPR(config, pr, id) } : null;
                 } catch (_) {
-                    title = null;
+                    info = null;
                 }
-                ADOContent._prTitleCache.set(id, title);
+                ADOContent._prTitleCache.set(id, info);
             }
-            if (!title) return;
+            if (!info || !info.title) return;
             pending.get(id).forEach(a => {
-                a.textContent = `PR ${id}: ${title}`;
+                a.textContent = `PR ${id}: ${info.title}`;
+                if (info.url) a.setAttribute('href', info.url);
             });
         }));
+    },
+
+    // Build a web URL for a PR object returned by the API (uses the PR's own
+    // repository/project so cross-repo references link correctly).
+    _buildPRUrlFromPR(config, pr, prId) {
+        const repo = pr.repository || {};
+        const projectName = repo.project?.name || config.project;
+        const repoName = repo.name || config.repository;
+        return `${config.serverUrl}/${config.organization}/${encodeURIComponent(projectName)}/_git/${encodeURIComponent(repoName)}/pullrequest/${prId}?_a=overview`;
     }
 };
 
