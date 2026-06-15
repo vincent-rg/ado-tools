@@ -766,3 +766,23 @@ summary:hover {
     flex: 0 0 auto;
     color: #0078d4;
 }
+
+/* ADO work item reference links (#N -> "#N: title") */
+.ado-wi-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #f0f0f0;
+    text-decoration: none;
+    line-height: 1.4;
+}
+.ado-wi-ref:hover {
+    background: #e1e1e1;
+    text-decoration: underline;
+}
+.ado-wi-ref-icon {
+    flex: 0 0 auto;
+    color: #0078d4;
+}

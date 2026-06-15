@@ -87,6 +87,21 @@ describe('ADOContent', () => {
             it('does not match ! attached to a preceding word/path char', () => {
                 expect(ADOContent.parseMarkdown('path/to/file!2')).toBe('path/to/file!2');
             });
+
+            it('links a bare #N to the work item', () => {
+                const out = ADOContent.parseMarkdown('fixes #123 now');
+                expect(out).toContain('<a href="http://s/o/p/_workitems/edit/123" class="ado-wi-ref" data-wi-id="123" target="_blank" rel="noopener noreferrer">');
+                expect(out).toContain('<span class="ado-wi-ref-text">#123</span>');
+                expect(out).toContain('ado-wi-ref-icon');
+            });
+
+            it('does not treat markdown headers as work item refs', () => {
+                expect(ADOContent.parseMarkdown('# Heading\n')).toBe('<h1 class="md-h1">Heading</h1>');
+            });
+
+            it('does not match # without digits (e.g. hex colors)', () => {
+                expect(ADOContent.parseMarkdown('color #fff value')).toBe('color #fff value');
+            });
         });
 
         it('auto-links bare https URLs', () => {

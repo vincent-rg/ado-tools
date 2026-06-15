@@ -1308,6 +1308,15 @@ const ADOContent = {
                 const html = `<a href="${ADOContent.escapeHtml(href)}" class="ado-pr-ref" data-pr-id="${prId}" target="_blank" rel="noopener noreferrer">${ADOContent.PR_REF_ICON}<span class="ado-pr-ref-text">${text}</span></a>`;
                 return createPlaceholder(html);
             });
+            // 4d. ADO work item references: #123 → link to that work item.
+            // (Headers `# text` are already consumed above; `#` glued to digits is a ref.)
+            result = result.replace(/(?<![\w/#])#(\d+)\b/g, (match, wiId) => {
+                const url = `${adoCfg.serverUrl}/${adoCfg.organization}/${adoCfg.project}/_workitems/edit/${wiId}`;
+                const cached = ADOContent._wiTitleCache.get(String(wiId));
+                const text = (cached && cached.title) ? `#${wiId}: ${ADOContent.escapeHtml(cached.title)}` : `#${wiId}`;
+                const html = `<a href="${ADOContent.escapeHtml(url)}" class="ado-wi-ref" data-wi-id="${wiId}" target="_blank" rel="noopener noreferrer">${ADOContent.WI_REF_ICON}<span class="ado-wi-ref-text">${text}</span></a>`;
+                return createPlaceholder(html);
+            });
         }
 
         // Helper: build nested list HTML from indented lines
@@ -1523,8 +1532,15 @@ const ADOContent = {
     // resolvePRRefs() for !N references.
     _prTitleCache: new Map(),
 
+    // Cache of work item id -> { title } (or null when not found), populated by
+    // resolvePRRefs() for #N references.
+    _wiTitleCache: new Map(),
+
     // Azure DevOps "pull request" glyph, drawn inline next to !N references.
     PR_REF_ICON: '<svg class="ado-pr-ref-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M4.5 2a2.5 2.5 0 0 0-.75 4.885v2.23a2.5 2.5 0 1 0 1.5 0v-2.23A2.5 2.5 0 0 0 4.5 2zm0 1.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 7a1 1 0 1 1 0 2 1 1 0 0 1 0-2zM11 2a2.5 2.5 0 0 0-.75 4.885v2.323a2.5 2.5 0 1 0 1.5 0V6.885A2.5 2.5 0 0 0 11 2zm0 1.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 7a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>',
+
+    // Azure DevOps "work item" glyph, drawn inline next to #N references.
+    WI_REF_ICON: '<svg class="ado-wi-ref-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M3 2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H3zm.5 1.5h9v9h-9v-9zM5 5.5a.75.75 0 0 0 0 1.5h6a.75.75 0 0 0 0-1.5H5zm0 3a.75.75 0 0 0 0 1.5h4a.75.75 0 0 0 0-1.5H5z"/></svg>',
 
     /**
      * Resolve ADO PR references (!N) inside a rendered container: fetch each
@@ -1564,6 +1580,51 @@ const ADOContent = {
                 if (info.url) a.setAttribute('href', info.url);
             });
         }));
+
+        await ADOContent.resolveWorkItemRefs(container, config);
+    },
+
+    /**
+     * Resolve ADO work item references (#N) inside a rendered container: fetch
+     * each work item's title and rewrite the link text to "#N: <title>".
+     */
+    async resolveWorkItemRefs(container, config) {
+        const links = container.querySelectorAll('a.ado-wi-ref[data-wi-id]');
+        if (!links.length) return;
+
+        const byId = new Map();
+        links.forEach(a => {
+            const id = a.getAttribute('data-wi-id');
+            if (!byId.has(id)) byId.set(id, []);
+            byId.get(id).push(a);
+        });
+
+        // Work items not yet cached → batch fetch in one request.
+        const toFetch = [...byId.keys()].filter(id => !ADOContent._wiTitleCache.has(id));
+        if (toFetch.length) {
+            try {
+                const res = await ADOAPI.getWorkItemsBatch(config, toFetch);
+                const found = new Set();
+                (res?.value || []).forEach(wi => {
+                    const title = wi.fields?.['System.Title'];
+                    ADOContent._wiTitleCache.set(String(wi.id), title ? { title } : null);
+                    found.add(String(wi.id));
+                });
+                // Mark any unresolved ids as null so we don't refetch them.
+                toFetch.forEach(id => { if (!found.has(id)) ADOContent._wiTitleCache.set(id, null); });
+            } catch (_) {
+                toFetch.forEach(id => ADOContent._wiTitleCache.set(id, null));
+            }
+        }
+
+        byId.forEach((anchors, id) => {
+            const info = ADOContent._wiTitleCache.get(id);
+            if (!info || !info.title) return;
+            anchors.forEach(a => {
+                const span = a.querySelector('.ado-wi-ref-text');
+                if (span) span.textContent = `#${id}: ${info.title}`;
+            });
+        });
     },
 
     // Build a web URL for a PR object returned by the API (uses the PR's own
