@@ -1462,6 +1462,10 @@
                 }
             });
 
+            // Preserve current selections across re-population (e.g. background refresh)
+            const prevThreadAuthor = threadAuthorFilter.value;
+            const prevCommentAuthor = commentAuthorFilter.value;
+
             // Populate thread author filter
             let threadAuthorHtml = '<option value="">All authors</option>';
             Array.from(threadAuthors).sort().forEach(author => {
@@ -1475,6 +1479,14 @@
                 commentAuthorHtml += `<option value="${ADOContent.escapeHtml(author)}">${ADOContent.escapeHtml(author)}</option>`;
             });
             commentAuthorFilter.innerHTML = commentAuthorHtml;
+
+            // Restore selections if still present among the options
+            if (prevThreadAuthor && threadAuthors.has(prevThreadAuthor)) {
+                threadAuthorFilter.value = prevThreadAuthor;
+            }
+            if (prevCommentAuthor && allCommentAuthors.has(prevCommentAuthor)) {
+                commentAuthorFilter.value = prevCommentAuthor;
+            }
         }
 
         function applyThreadFilters(skipFormRestore = false) {
@@ -1793,6 +1805,7 @@
             allThreads = (threadsData.value || []).map((t, idx) => ({ ...t, _originalIndex: idx }));
             if (window._adoDebug) console.log(`[REFRESH op#${_opId}] allThreads replaced count=${allThreads.length}`);
             updateThreadStats();
+            populateAuthorFilter();
             if (window._adoDebug) console.log(`[REFRESH op#${_opId}] applyThreadFilters start t=${Date.now()}`);
             applyThreadFilters(true);
             if (window._adoDebug) console.log(`[REFRESH op#${_opId}] done t=${Date.now()}`);

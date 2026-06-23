@@ -4,7 +4,7 @@
 // Accesses globals: currentPRId, currentPRData, allThreads, allIterations, allChangeEntries,
 //                   currentFileChangeStats, currentConfig, currentView, updatesViewBuilt,
 //                   fileDiffCache, fileTreeBuilt, liveUpdatesEnabled,
-//                   updateReviewersDisplay, buildThreadsByFilePath, applyThreadFilters,
+//                   updateReviewersDisplay, buildThreadsByFilePath, applyThreadFilters, populateAuthorFilter,
 //                   refreshInlineThreadsIfNeeded, buildUpdatesView, buildFileTree,
 //                   buildIterationSelector, calculateFileChangeStats, buildCumulativeRenameMaps,
 //                   fetchLineStatsAsync
@@ -99,6 +99,7 @@
                     await ADOIdentity.collectAndResolveFromThreads(allThreads, config.serverUrl, config.organization, config.pat);
                     buildThreadsByFilePath();
                     updateThreadStats();
+                    populateAuthorFilter();
                     // Re-apply filters to refresh thread display
                     if (window._adoDebug) console.log(`[POLL] applyThreadFilters start t=${Date.now()}`);
                     applyThreadFilters();
